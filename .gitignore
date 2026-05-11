@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Tauri / Rust
+**/src-tauri/target/
+**/src-tauri/gen/schemas/
+**/src-tauri/WixTools/
+
+# Vite
+.vite/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Editors
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local reference repos (we use the dev container mount, this is just a safety net)
+reference/
