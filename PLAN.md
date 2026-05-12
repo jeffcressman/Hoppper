@@ -80,15 +80,19 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 ## Phase 4 — SDK: stem fetching & cache
 
-**Goal**: efficient, resumable stem downloads with a pluggable cache.
+**Goal**: efficient, resumable stem downloads with a pluggable cache, including a zero-duplication path for users with existing LORE archives.
 
-- [ ] `StemCache` interface: `has(hash)`, `get(hash)`, `put(hash, bytes)`, `evict(...)`.
-- [ ] In-memory impl in SDK.
-- [ ] Stem fetcher: concurrent download with backpressure, integrity check, stores via cache.
-- [ ] Pre-fetch scheduler: given a list of riff IDs, warm the cache.
-- [ ] LORE sqlite jam-archive importer — read an existing LORE archive and populate the cache + jam metadata, so LORE users can bring their data in without going through the network.
+Detailed design: [`docs/phases/phase-4-stems-and-cache.md`](docs/phases/phase-4-stems-and-cache.md).
 
-**Checkpoint**: app can request a riff and have all 8 stems on disk in under 2× the slowest stem's download time.
+- [ ] `StemCache` interface (keyed by `StemCouchID`): `has`, `get`, `put`, optional `evict`.
+- [ ] `InMemoryStemCache` and `FilesystemStemCache` (V2 layout: `<root>/<jamId>/<firstChar>/<stemId>.<ext>`, atomic writes).
+- [ ] `FsAdapter` injection seam (default `node:fs/promises`; Tauri plugs in its own in Phase 5).
+- [ ] `HttpTransport.requestBinary()` — shares retry loop with the existing JSON path.
+- [ ] `StemFetcher`: bounded-concurrency download (default 4 in-flight), byte-length integrity check, `allowSizeMismatch` flag matching LORE's `hackAllowStemSizeMismatch`.
+- [ ] `prefetchRiffs(...)`: async-iterator progress handle with `cancel()` and `done()`.
+- [ ] **LORE piggyback (reframed from "importer")**: `ReadonlyLoreStemDir` is a first-class read-only cache tier, composed via `LayeredStemCache` with `promoteOnRead: true`. Stems live where LORE put them; touched stems get promoted into Hoppper's own cache so Hoppper becomes self-contained over time. **No byte duplication of untouched stems.** The sqlite `warehouse.db3` metadata importer is deferred to Phase 5 where the Tauri sqlite plugin lives.
+
+**Checkpoint**: app can request a riff and have all 8 stems on disk in under 2× the slowest stem's download time. Live-test acceptance gate gated behind `HOPPPER_RUN_LIVE_TESTS=1`; optional LORE-archive smoke test gated behind `HOPPPER_LORE_STEM_V2_ROOT=...`.
 
 ---
 
