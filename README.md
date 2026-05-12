@@ -32,6 +32,19 @@ This project is a TypeScript reimplementation of the protocol layer reverse-engi
 
 Not affiliated with or endorsed by Endlesss / Hablab London Limited.
 
+## Be kind to Endlesss servers
+
+Endlesss is run by a tiny team and was offline for over a year. **Please don't hammer their API.** Hoppper is built around the principle of *fetch once, keep forever*:
+
+- Riff and stem documents are immutable and are cached by ID — once on disk, they are never re-fetched.
+- Stem audio is downloaded once and stored locally.
+- Pre-fetching is limited to a small window around the user's current position.
+- The integration test that hits live servers is opt-in (`.env.local` credentials) and is **not** run in CI.
+
+If you are hacking on the SDK, follow the same discipline: write against fixtures or mocks when you can, and only run the live integration test sparingly.
+
+A side effect: the local cache will grow. A heavy user with deep jam history can accumulate many gigabytes. A storage-management UI (eviction, per-jam totals, clear-cache) is on the post-v1 roadmap; for now, expect cache size to climb monotonically.
+
 ## Local development
 
 ### Prerequisites

@@ -87,6 +87,19 @@ When you need to understand how Endlesss does something, read the relevant LORE 
 - Every reverse-engineered endpoint gets a short note in `docs/protocol/<endpoint>.md`: URL, method, request shape, response shape, observed quirks, LORE source reference.
 - No secrets in the repo. `.env.local` for dev only; gitignored.
 
+## Server etiquette (important)
+
+Endlesss is run by a small team on infrastructure that has already gone dark once. **Treat their servers as a fragile shared resource.** Concretely:
+
+- **Make the minimum calls required.** If we have the data on disk, we don't fetch it again. Ever. Riff documents, stem documents, stem audio bytes — once retrieved, they're ours.
+- **No speculative pre-fetching beyond a small look-ahead window.** Pre-cache N±2 riffs around the user's current position, not the whole jam.
+- **Never poll faster than LORE does.** The sentinel poll rate is 5 seconds; don't go below that.
+- **Riff/stem data is immutable.** A given `RiffCouchID` or `StemCouchID` always points to the same payload, so cache hits are safe forever.
+- **Cache by ID, not by URL.** CDN URLs may change; the CouchID never does.
+- **Tests don't hit live servers in CI.** The integration test in `packages/sdk/test/integration.test.ts` is gated on `.env.local` credentials and is opt-in for local runs only.
+
+The cache will grow large — a heavy user with hundreds of jams can easily reach tens of gigabytes. **Storage-management UI is on the roadmap for post-v1**: an eviction policy, per-jam size accounting, a "clear cache" affordance. We do not need to build it yet, but don't make architectural choices that would block it later (e.g., always include enough metadata in the cache index to compute jam-level totals on demand).
+
 ## Important caveats
 
 - **Endlesss was offline May 2024 – August 2025**, then reopened under new owner Hablab London Limited. LORE continues to function correctly against the current servers, so it remains a reliable reference.
