@@ -22,3 +22,9 @@ export {
   type TokenStore,
 } from './token-store.js';
 export * from './types/index.js';
+export {
+  ReadonlyCacheError,
+  type StemBlob,
+  type StemCache,
+  type StemCachePutKey,
+} from './stems/cache.js';
