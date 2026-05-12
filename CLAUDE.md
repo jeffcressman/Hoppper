@@ -108,3 +108,5 @@ The cache will grow large — a heavy user with hundreds of jams can easily reac
 ## Where to find the current task
 
 `PLAN.md`. Phases are numbered; work through them in order unless told otherwise. Each phase ends with a checkpoint — pause and confirm with the user before starting the next.
+
+When a phase's design is bigger than its `PLAN.md` entry — interfaces, file layouts, TDD order, deferred items — it gets its own design doc at `docs/phases/phase-N-<slug>.md`, and `PLAN.md` links to it. Read the design doc before starting work on a phase that has one.
