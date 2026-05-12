@@ -219,6 +219,110 @@ describe('HttpTransport', () => {
     expect(calls).toHaveLength(2);
   });
 
+  describe('requestBinary', () => {
+    it('returns the response bytes as Uint8Array on 2xx', async () => {
+      const payload = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0x00, 0x01]); // OggS magic + extra
+      const { fetchImpl } = makeFetch(() =>
+        new Response(payload, { status: 200, headers: { 'Content-Type': 'audio/ogg' } }),
+      );
+      const transport = new HttpTransport({ fetch: fetchImpl });
+
+      const bytes = await transport.requestBinary({
+        url: 'https://cdn.example/stem.ogg',
+        method: 'GET',
+      });
+
+      expect(bytes).toBeInstanceOf(Uint8Array);
+      expect(Array.from(bytes)).toEqual(Array.from(payload));
+    });
+
+    it('sends Accept: */* by default and skips Content-Type when no body', async () => {
+      const { fetchImpl, calls } = makeFetch(() => new Response(new Uint8Array([1, 2, 3])));
+      const transport = new HttpTransport({ fetch: fetchImpl });
+
+      await transport.requestBinary({ url: 'https://cdn.example/x', method: 'GET' });
+
+      expect(getHeader(calls[0]!.init, 'Accept')).toBe('*/*');
+      expect(getHeader(calls[0]!.init, 'Content-Type')).toBeNull();
+    });
+
+    it('respects a custom accept override', async () => {
+      const { fetchImpl, calls } = makeFetch(() => new Response(new Uint8Array([1])));
+      const transport = new HttpTransport({ fetch: fetchImpl });
+
+      await transport.requestBinary({
+        url: 'https://cdn.example/x',
+        method: 'GET',
+        accept: 'audio/flac',
+      });
+
+      expect(getHeader(calls[0]!.init, 'Accept')).toBe('audio/flac');
+    });
+
+    it('retries 5xx with the same backoff and surfaces HttpError after maxRetries', async () => {
+      const { fetchImpl, calls } = makeFetch(() => new Response('boom', { status: 503 }));
+      const sleep = vi.fn(async (_ms: number) => {});
+      const transport = new HttpTransport({
+        fetch: fetchImpl,
+        sleep,
+        retry: { maxRetries: 2 },
+      });
+
+      await expect(
+        transport.requestBinary({ url: 'https://cdn.example/x', method: 'GET' }),
+      ).rejects.toBeInstanceOf(HttpError);
+
+      expect(calls).toHaveLength(3);
+      expect(sleep.mock.calls.map((c) => c[0])).toEqual([250, 400]);
+    });
+
+    it('throws HttpError on 4xx without retry', async () => {
+      const { fetchImpl, calls } = makeFetch(() => new Response('nope', { status: 404 }));
+      const sleep = vi.fn(async (_ms: number) => {});
+      const transport = new HttpTransport({ fetch: fetchImpl, sleep });
+
+      await expect(
+        transport.requestBinary({ url: 'https://cdn.example/x', method: 'GET' }),
+      ).rejects.toBeInstanceOf(HttpError);
+
+      expect(calls).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it('throws NetworkError after maxRetries network errors', async () => {
+      const { fetchImpl, calls } = makeFetch(() => {
+        throw new TypeError('fetch failed');
+      });
+      const sleep = vi.fn(async (_ms: number) => {});
+      const transport = new HttpTransport({
+        fetch: fetchImpl,
+        sleep,
+        retry: { maxRetries: 1 },
+      });
+
+      await expect(
+        transport.requestBinary({ url: 'https://cdn.example/x', method: 'GET' }),
+      ).rejects.toBeInstanceOf(NetworkError);
+
+      expect(calls).toHaveLength(2);
+    });
+
+    it('preserves Basic and Bearer auth when provided', async () => {
+      const { fetchImpl, calls } = makeFetch(() => new Response(new Uint8Array([1])));
+      const transport = new HttpTransport({ fetch: fetchImpl });
+
+      await transport.requestBinary({
+        url: 'https://cdn.example/x',
+        method: 'GET',
+        auth: { kind: 'basic', token: 't', password: 'p' },
+      });
+
+      expect(getHeader(calls[0]!.init, 'Authorization')).toBe(
+        `Basic ${Buffer.from('t:p').toString('base64')}`,
+      );
+    });
+  });
+
   it('calls the logger with method, url, status, and attempt', async () => {
     const log = vi.fn();
     const { fetchImpl } = makeFetch(() => jsonResponse({}));

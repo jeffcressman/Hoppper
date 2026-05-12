@@ -38,6 +38,15 @@ export interface TransportRequest {
   responseTextTransform?: (text: string) => string;
 }
 
+export interface BinaryTransportRequest {
+  url: string;
+  method: 'GET' | 'POST';
+  body?: object | string;
+  auth?: AuthMode;
+  // Accept header override; defaults to '*/*' for opaque binary responses.
+  accept?: string;
+}
+
 // Mirrors LORE's NetConfiguration::attempt: 250ms, +150ms each retry, capped at 1s.
 const DEFAULT_RETRY: RetryPolicy = {
   maxRetries: 3,
@@ -91,44 +100,63 @@ export class HttpTransport {
   }
 
   async request<T = unknown>(req: TransportRequest): Promise<T> {
+    const init: RequestInit = {
+      method: req.method,
+      headers: this.buildJsonHeaders(req),
+    };
+    if (req.body !== undefined) {
+      init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
+
+    const response = await this.attempt(req.url, req.method, init);
+    const text = await response.text();
+    if (!text) return undefined as T;
+    const transformed = req.responseTextTransform ? req.responseTextTransform(text) : text;
+    try {
+      return JSON.parse(transformed) as T;
+    } catch {
+      throw new HttpError(response.status, text, null, req.url);
+    }
+  }
+
+  async requestBinary(req: BinaryTransportRequest): Promise<Uint8Array> {
+    const init: RequestInit = {
+      method: req.method,
+      headers: this.buildBinaryHeaders(req),
+    };
+    if (req.body !== undefined) {
+      init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
+
+    const response = await this.attempt(req.url, req.method, init);
+    const buf = await response.arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  private async attempt(url: string, method: string, init: RequestInit): Promise<Response> {
     let attempt = 0;
     let delay = this.retry.initialDelayMs;
 
     while (true) {
       attempt++;
 
-      const init: RequestInit = {
-        method: req.method,
-        headers: this.buildHeaders(req),
-      };
-      if (req.body !== undefined) {
-        init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      }
-
       let response: Response;
       try {
-        response = await this.fetchImpl(req.url, init);
+        response = await this.fetchImpl(url, init);
       } catch (error) {
-        this.logger?.({ method: req.method, url: req.url, attempt, error });
+        this.logger?.({ method, url, attempt, error });
         if (attempt - 1 >= this.retry.maxRetries) {
-          throw new NetworkError(error, attempt, req.url);
+          throw new NetworkError(error, attempt, url);
         }
         await this.sleep(delay);
         delay = Math.min(delay + this.retry.delayStepMs, this.retry.maxDelayMs);
         continue;
       }
 
-      this.logger?.({ method: req.method, url: req.url, attempt, status: response.status });
+      this.logger?.({ method, url, attempt, status: response.status });
 
       if (response.status >= 200 && response.status < 300) {
-        const text = await response.text();
-        if (!text) return undefined as T;
-        const transformed = req.responseTextTransform ? req.responseTextTransform(text) : text;
-        try {
-          return JSON.parse(transformed) as T;
-        } catch {
-          throw new HttpError(response.status, text, null, req.url);
-        }
+        return response;
       }
 
       if (response.status >= 500 && attempt - 1 < this.retry.maxRetries) {
@@ -144,27 +172,41 @@ export class HttpTransport {
       } catch {
         parsed = null;
       }
-      throw new HttpError(response.status, text, parsed, req.url);
+      throw new HttpError(response.status, text, parsed, url);
     }
   }
 
-  private buildHeaders(req: TransportRequest): Record<string, string> {
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      'Accept-Language': 'en-gb',
-      'User-Agent': this.userAgent,
-      Cookie: this.loadBalancerCookie(),
-    };
+  private buildJsonHeaders(req: TransportRequest): Record<string, string> {
+    const headers = this.buildBaseHeaders();
+    headers['Accept'] = 'application/json';
+    headers['Accept-Language'] = 'en-gb';
     if (req.body !== undefined) {
       headers['Content-Type'] = req.contentType ?? 'application/json';
     }
-    const auth = req.auth;
+    this.applyAuth(headers, req.auth);
+    return headers;
+  }
+
+  private buildBinaryHeaders(req: BinaryTransportRequest): Record<string, string> {
+    const headers = this.buildBaseHeaders();
+    headers['Accept'] = req.accept ?? '*/*';
+    this.applyAuth(headers, req.auth);
+    return headers;
+  }
+
+  private buildBaseHeaders(): Record<string, string> {
+    return {
+      'User-Agent': this.userAgent,
+      Cookie: this.loadBalancerCookie(),
+    };
+  }
+
+  private applyAuth(headers: Record<string, string>, auth: AuthMode | undefined): void {
     if (auth?.kind === 'basic') {
       headers['Authorization'] = `Basic ${encodeBase64(`${auth.token}:${auth.password}`)}`;
     } else if (auth?.kind === 'bearer') {
       headers['Authorization'] = `Bearer ${auth.token}:${auth.password}`;
     }
-    return headers;
   }
 
   private loadBalancerCookie(): string {
