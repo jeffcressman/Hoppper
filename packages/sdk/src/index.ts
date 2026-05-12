@@ -29,3 +29,5 @@ export {
   type StemCachePutKey,
 } from './stems/cache.js';
 export { InMemoryStemCache } from './stems/in-memory-cache.js';
+export { FilesystemStemCache } from './stems/fs-cache.js';
+export { nodeFsAdapter, type FsAdapter } from './stems/fs-adapter.js';
