@@ -43,8 +43,10 @@ All requests include a **load-balancer cookie**: `Cookie: LB=live##` where `##` 
 POST https://api.endlesss.fm/auth/login
 Content-Type: application/json
 
-{ "username": "<endlesss username>", "password": "<endlesss password>" }
+{ "username": "<endlesss username or email>", "password": "<endlesss password>" }
 ```
+
+The `username` field accepts either the canonical Endlesss username or the account email — both work. The response's `user_id` is always the canonical username, so callers should use `user_id` (not the form input) for any subsequent CouchDB path that needs the username. **Verified empirically 2026-05-12 against live servers.**
 
 Success response (subset of what LORE captures):
 ```json

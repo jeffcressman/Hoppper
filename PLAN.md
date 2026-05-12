@@ -52,14 +52,14 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 **Goal**: a logged-in session against live Endlesss servers.
 
-- [ ] `EndlesssClient` class — accepts base config, exposes auth + request methods.
-- [ ] HTTP transport with: retry/backoff, request logging, configurable fetch (so Tauri can inject its CORS-free fetch).
-- [ ] Login flow → session token. Token-refresh logic if applicable.
-- [ ] Token storage: define an interface (`TokenStore`), provide in-memory + simple file impls in the SDK. App will plug in Tauri keychain later.
-- [ ] First real endpoint: `getCurrentUser()` (or equivalent) — proves auth works end to end.
-- [ ] Test against a real account (you'll provide credentials via `.env.local`).
+- [x] `EndlesssClient` class — accepts base config, exposes auth + request methods.
+- [x] HTTP transport with: retry/backoff, request logging, configurable fetch (so Tauri can inject its CORS-free fetch).
+- [x] Login flow → session token. (No refresh endpoint exists; SDK exposes `isSessionExpired` and surfaces `AuthError` so callers can re-prompt.)
+- [x] Token storage: define an interface (`TokenStore`), provide in-memory + simple file impls in the SDK. App will plug in Tauri keychain later.
+- [x] First real endpoint: `getSubscribedJams()` — hits CouchDB with the Basic auth keypair from login, proving the full credential chain works.
+- [x] Test against a real account (creds via `packages/sdk/.env.local`).
 
-**Checkpoint**: a vitest integration test logs in and fetches the user profile.
+**Checkpoint**: ~~a vitest integration test logs in and fetches the user profile.~~ ✓ Done 2026-05-12 — live login + 98 subscribed jams fetched.
 
 ---
 
