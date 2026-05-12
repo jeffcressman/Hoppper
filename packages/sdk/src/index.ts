@@ -28,3 +28,4 @@ export {
   type StemCache,
   type StemCachePutKey,
 } from './stems/cache.js';
+export { InMemoryStemCache } from './stems/in-memory-cache.js';
