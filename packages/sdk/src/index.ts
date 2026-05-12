@@ -21,4 +21,4 @@ export {
   FileTokenStore,
   type TokenStore,
 } from './token-store.js';
-export type { AuthSession } from './types.js';
+export * from './types/index.js';

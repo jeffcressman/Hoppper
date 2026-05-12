@@ -33,6 +33,9 @@ export interface TransportRequest {
   body?: object | string;
   auth?: AuthMode;
   contentType?: string;
+  // Optional transform applied to the response body text before JSON.parse.
+  // Used for the Endlesss length-as-string quirk on stem documents.
+  responseTextTransform?: (text: string) => string;
 }
 
 // Mirrors LORE's NetConfiguration::attempt: 250ms, +150ms each retry, capped at 1s.
@@ -120,8 +123,9 @@ export class HttpTransport {
       if (response.status >= 200 && response.status < 300) {
         const text = await response.text();
         if (!text) return undefined as T;
+        const transformed = req.responseTextTransform ? req.responseTextTransform(text) : text;
         try {
-          return JSON.parse(text) as T;
+          return JSON.parse(transformed) as T;
         } catch {
           throw new HttpError(response.status, text, null, req.url);
         }

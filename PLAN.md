@@ -67,14 +67,14 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 **Goal**: list jams, get riffs, get stem URLs.
 
-- [ ] `listJams()` — subscribed jams, solo jam, public jams.
-- [ ] `getJam(jamId)` — metadata.
-- [ ] `getRiffs(jamId, opts)` — paginated; handle the 50,000+ riff case via streaming/cursor.
-- [ ] `getStemUrls(riff)` — resolve the 8 stem download URLs and their formats (Ogg/FLAC).
-- [ ] Types for everything in `packages/sdk/src/types/`.
-- [ ] Tests against a known small jam.
+- [x] `listJams()` — returns subscribed + personal + joinable jams as `JamRef`s. Names are NOT eagerly fetched (server-etiquette); caller uses `getJam` per ID.
+- [x] `getJam(jamId)` — JamProfile (displayName, bio?, appVersion?). Hyphen→(2d) escape applied for personal jam IDs.
+- [x] `getRiffIds(jamId, opts)` + `getRiffs(jamId, ids)` + `iterateRiffs(jamId, opts)` — paginated, async iterator handles 50k+ riff jams without loading all at once.
+- [x] `resolveStemUrl(stemDoc)` (pure) + `getStemUrls(jamId, riff)` — handles quirks #1 (length-as-string), #4 (missing OGG key), #5 (http(s):// in endpoint), #6 (bucket-in-endpoint). Prefers FLAC when present.
+- [x] Types split into `packages/sdk/src/types/` (auth, ids, jam, riff, stem).
+- [x] Live integration test against a known small jam, gated behind `HOPPPER_RUN_LIVE_TESTS=1` to avoid hitting servers on routine `pnpm test`.
 
-**Checkpoint**: SDK can enumerate a jam and produce playable stem URLs.
+**Checkpoint**: ~~SDK can enumerate a jam and produce playable stem URLs.~~ ✓ Done 2026-05-12 — live test confirmed enumeration + stem URL resolution against `bande7b989f1bb` (jam 'lwlkc').
 
 ---
 

@@ -5,7 +5,20 @@ import {
   type RetryPolicy,
 } from './transport.js';
 import { InMemoryTokenStore, type TokenStore } from './token-store.js';
-import type { AuthSession } from './types.js';
+import { applyLengthQuirk, parseRiffDocument, parseStemDocument, resolveStemUrl } from './parse.js';
+import type {
+  AuthSession,
+  JamListing,
+  JamProfile,
+  JamRef,
+  RiffCouchID,
+  RiffDocument,
+  RiffIndex,
+  RiffIndexRow,
+  ResolvedStem,
+  StemCouchID,
+  StemDocument,
+} from './types/index.js';
 
 const DEFAULT_API_DOMAIN = 'https://api.endlesss.fm';
 const DEFAULT_DATA_DOMAIN = 'https://data.endlesss.fm';
@@ -46,6 +59,39 @@ interface RawSubscribedJamsResponse {
   total_rows: number;
   offset: number;
   rows: Array<{ id: string; key: string; value?: unknown }>;
+}
+
+interface RawJamProfile {
+  displayName: string;
+  bio?: string;
+  app_version?: number;
+}
+
+interface RawRiffViewResponse {
+  total_rows: number;
+  offset: number;
+  rows: Array<{ id: string; key: number | string; value: unknown }>;
+}
+
+interface RawAllDocsResponse {
+  rows?: Array<{
+    id?: string;
+    key: string;
+    value?: { rev?: string; deleted?: boolean };
+    doc?: unknown;
+    error?: string;
+  }>;
+}
+
+export interface GetRiffIdsOptions {
+  limit?: number;
+  skip?: number;
+  descending?: boolean;
+}
+
+export interface IterateRiffsOptions {
+  pageSize?: number;
+  descending?: boolean;
 }
 
 export class EndlesssClient {
@@ -127,6 +173,190 @@ export class EndlesssClient {
     return raw.rows.map((row) => ({ jamId: row.id, joinedAt: row.key }));
   }
 
+  async listJams(opts: { includeJoinable?: boolean } = {}): Promise<JamListing> {
+    const session = await this.requireValidSession();
+    const includeJoinable = opts.includeJoinable !== false;
+
+    const subscribedPromise = this.getSubscribedJams();
+    const joinablePromise = includeJoinable
+      ? this.fetchJoinableJamIds(session)
+      : Promise.resolve<string[]>([]);
+
+    const [subscribedRows, joinableIds] = await Promise.all([subscribedPromise, joinablePromise]);
+
+    const personal: JamRef = { jamId: session.userId, category: 'personal' };
+    const subscribed: JamRef[] = subscribedRows.map((row) => ({
+      jamId: row.jamId,
+      category: 'subscribed',
+      joinedAt: row.joinedAt,
+    }));
+    const joinable: JamRef[] = joinableIds.map((jamId) => ({
+      jamId,
+      category: 'joinable',
+    }));
+    return { personal, subscribed, joinable };
+  }
+
+  private async fetchJoinableJamIds(session: AuthSession): Promise<string[]> {
+    const url = `${this.dataDomain}/app_client_config/bands:joinable`;
+    const raw = await this.transport.request<{ band_ids?: string[] }>({
+      url,
+      method: 'GET',
+      auth: { kind: 'basic', token: session.token, password: session.password },
+    });
+    return raw.band_ids ?? [];
+  }
+
+  async getRiffIds(
+    jamId: string,
+    opts: GetRiffIdsOptions = {},
+  ): Promise<RiffIndex> {
+    const session = await this.requireValidSession();
+    const path = escapeCouchJamId(jamId);
+    const query: string[] = [];
+    if (opts.descending !== false) query.push('descending=true');
+    if (opts.limit !== undefined) query.push(`limit=${opts.limit}`);
+    if (opts.skip !== undefined) query.push(`skip=${opts.skip}`);
+    const qs = query.length ? `?${query.join('&')}` : '';
+    const url = `${this.dataDomain}/user_appdata$${path}/_design/types/_view/rifffLoopsByCreateTime${qs}`;
+
+    const raw = await this.transport.request<RawRiffViewResponse>({
+      url,
+      method: 'GET',
+      auth: { kind: 'basic', token: session.token, password: session.password },
+    });
+
+    const rows: RiffIndexRow[] = raw.rows.map((row) => {
+      const stemIds: (StemCouchID | null)[] = [];
+      const value = Array.isArray(row.value) ? row.value : [];
+      for (let i = 0; i < 8; i++) {
+        const v = value[i];
+        stemIds.push(typeof v === 'string' && v !== '' ? (v as StemCouchID) : null);
+      }
+      return {
+        riffId: row.id as RiffCouchID,
+        createdAtNs: BigInt(row.key),
+        stemIds,
+      };
+    });
+
+    return { totalRows: raw.total_rows, rows };
+  }
+
+  async getRiffs(jamId: string, riffIds: string[]): Promise<RiffDocument[]> {
+    if (riffIds.length === 0) return [];
+    const session = await this.requireValidSession();
+    const path = escapeCouchJamId(jamId);
+    const url = `${this.dataDomain}/user_appdata$${path}/_all_docs?include_docs=true`;
+
+    const raw = await this.transport.request<RawAllDocsResponse>({
+      url,
+      method: 'POST',
+      body: { keys: riffIds },
+      auth: { kind: 'basic', token: session.token, password: session.password },
+    });
+
+    const out: RiffDocument[] = [];
+    for (const row of raw.rows ?? []) {
+      if (row.error) continue;
+      if (row.value && (row.value as { deleted?: boolean }).deleted) continue;
+      if (!row.doc) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      out.push(parseRiffDocument(row.doc as any, jamId));
+    }
+    return out;
+  }
+
+  async getStemDocuments(
+    jamId: string,
+    stemIds: string[],
+  ): Promise<(StemDocument | null)[]> {
+    if (stemIds.length === 0) return [];
+    const session = await this.requireValidSession();
+    const path = escapeCouchJamId(jamId);
+    const url = `${this.dataDomain}/user_appdata$${path}/_all_docs?include_docs=true`;
+
+    const raw = await this.transport.request<RawAllDocsResponse>({
+      url,
+      method: 'POST',
+      body: { keys: stemIds },
+      auth: { kind: 'basic', token: session.token, password: session.password },
+      responseTextTransform: applyLengthQuirk,
+    });
+
+    const rows = raw.rows ?? [];
+    return rows.map((row) => {
+      if (row.error) return null;
+      if (row.value && (row.value as { deleted?: boolean }).deleted) return null;
+      if (!row.doc) return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return parseStemDocument(row.doc as any);
+    });
+  }
+
+  async getStemUrls(
+    jamId: string,
+    riff: RiffDocument,
+  ): Promise<(ResolvedStem | null)[]> {
+    const activeStemIds = riff.slots.map((s) => (s.on ? s.stemId : null));
+    const uniqueIds = Array.from(new Set(activeStemIds.filter((x): x is StemCouchID => !!x)));
+
+    if (uniqueIds.length === 0) {
+      return Array.from({ length: 8 }, () => null);
+    }
+
+    const docs = await this.getStemDocuments(jamId, uniqueIds);
+    const byId = new Map<string, StemDocument>();
+    for (let i = 0; i < uniqueIds.length; i++) {
+      const doc = docs[i];
+      if (doc) byId.set(uniqueIds[i]!, doc);
+    }
+
+    return activeStemIds.map((id) => {
+      if (!id) return null;
+      const doc = byId.get(id);
+      if (!doc) return null;
+      return resolveStemUrl(doc);
+    });
+  }
+
+  async *iterateRiffs(
+    jamId: string,
+    opts: IterateRiffsOptions = {},
+  ): AsyncGenerator<RiffDocument[], void, void> {
+    const pageSize = opts.pageSize ?? 50;
+    const descending = opts.descending !== false;
+    let skip = 0;
+    while (true) {
+      const index = await this.getRiffIds(jamId, { limit: pageSize, skip, descending });
+      if (index.rows.length === 0) return;
+      const riffs = await this.getRiffs(
+        jamId,
+        index.rows.map((r) => r.riffId),
+      );
+      yield riffs;
+      if (index.rows.length < pageSize) return;
+      skip += index.rows.length;
+    }
+  }
+
+  async getJam(jamId: string): Promise<JamProfile> {
+    const session = await this.requireValidSession();
+    const path = escapeCouchJamId(jamId);
+    const url = `${this.dataDomain}/user_appdata$${path}/Profile`;
+
+    const raw = await this.transport.request<RawJamProfile>({
+      url,
+      method: 'GET',
+      auth: { kind: 'basic', token: session.token, password: session.password },
+    });
+
+    const profile: JamProfile = { jamId, displayName: raw.displayName };
+    if (raw.bio !== undefined) profile.bio = raw.bio;
+    if (raw.app_version !== undefined) profile.appVersion = raw.app_version;
+    return profile;
+  }
+
   private async requireValidSession(): Promise<AuthSession> {
     const session = await this.getSession();
     if (!session) throw new AuthError('not logged in');
@@ -169,8 +399,16 @@ function isLoginSuccess(raw: unknown): raw is RawLoginSuccess {
 }
 
 // Personal jam CouchIDs are the username verbatim; CouchDB paths can't carry
-// hyphens, so LORE escapes them as `(2d)`. Subscribed-jams view path uses the
-// same escape rule.
+// hyphens, so LORE escapes them as `(2d)`. The user-appdata path of the
+// subscribed-jams view always uses the literal username, so always escape.
 function escapeCouchUserName(name: string): string {
   return name.replace(/-/g, '(2d)');
+}
+
+// Jam IDs prefixed `band` are opaque CouchIDs and pass through unchanged.
+// Anything else is a personal jam whose ID is the username and needs the same
+// `-` → `(2d)` treatment. Mirrors LORE's checkAndSanitizeJamCouchID.
+function escapeCouchJamId(jamId: string): string {
+  if (jamId.startsWith('band')) return jamId;
+  return escapeCouchUserName(jamId);
 }

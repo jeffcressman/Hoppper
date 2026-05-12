@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync, statSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTokenStore, FileTokenStore } from '../src/token-store.js';
-import type { AuthSession } from '../src/types.js';
+import type { AuthSession } from '../src/types/index.js';
 
 const fixture: AuthSession = {
   token: 'tok-abc',

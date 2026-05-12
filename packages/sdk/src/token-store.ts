@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, chmod } from 'node:fs/promises';
-import type { AuthSession } from './types.js';
+import type { AuthSession } from './types/index.js';
 
 export interface TokenStore {
   load(): Promise<AuthSession | null>;
