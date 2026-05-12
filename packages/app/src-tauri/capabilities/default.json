@@ -1,0 +1,7 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema/acl/capabilities/capability.json",
+  "identifier": "default",
+  "description": "Default capability set for Hoppper",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

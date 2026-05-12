@@ -1,0 +1,15 @@
+{
+  "name": "hoppper",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "pnpm --filter @hoppper/app dev",
+    "build": "pnpm --filter @hoppper/sdk build && pnpm --filter @hoppper/app build",
+    "test": "pnpm --filter @hoppper/sdk test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
+  }
+}

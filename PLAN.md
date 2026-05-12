@@ -20,16 +20,16 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 **Goal**: understand what we're actually targeting before writing any product code.
 
-- [ ] Read `../OUROVEON/src/r0.endlesss/` end to end. Produce `docs/protocol/overview.md` summarising:
+- [x] Read `../OUROVEON/src/r0.endlesss/` end to end. Produce `docs/protocol/overview.md` summarising:
   - Base URLs and authentication flow (login, session, token refresh)
   - Public-only "fallback" endpoint set vs authenticated endpoint set
   - Core data shapes: `Jam`, `Riff`, `Stem`, `Shared Riff`
   - WebSocket protocol (the one BEAM/LORE use for pushing riff sequences)
   - Known quirks / damaged-data handling LORE accounts for
-- [ ] Check LORE's git log since August 2025 for any commits related to Hablab's reactivated servers. Note any endpoint changes.
-- [ ] Decide: do we support unauthenticated public-endpoints mode in v1, or auth-only? (Recommend auth-only; faster to ship.)
+- [x] Check LORE's git log since August 2025 for any commits related to Hablab's reactivated servers. Note any endpoint changes.
+- [x] Decide: do we support unauthenticated public-endpoints mode in v1, or auth-only? **Decision: auth-only.**
 
-**Checkpoint**: protocol overview reviewed with user. Confirm scope.
+**Checkpoint**: ~~protocol overview reviewed with user. Confirm scope.~~ ✓ Done 2026-05-12.
 
 ---
 
@@ -37,12 +37,12 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 **Goal**: empty but correct shells for both packages, CI green.
 
-- [ ] pnpm workspace at root. `packages/sdk` (publishable as `@hoppper/sdk`) and `packages/app`.
-- [ ] `packages/sdk`: tsup for build, vitest for tests, strict TS, ESLint, prettier. Publishable shape (`exports`, `types`, `files`).
-- [ ] `packages/app`: Tauri 2.x + Vue 3 + Vite scaffold (`pnpm create tauri-app`). Add Pinia for state, Vue Router if needed later.
-- [ ] Root scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`.
-- [ ] Basic GitHub Actions: typecheck + test on push.
-- [ ] `.gitignore` covers `node_modules`, `dist`, `target/`, `.env.local`, `reference/`.
+- [x] pnpm workspace at root. `packages/sdk` (publishable as `@hoppper/sdk`) and `packages/app`.
+- [x] `packages/sdk`: tsup for build, vitest for tests, strict TS, ESLint, prettier. Publishable shape (`exports`, `types`, `files`).
+- [x] `packages/app`: Tauri 2.x + Vue 3 + Vite scaffold. Add Pinia for state, Vue Router if needed later.
+- [x] Root scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`.
+- [x] Basic GitHub Actions: typecheck + test on push.
+- [x] `.gitignore` covers `node_modules`, `dist`, `target/`, `.env.local`, `reference/`.
 
 **Checkpoint**: `pnpm dev` opens an empty Tauri window with a Vue page; `pnpm test` passes on an empty SDK.
 
