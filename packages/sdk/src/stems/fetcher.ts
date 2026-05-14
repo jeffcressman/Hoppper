@@ -28,12 +28,14 @@ export class StemIntegrityError extends Error {
 export class StemFetcher {
   private readonly transport: HttpTransport;
   private readonly cache: StemCache;
+  private readonly concurrency: number;
   private readonly allowSizeMismatch: boolean;
   private readonly logger?: (entry: StemFetchLog) => void;
 
   constructor(opts: StemFetcherOptions) {
     this.transport = opts.transport;
     this.cache = opts.cache;
+    this.concurrency = opts.concurrency ?? 4;
     this.allowSizeMismatch = opts.allowSizeMismatch ?? false;
     this.logger = opts.logger;
   }
@@ -71,5 +73,32 @@ export class StemFetcher {
       length: bytes.length,
       source: 'network',
     };
+  }
+
+  async fetchRiff(
+    jamId: JamCouchID,
+    resolved: ReadonlyArray<ResolvedStem | null>,
+  ): Promise<(StemBlob | null)[]> {
+    const results: (StemBlob | null)[] = new Array(resolved.length).fill(null);
+    const indices = resolved
+      .map((r, i) => (r ? i : -1))
+      .filter((i) => i >= 0);
+
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const slot = cursor++;
+        if (slot >= indices.length) return;
+        const i = indices[slot]!;
+        results[i] = await this.fetchOne(resolved[i]!, jamId);
+      }
+    };
+
+    const workerCount = Math.min(this.concurrency, indices.length);
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < workerCount; w++) workers.push(worker());
+    await Promise.all(workers);
+
+    return results;
   }
 }
