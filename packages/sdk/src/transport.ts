@@ -203,6 +203,12 @@ export class HttpTransport {
   private buildBaseHeaders(omitLoadBalancerCookie?: boolean): Record<string, string> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
+      // Tauri's plugin-http auto-injects 'Origin: tauri://localhost' on every
+      // request unless we set Origin ourselves. Endlesss's auth tier doesn't
+      // recognise that scheme and 500s. With the 'unsafe-headers' feature
+      // flag, an explicit empty Origin tells the plugin to drop the header
+      // entirely — matching how LORE's httplib client behaves (no Origin).
+      Origin: '',
     };
     if (!omitLoadBalancerCookie) {
       headers['Cookie'] = this.loadBalancerCookie();
