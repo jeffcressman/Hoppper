@@ -117,6 +117,8 @@ Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-
 
 **Goal**: live performance mode works.
 
+Detailed design: [`docs/phases/phase-6-audio-engine.md`](docs/phases/phase-6-audio-engine.md).
+
 - [ ] Tone.js setup: master bus, per-stem channels (×8), crossfade pair for hop transitions.
 - [ ] Stem loader: decode cached bytes → `AudioBuffer` (FLAC via libflac.js, Ogg via `decodeAudioData`).
 - [ ] Playback engine: start riff at offset, loop at bar boundary.
