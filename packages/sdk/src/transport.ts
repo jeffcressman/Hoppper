@@ -36,6 +36,11 @@ export interface TransportRequest {
   // Optional transform applied to the response body text before JSON.parse.
   // Used for the Endlesss length-as-string quirk on stem documents.
   responseTextTransform?: (text: string) => string;
+  // Suppress the LB=liveNN load-balancer cookie. The cookie is a routing
+  // hint for the CouchDB cluster on data.endlesss.fm; sending it to other
+  // tiers (notably api.endlesss.fm/auth/login) triggers 500s because the
+  // upstream the cookie points at doesn't exist on that fleet.
+  omitLoadBalancerCookie?: boolean;
 }
 
 export interface BinaryTransportRequest {
@@ -45,6 +50,7 @@ export interface BinaryTransportRequest {
   auth?: AuthMode;
   // Accept header override; defaults to '*/*' for opaque binary responses.
   accept?: string;
+  omitLoadBalancerCookie?: boolean;
 }
 
 // Mirrors LORE's NetConfiguration::attempt: 250ms, +150ms each retry, capped at 1s.
@@ -177,7 +183,7 @@ export class HttpTransport {
   }
 
   private buildJsonHeaders(req: TransportRequest): Record<string, string> {
-    const headers = this.buildBaseHeaders();
+    const headers = this.buildBaseHeaders(req.omitLoadBalancerCookie);
     headers['Accept'] = 'application/json';
     headers['Accept-Language'] = 'en-gb';
     if (req.body !== undefined) {
@@ -188,17 +194,20 @@ export class HttpTransport {
   }
 
   private buildBinaryHeaders(req: BinaryTransportRequest): Record<string, string> {
-    const headers = this.buildBaseHeaders();
+    const headers = this.buildBaseHeaders(req.omitLoadBalancerCookie);
     headers['Accept'] = req.accept ?? '*/*';
     this.applyAuth(headers, req.auth);
     return headers;
   }
 
-  private buildBaseHeaders(): Record<string, string> {
-    return {
+  private buildBaseHeaders(omitLoadBalancerCookie?: boolean): Record<string, string> {
+    const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
-      Cookie: this.loadBalancerCookie(),
     };
+    if (!omitLoadBalancerCookie) {
+      headers['Cookie'] = this.loadBalancerCookie();
+    }
+    return headers;
   }
 
   private applyAuth(headers: Record<string, string>, auth: AuthMode | undefined): void {

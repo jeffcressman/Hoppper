@@ -125,6 +125,11 @@ export class EndlesssClient {
         url: `${this.apiDomain}/auth/login`,
         method: 'POST',
         body: { username, password },
+        // api.endlesss.fm is a different tier from the CouchDB cluster the
+        // LB cookie pins; sending it here gets a 500 from the auth fleet's
+        // load balancer. LORE uses a bare HTTP client for login for the
+        // same reason.
+        omitLoadBalancerCookie: true,
       });
     } catch (err) {
       // Auth failures come back as 4xx with a `{ message }` body. Surface those
