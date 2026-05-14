@@ -26,6 +26,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '../stores';
+import { log } from '../logging/log-store';
 
 const session = useSessionStore();
 const router = useRouter();
@@ -36,11 +37,21 @@ const busy = ref(false);
 
 async function onSubmit() {
   busy.value = true;
+  log('info', 'login', `submitting login for user=${username.value}`);
   try {
     await session.login(username.value, password.value);
-    if (session.isAuthenticated) {
-      await router.push('/jams');
+    log('info', 'login', `session.login returned (authenticated=${session.isAuthenticated})`);
+    if (session.authError) {
+      log('warn', 'login', `auth error: ${session.authError}`);
     }
+    if (session.isAuthenticated) {
+      log('debug', 'login', 'pushing /jams');
+      await router.push('/jams');
+      log('info', 'login', 'navigated to /jams');
+    }
+  } catch (err) {
+    log('error', 'login', err instanceof Error ? err.message : String(err), err);
+    throw err;
   } finally {
     busy.value = false;
   }

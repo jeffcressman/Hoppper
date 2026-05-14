@@ -30,31 +30,49 @@ import {
   getOrCreateAudioContext,
   unlockAudioContext,
 } from './audio';
+import { installGlobalErrorCapture, log } from './logging/log-store';
 import type { JamCouchID, ResolvedStem, RiffDocument } from '@hoppper/sdk';
 
 async function bootstrap() {
-  const tokenStore = await openTokenStore();
+  installGlobalErrorCapture();
+  log('info', 'boot', 'bootstrap started');
 
+  log('debug', 'boot', 'opening token store');
+  const tokenStore = await openTokenStore();
+  log('info', 'boot', 'token store opened');
+
+  log('debug', 'boot', 'creating EndlesssClient');
   const client = new EndlesssClient({
     fetch: tauriFetch as typeof fetch,
     tokenStore,
     userAgent: 'hoppper/0.0.0',
+    logger: (entry) => {
+      const level = entry.error
+        ? 'error'
+        : entry.status && entry.status >= 400
+          ? 'warn'
+          : 'info';
+      const status = entry.status ? ` ${entry.status}` : '';
+      const tag = entry.error ? ' ERR' : '';
+      log(level, 'http', `${entry.method} ${entry.url}${status}${tag} (try ${entry.attempt})`, entry.error);
+    },
   });
   initClient(client);
+  log('info', 'boot', 'EndlesssClient ready');
 
   const app = createApp(App);
   const pinia = createPinia();
   app.use(pinia);
 
   const session = useSessionStore();
+  log('debug', 'boot', 'hydrating session from token store');
   await session.hydrate();
+  log('info', 'boot', `session hydrated (authenticated=${session.isAuthenticated})`);
 
-  // Audio bootstrap. AudioContext is created lazily — Tauri's webview still
-  // honors the autoplay policy, so we resume() on the first user gesture
-  // inside PerformView. Stem bytes flow through a Tauri-backed FS cache that
-  // shares the layout already validated in Phase 5's self-test.
+  log('debug', 'boot', 'resolving appLocalDataDir');
   const appData = await appLocalDataDir();
   const stemCacheRoot = await join(appData, 'stem-cache');
+  log('debug', 'boot', `stem cache root: ${stemCacheRoot}`);
   const stemCache = new FilesystemStemCache({
     root: stemCacheRoot,
     fs: tauriFsAdapter(),
@@ -62,12 +80,24 @@ async function bootstrap() {
   const stemTransport = new HttpTransport({
     fetch: tauriFetch as typeof fetch,
     userAgent: 'hoppper/0.0.0',
+    logger: (entry) => {
+      const level = entry.error
+        ? 'error'
+        : entry.status && entry.status >= 400
+          ? 'warn'
+          : 'debug';
+      const status = entry.status ? ` ${entry.status}` : '';
+      log(level, 'stem-http', `${entry.method} ${entry.url}${status}`, entry.error);
+    },
   });
   const stemFetcher = new StemFetcher({
     transport: stemTransport,
     cache: stemCache,
+    logger: (entry) => log('warn', 'stem-fetch', JSON.stringify(entry)),
   });
+  log('debug', 'boot', 'creating AudioContext (suspended)');
   const audioContext = getOrCreateAudioContext();
+  log('debug', 'boot', `AudioContext.state=${audioContext.state} sampleRate=${audioContext.sampleRate}`);
   const decoder = createDecoder({
     ogg: createNativeDecoder(audioContext),
     flac: createNativeDecoder(audioContext),
@@ -80,17 +110,23 @@ async function bootstrap() {
   });
   const engine = createAudioEngine({ context: audioContext, loader });
   const prefetcher = createPrefetchRing({ loader });
+  engine.onStateChange((s) => log('info', 'audio', `engine state → ${s}`));
 
   const resolveStems = async (
     jamId: JamCouchID,
     riff: RiffDocument,
   ): Promise<ResolvedStem[]> => {
+    log('debug', 'audio', `resolveStems jam=${jamId} riff=${riff.riffId}`);
     await unlockAudioContext();
+    log('debug', 'audio', `AudioContext resumed → ${audioContext.state}`);
     const resolved = await client.getStemUrls(jamId, riff);
-    return resolved.filter((r): r is ResolvedStem => r !== null);
+    const filtered = resolved.filter((r): r is ResolvedStem => r !== null);
+    log('info', 'audio', `resolveStems → ${filtered.length} stems`);
+    return filtered;
   };
 
   initPerformanceStore({ engine, prefetcher, resolveStems });
+  log('info', 'boot', 'performance store initialized');
 
   const router = createAppRouter({
     isAuthenticated: () => session.isAuthenticated,
@@ -102,6 +138,9 @@ async function bootstrap() {
     ],
     useWebHistory: true,
   });
+  router.afterEach((to, from) => {
+    log('debug', 'route', `${from.fullPath} → ${to.fullPath}`);
+  });
   app.use(router);
 
   if (import.meta.env.DEV) {
@@ -110,9 +149,11 @@ async function bootstrap() {
   }
 
   app.mount('#app');
+  log('info', 'boot', 'mounted');
 }
 
 bootstrap().catch((err) => {
+  log('error', 'boot', err instanceof Error ? err.message : String(err), err);
   // eslint-disable-next-line no-console
   console.error('[hoppper] bootstrap failed:', err);
   const root = document.getElementById('app');
