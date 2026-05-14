@@ -13,11 +13,9 @@
         { "url": "https://*.amazonaws.com/*" }
       ]
     },
-    "fs:default",
-    {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "$APPLOCALDATA/**" }]
-    },
+    "fs:allow-applocaldata-read-recursive",
+    "fs:allow-applocaldata-write-recursive",
+    "fs:allow-applocaldata-meta-recursive",
     "stronghold:default"
   ]
 }
