@@ -100,10 +100,14 @@ Detailed design: [`docs/phases/phase-4-stems-and-cache.md`](docs/phases/phase-4-
 
 **Goal**: the Vue app is properly wired to Tauri.
 
-- [ ] Tauri commands: `fetchUrl` (CORS-free HTTP), `cacheRead`/`cacheWrite` (filesystem), `keychainGet`/`keychainSet` (secure token store).
-- [ ] Inject Tauri-backed `fetch` and `TokenStore` into the SDK.
-- [ ] Pinia store for session, current jam, current riff selection.
-- [ ] Basic UI: login screen → jam list → riff list (no audio yet).
+Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-app-shell-tauri.md).
+
+- [ ] Tauri-backed `fetch` (via `tauri-plugin-http`) injected into `HttpTransport`.
+- [ ] `TauriFsAdapter` (via `tauri-plugin-fs`) + `FilesystemStemCache` rooted at `appLocalDataDir`. Plumbing-only this phase; sanity command proves it works.
+- [ ] `StrongholdTokenStore` (via `tauri-plugin-stronghold`) implementing the SDK's `TokenStore`; vault key file at `appLocalDataDir/vault.key`.
+- [ ] Pinia stores: `useSessionStore`, `useJamsStore`, `useCurrentJamStore`.
+- [ ] Vue Router with `/login`, `/jams`, `/jams/:jamId`; auth guard redirects to login.
+- [ ] Views: `LoginView`, `JamListView`, `JamDetailView` — no audio yet.
 
 **Checkpoint**: log in, browse jams, browse riffs — all from the Tauri app.
 
