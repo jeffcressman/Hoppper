@@ -1,5 +1,10 @@
-import { readFile, writeFile, unlink, chmod } from 'node:fs/promises';
 import type { AuthSession } from './types/index.js';
+
+// Lazy-loaded so the SDK can be bundled for the browser/Tauri without
+// pulling in node:fs/promises at module-evaluation time.
+async function nodeFs() {
+  return await import('node:fs/promises');
+}
 
 export interface TokenStore {
   load(): Promise<AuthSession | null>;
@@ -27,9 +32,10 @@ export class FileTokenStore implements TokenStore {
   constructor(private readonly path: string) {}
 
   async load(): Promise<AuthSession | null> {
+    const fs = await nodeFs();
     let raw: string;
     try {
-      raw = await readFile(this.path, 'utf8');
+      raw = await fs.readFile(this.path, 'utf8');
     } catch (err) {
       if (isNotFound(err)) return null;
       throw err;
@@ -42,18 +48,20 @@ export class FileTokenStore implements TokenStore {
   }
 
   async save(session: AuthSession): Promise<void> {
-    await writeFile(this.path, JSON.stringify(session, null, 2), {
+    const fs = await nodeFs();
+    await fs.writeFile(this.path, JSON.stringify(session, null, 2), {
       encoding: 'utf8',
       mode: 0o600,
     });
     // writeFile only applies `mode` on file creation; chmod ensures perms are
     // tightened when overwriting an existing file too.
-    await chmod(this.path, 0o600);
+    await fs.chmod(this.path, 0o600);
   }
 
   async clear(): Promise<void> {
+    const fs = await nodeFs();
     try {
-      await unlink(this.path);
+      await fs.unlink(this.path);
     } catch (err) {
       if (isNotFound(err)) return;
       throw err;

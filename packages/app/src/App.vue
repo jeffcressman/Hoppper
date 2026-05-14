@@ -1,5 +1,7 @@
 <template>
-  <main>
-    <h1>Hoppper</h1>
-  </main>
+  <RouterView />
 </template>
+
+<script setup lang="ts">
+import { RouterView } from 'vue-router';
+</script>

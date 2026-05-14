@@ -59,7 +59,8 @@ describe('openTokenStore', () => {
     const ts = await openTokenStore();
 
     expect(strongholdMocks.Stronghold.load).toHaveBeenCalledTimes(1);
-    const [vaultPath, password] = strongholdMocks.Stronghold.load.mock.calls[0]!;
+    const call = strongholdMocks.Stronghold.load.mock.calls[0] as unknown as [string, string];
+    const [vaultPath, password] = call;
     expect(vaultPath).toBe('/app-data/session.stronghold');
     // 32-byte key in hex = 64 chars; the stub key is all 0x42s.
     expect(password).toBe('42'.repeat(32));

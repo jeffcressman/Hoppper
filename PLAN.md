@@ -102,12 +102,12 @@ Detailed design: [`docs/phases/phase-4-stems-and-cache.md`](docs/phases/phase-4-
 
 Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-app-shell-tauri.md).
 
-- [ ] Tauri-backed `fetch` (via `tauri-plugin-http`) injected into `HttpTransport`.
-- [ ] `TauriFsAdapter` (via `tauri-plugin-fs`) + `FilesystemStemCache` rooted at `appLocalDataDir`. Plumbing-only this phase; sanity command proves it works.
-- [ ] `StrongholdTokenStore` (via `tauri-plugin-stronghold`) implementing the SDK's `TokenStore`; vault key file at `appLocalDataDir/vault.key`.
-- [ ] Pinia stores: `useSessionStore`, `useJamsStore`, `useCurrentJamStore`.
-- [ ] Vue Router with `/login`, `/jams`, `/jams/:jamId`; auth guard redirects to login.
-- [ ] Views: `LoginView`, `JamListView`, `JamDetailView` — no audio yet.
+- [x] Tauri-backed `fetch` (via `tauri-plugin-http`) injected into `HttpTransport`.
+- [x] `TauriFsAdapter` (via `tauri-plugin-fs`) + sanity command `stem_cache_self_test` proving FilesystemStemCache works inside the sandbox.
+- [x] `StrongholdTokenStore` (via `tauri-plugin-stronghold`) implementing the SDK's `TokenStore`; vault key file at `appLocalDataDir/vault.key`.
+- [x] Pinia stores: `useSessionStore`, `useJamsStore`, `useCurrentJamStore`.
+- [x] Vue Router with `/login`, `/jams`, `/jams/:jamId`; auth guard redirects to login.
+- [x] Views: `LoginView`, `JamListView`, `JamDetailView` — no audio yet.
 
 **Checkpoint**: log in, browse jams, browse riffs — all from the Tauri app.
 
