@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter @hoppper/app dev",
     "build": "pnpm --filter @hoppper/sdk build && pnpm --filter @hoppper/app build",
-    "test": "pnpm --filter @hoppper/sdk test",
+    "test": "pnpm -r test",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
