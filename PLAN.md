@@ -84,10 +84,10 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 Detailed design: [`docs/phases/phase-4-stems-and-cache.md`](docs/phases/phase-4-stems-and-cache.md).
 
-- [ ] `StemCache` interface (keyed by `StemCouchID`): `has`, `get`, `put`, optional `evict`.
-- [ ] `InMemoryStemCache` and `FilesystemStemCache` (V2 layout: `<root>/<jamId>/<firstChar>/<stemId>.<ext>`, atomic writes).
-- [ ] `FsAdapter` injection seam (default `node:fs/promises`; Tauri plugs in its own in Phase 5).
-- [ ] `HttpTransport.requestBinary()` — shares retry loop with the existing JSON path.
+- [x] `StemCache` interface (keyed by `StemCouchID`): `has`, `get`, `put`, optional `evict`.
+- [x] `InMemoryStemCache` and `FilesystemStemCache` (V2 layout: `<root>/<jamId>/<firstChar>/<stemId>.<ext>`, atomic writes).
+- [x] `FsAdapter` injection seam (default `node:fs/promises`; Tauri plugs in its own in Phase 5).
+- [x] `HttpTransport.requestBinary()` — shares retry loop with the existing JSON path.
 - [ ] `StemFetcher`: bounded-concurrency download (default 4 in-flight), byte-length integrity check, `allowSizeMismatch` flag matching LORE's `hackAllowStemSizeMismatch`.
 - [ ] `prefetchRiffs(...)`: async-iterator progress handle with `cancel()` and `done()`.
 - [ ] **LORE piggyback (reframed from "importer")**: `ReadonlyLoreStemDir` is a first-class read-only cache tier, composed via `LayeredStemCache` with `promoteOnRead: true`. Stems live where LORE put them; touched stems get promoted into Hoppper's own cache so Hoppper becomes self-contained over time. **No byte duplication of untouched stems.** The sqlite `warehouse.db3` metadata importer is deferred to Phase 5 where the Tauri sqlite plugin lives.
