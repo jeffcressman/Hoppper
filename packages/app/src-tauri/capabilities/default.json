@@ -1,7 +1,23 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/schema/acl/capabilities/capability.json",
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability set for Hoppper",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.endlesss.fm/*" },
+        { "url": "https://data.endlesss.fm/*" },
+        { "url": "https://*.amazonaws.com/*" }
+      ]
+    },
+    "fs:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$APPLOCALDATA/**" }]
+    },
+    "stronghold:default"
+  ]
 }
