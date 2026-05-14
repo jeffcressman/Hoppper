@@ -19,6 +19,7 @@ import { createAppRouter } from './router';
 import { initPerformanceStore, useSessionStore } from './stores';
 import { openTokenStore } from './tauri/open-token-store';
 import { tauriFsAdapter } from './tauri/fs-adapter';
+import { endlesssHttpFetch } from './tauri/endlesss-http-fetch';
 import {
   createAudioBufferCache,
   createAudioEngine,
@@ -43,7 +44,10 @@ async function bootstrap() {
 
   log('debug', 'boot', 'creating EndlesssClient');
   const client = new EndlesssClient({
-    fetch: tauriFetch as typeof fetch,
+    // endlesssHttpFetch routes through a Rust reqwest client pinned to
+    // HTTP/1.1. tauri-plugin-http's default HTTP/2 client gets 500'd by
+    // Endlesss's Cloudflare front-end; HTTP/1.1 succeeds.
+    fetch: endlesssHttpFetch,
     tokenStore,
     userAgent: 'hoppper/0.0.0',
     logger: (entry) => {
