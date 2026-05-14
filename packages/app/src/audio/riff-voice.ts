@@ -23,7 +23,9 @@ export interface AudioBufferSourceLike extends AudioNodeLike {
   loop: boolean;
   loopStart: number;
   loopEnd: number;
-  onended: (() => void) | null;
+  // Loose signature so a real AudioBufferSourceNode satisfies us structurally.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onended: ((...args: any[]) => any) | null;
   start(when?: number, offset?: number): void;
   stop(when?: number): void;
   connect(destination: AudioNodeLike): void;

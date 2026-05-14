@@ -3,6 +3,13 @@
     <header>
       <h1>{{ displayName }}</h1>
       <p v-if="profile?.bio" class="bio">{{ profile.bio }}</p>
+      <router-link
+        :to="{ name: 'perform', params: { jamId } }"
+        data-test="perform-link"
+        class="perform-link"
+      >
+        Perform →
+      </router-link>
     </header>
     <ul class="riffs">
       <li
@@ -76,6 +83,12 @@ header {
 .bio {
   color: #666;
   margin: 0.25rem 0 0;
+}
+.perform-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 .riffs {
   list-style: none;

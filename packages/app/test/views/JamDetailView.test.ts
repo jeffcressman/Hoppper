@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils';
+
+const globalMountOptions = {
+  global: { stubs: { 'router-link': RouterLinkStub } },
+};
 
 const jamsStub = vi.hoisted(() => ({
   profilesById: new Map<string, { displayName: string; bio?: string }>(),
@@ -54,7 +58,7 @@ beforeEach(() => {
 
 describe('JamDetailView', () => {
   it('calls jamsStore.loadProfile and currentJamStore.open for the route jamId on mount', async () => {
-    mount(JamDetailView);
+    mount(JamDetailView, globalMountOptions);
     await flushPromises();
     expect(jamsStub.loadProfile).toHaveBeenCalledWith('band1');
     expect(currentJamStub.open).toHaveBeenCalledWith('band1');
@@ -62,14 +66,14 @@ describe('JamDetailView', () => {
 
   it('renders displayName when the profile is in the cache', async () => {
     jamsStub.profilesById = new Map([['band1', { displayName: 'Cool Band', bio: 'a bio' }]]);
-    const wrapper = mount(JamDetailView);
+    const wrapper = mount(JamDetailView, globalMountOptions);
     await flushPromises();
     expect(wrapper.text()).toContain('Cool Band');
     expect(wrapper.text()).toContain('a bio');
   });
 
   it('falls back to the raw jam id while profile is loading', () => {
-    const wrapper = mount(JamDetailView);
+    const wrapper = mount(JamDetailView, globalMountOptions);
     expect(wrapper.text()).toContain('band1');
   });
 
@@ -78,7 +82,7 @@ describe('JamDetailView', () => {
       { riffId: 'r1', bpm: 120, createdAt: 1, slots: [{ on: true }, { on: false }] },
       { riffId: 'r2', bpm: 130, createdAt: 2, slots: [{ on: true }] },
     ];
-    const wrapper = mount(JamDetailView);
+    const wrapper = mount(JamDetailView, globalMountOptions);
     const rows = wrapper.findAll('[data-test="riff-row"]');
     expect(rows).toHaveLength(2);
     expect(rows[0]!.text()).toContain('r1');
@@ -87,7 +91,7 @@ describe('JamDetailView', () => {
 
   it('shows the Load more button when hasMore=true, and calls loadNextPage when clicked', async () => {
     currentJamStub.hasMore = true;
-    const wrapper = mount(JamDetailView);
+    const wrapper = mount(JamDetailView, globalMountOptions);
     const btn = wrapper.find('[data-test="load-more"]');
     expect(btn.exists()).toBe(true);
     await btn.trigger('click');
@@ -96,7 +100,7 @@ describe('JamDetailView', () => {
 
   it('hides Load more when hasMore=false', () => {
     currentJamStub.hasMore = false;
-    const wrapper = mount(JamDetailView);
+    const wrapper = mount(JamDetailView, globalMountOptions);
     expect(wrapper.find('[data-test="load-more"]').exists()).toBe(false);
   });
 });
