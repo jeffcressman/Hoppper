@@ -1,6 +1,31 @@
 use tauri::Manager;
 use tauri_plugin_stronghold::Builder as StrongholdBuilder;
 
+fn decode_hex_key(password: &str) -> Vec<u8> {
+    assert_eq!(
+        password.len(),
+        64,
+        "vault password must be 64-char hex (32 bytes)"
+    );
+    let mut out = Vec::with_capacity(32);
+    let bytes = password.as_bytes();
+    for chunk in bytes.chunks(2) {
+        let hi = hex_nibble(chunk[0]);
+        let lo = hex_nibble(chunk[1]);
+        out.push((hi << 4) | lo);
+    }
+    out
+}
+
+fn hex_nibble(c: u8) -> u8 {
+    match c {
+        b'0'..=b'9' => c - b'0',
+        b'a'..=b'f' => c - b'a' + 10,
+        b'A'..=b'F' => c - b'A' + 10,
+        _ => panic!("non-hex character in vault password"),
+    }
+}
+
 // Dev-time sanity check that the Tauri-backed FsAdapter wiring works inside
 // the sandbox. Writes one byte under appLocalDataDir and reads it back.
 // Wired in only via the JS dev console (`window.__hoppperSelfTest()` in
@@ -28,11 +53,13 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(
             StrongholdBuilder::new(|password| {
-                // Hoppper's vault password is already a 64-char hex string of
-                // 32 random bytes (see openTokenStore); the Stronghold plugin
-                // hashes whatever we hand it, so passing the hex bytes through
-                // is enough — no extra KDF is required on the Rust side.
-                password.as_bytes().to_vec()
+                // Hoppper's vault password is the 64-char hex of 32 random
+                // bytes generated JS-side (see openTokenStore + ensureVaultKey).
+                // Stronghold uses this callback's output directly as the
+                // snapshot encryption key and demands exactly 32 bytes —
+                // anything else trips "illegal non-contiguous size" inside
+                // libsodium. Decode the hex back to the original 32 bytes.
+                decode_hex_key(password)
             })
             .build(),
         )
