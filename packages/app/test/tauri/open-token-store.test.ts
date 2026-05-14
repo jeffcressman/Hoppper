@@ -32,6 +32,7 @@ const fsMocks = vi.hoisted(() => ({
     throw new Error('No such file or directory');
   }),
   writeFile: vi.fn(async () => {}),
+  mkdir: vi.fn(async () => {}),
 }));
 
 const cryptoMocks = vi.hoisted(() => ({

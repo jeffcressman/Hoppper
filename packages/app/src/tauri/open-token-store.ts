@@ -13,6 +13,11 @@ export async function openTokenStore(): Promise<StrongholdTokenStore> {
   const keyPath = await join(appData, 'vault.key');
 
   const fs = tauriFsAdapter();
+  // First-run installs land here before the OS-managed app-data directory
+  // exists. Tauri's writeFile does not create parents, so neither
+  // ensureVaultKey nor Stronghold.load can write through to disk without
+  // this. Recursive + idempotent — cheap to run every boot.
+  await fs.mkdir(appData, { recursive: true });
   const key = await ensureVaultKey({ keyPath, fs, randomBytes });
 
   // Stronghold takes a string password; hex-encode the 32 bytes so the same
