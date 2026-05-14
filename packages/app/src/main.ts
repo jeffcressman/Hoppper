@@ -112,4 +112,18 @@ async function bootstrap() {
   app.mount('#app');
 }
 
-void bootstrap();
+bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('[hoppper] bootstrap failed:', err);
+  const root = document.getElementById('app');
+  if (root) {
+    root.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.style.cssText =
+      'padding:1rem;margin:1rem;background:#fff5f5;color:#7a0010;font:13px/1.4 ui-monospace,monospace;white-space:pre-wrap;border:1px solid #f0c0c0;border-radius:4px;';
+    const message =
+      err instanceof Error ? `${err.message}\n\n${err.stack ?? ''}` : String(err);
+    pre.textContent = `Hoppper bootstrap failed:\n\n${message}`;
+    root.appendChild(pre);
+  }
+});
