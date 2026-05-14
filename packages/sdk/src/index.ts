@@ -30,4 +30,20 @@ export {
 } from './stems/cache.js';
 export { InMemoryStemCache } from './stems/in-memory-cache.js';
 export { FilesystemStemCache } from './stems/fs-cache.js';
+export { ReadonlyLoreStemDir } from './stems/lore-readonly.js';
+export { LayeredStemCache } from './stems/layered-cache.js';
 export { nodeFsAdapter, type FsAdapter } from './stems/fs-adapter.js';
+export {
+  StemFetcher,
+  StemIntegrityError,
+  type StemFetcherOptions,
+  type StemFetchLog,
+} from './stems/fetcher.js';
+export {
+  prefetchRiffs,
+  type PrefetchClient,
+  type PrefetchHandle,
+  type PrefetchOptions,
+  type PrefetchProgress,
+  type PrefetchResult,
+} from './stems/prefetcher.js';
