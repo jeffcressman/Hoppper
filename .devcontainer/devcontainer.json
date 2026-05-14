@@ -44,7 +44,11 @@
   "mounts": [
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-    "source=${localWorkspaceFolder}/../OUROVEON,target=/refs/OUROVEON,type=bind,readonly,consistency=cached"
+    "source=${localWorkspaceFolder}/../OUROVEON,target=/refs/OUROVEON,type=bind,readonly,consistency=cached",
+    "source=hoppper-node-modules-root-${devcontainerId},target=/workspace/node_modules,type=volume",
+    "source=hoppper-node-modules-sdk-${devcontainerId},target=/workspace/packages/sdk/node_modules,type=volume",
+    "source=hoppper-node-modules-app-${devcontainerId},target=/workspace/packages/app/node_modules,type=volume",
+    "source=hoppper-cargo-target-${devcontainerId},target=/workspace/packages/app/src-tauri/target,type=volume"
   ],
   "containerEnv": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
@@ -54,5 +58,6 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "postStartCommand": "sudo /usr/local/bin/init-firewall.sh || true",
+  "postCreateCommand": "sudo chown -R node:node /workspace/node_modules /workspace/packages/sdk/node_modules /workspace/packages/app/node_modules /workspace/packages/app/src-tauri/target && pnpm install",
   "waitFor": "postStartCommand"
 }

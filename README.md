@@ -71,6 +71,14 @@ pnpm dev
 
 This starts the Vite dev server for the Vue frontend and compiles the Tauri Rust backend, then opens the Hoppper desktop window. The first run takes longer while Cargo fetches and compiles crates; subsequent runs are fast.
 
+**Run `pnpm dev` on your host OS, not inside the dev container.** WebKitGTK inside a Linux container generally can't get a working GL context, so the Tauri window opens blank. Use the dev container for SDK/Vue work and tests; switch to a host terminal for the Tauri shell. To enable this without a reinstall every time you switch, the container keeps its own `node_modules` and Rust `target/` directories in named Docker volumes (see [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json)) — they shadow the bind mount inside the container and stay invisible to the host. Each side runs its own `pnpm install` once and they coexist forever after that. First-time setup on the host:
+
+```sh
+# from the macOS/Windows host, in the repo root
+pnpm install      # populates host-side node_modules with native binaries for your OS
+pnpm dev          # opens the Tauri window using your host's native WebKit
+```
+
 ### Run tests
 
 ```sh
