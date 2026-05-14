@@ -119,14 +119,14 @@ Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-
 
 Detailed design: [`docs/phases/phase-6-audio-engine.md`](docs/phases/phase-6-audio-engine.md).
 
-- [ ] Tone.js setup: master bus, per-stem channels (×8), crossfade pair for hop transitions.
-- [ ] Stem loader: decode cached bytes → `AudioBuffer` (FLAC via libflac.js, Ogg via `decodeAudioData`).
-- [ ] Playback engine: start riff at offset, loop at bar boundary.
-- [ ] Hop: compute `elapsedInLoop`, start next riff phase-locked, crossfade over configurable ms (default ~250ms, snap-to-bar option).
-- [ ] Pre-cache strategy: when user is viewing riff N, decode N and N±2 into AudioBuffers in the background.
-- [ ] UI: a "perform" view — riff list, click to hop, current playhead indicator.
+- [x] Per-riff voice graph: 8 BufferSources → shared GainNode → destination (`riff-voice.ts`). Tone.js deferred — raw Web Audio behind a thin AudioContextLike facade keeps the engine testable and avoids the dependency footprint. Master bus is just `context.destination` for now.
+- [x] Stem loader: decode cached bytes → `AudioBuffer` via per-format dispatch (`decoder.ts` + `native-decoder.ts`). Both formats currently use `decodeAudioData`; libflac.js remains a deferred fallback if a webview lacks native FLAC.
+- [x] Playback engine: cold-start path in `AudioEngine.hopTo` schedules every BufferSource with `start(now, 0)`, `loop = true`, `loopEnd = loopDurationSec`.
+- [x] Hop: `computeHop` + engine wiring start the new riff `crossfadeSec` early so its playhead reaches `offsetInNew` at the phase-anchor moment; old voice fades 1→0 and new voice fades 0→1 over the same window. Snap-to-bar supported, off by default.
+- [x] Pre-cache: `PrefetchRing.setWindow(jamId, [N-2..N+2])` walks each riff's stems through the StemLoader in series; window moves cancel further decodes.
+- [x] UI: `PerformView.vue` with Hop button per riff, current-riff indicator, Stop button, busy badge on not-ready hops. Route `/jams/:jamId/perform`, linked from the jam detail header.
 
-**Checkpoint**: user can play a jam by clicking through riffs, transitions are seamless and phase-locked.
+**Checkpoint**: user can play a jam by clicking through riffs, transitions are seamless and phase-locked. **Awaiting manual smoke** (TDD step 10 in the design doc) — the unit suite is green at 146 tests but the audible behavior can only be verified by a real listen-through. Run `pnpm dev`, log in, open a small jam → Perform, click a few riffs.
 
 ---
 
