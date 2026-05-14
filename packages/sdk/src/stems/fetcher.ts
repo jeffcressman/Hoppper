@@ -71,6 +71,7 @@ export class StemFetcher {
       bytes,
       format: resolved.format,
       length: bytes.length,
+      jamId,
       source: 'network',
     };
   }

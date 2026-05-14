@@ -41,7 +41,13 @@ export class ReadonlyLoreStemDir implements StemCache {
     if (!entry) return null;
     const path = `${this.root}/${entry.jamId}/${stemId.charAt(0)}/${stemId}.${entry.format}`;
     const bytes = await this.fs.readFile(path);
-    return { bytes, format: entry.format, length: bytes.length, source: 'lore' };
+    return {
+      bytes,
+      format: entry.format,
+      length: bytes.length,
+      jamId: entry.jamId,
+      source: 'lore',
+    };
   }
 
   async put(_key: StemCachePutKey, _bytes: Uint8Array): Promise<void> {

@@ -18,6 +18,7 @@ export class InMemoryStemCache implements StemCache {
       bytes,
       format: key.format,
       length: bytes.length,
+      jamId: key.jamId,
       source: 'memory',
     });
   }

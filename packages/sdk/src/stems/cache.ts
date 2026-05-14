@@ -1,11 +1,14 @@
 import type { JamCouchID, StemCouchID } from '../types/ids.js';
 import type { StemFormat } from '../types/stem.js';
 
-// Bytes for a single stem, with enough metadata for the audio engine to decode.
+// Bytes for a single stem, with enough metadata for the audio engine to decode
+// and for a layered cache to promote bytes from a read-only tier to a writable
+// tier without round-tripping the jamId through the caller.
 export interface StemBlob {
   bytes: Uint8Array;
   format: StemFormat;
   length: number;
+  jamId: JamCouchID;
   source: 'memory' | 'fs' | 'lore' | 'network';
 }
 

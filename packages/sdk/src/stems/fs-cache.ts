@@ -36,7 +36,13 @@ export class FilesystemStemCache implements StemCache {
     const entry = this.index.get(stemId);
     if (!entry) return null;
     const bytes = await this.fs.readFile(this.pathFor(stemId, entry.jamId, entry.format));
-    return { bytes, format: entry.format, length: bytes.length, source: 'fs' };
+    return {
+      bytes,
+      format: entry.format,
+      length: bytes.length,
+      jamId: entry.jamId,
+      source: 'fs',
+    };
   }
 
   async put(key: StemCachePutKey, bytes: Uint8Array): Promise<void> {
