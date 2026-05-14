@@ -12,7 +12,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-http = "2"
+# `unsafe-headers` lets the SDK set the Cookie header used for Endlesss's
+# load-balancer pinning (LORE convention: `Cookie: LB=liveNN`). Tauri drops
+# it by default because fetch-spec treats Cookie as a forbidden header.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-fs = "2"
 tauri-plugin-stronghold = "2"
 serde = { version = "1", features = ["derive"] }
