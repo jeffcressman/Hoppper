@@ -1,7 +1,14 @@
 <template>
   <main class="perform">
     <header>
-      <h1>{{ displayName }}</h1>
+      <router-link
+        :to="{ name: 'jam-detail', params: { jamId } }"
+        class="back-link"
+        data-test="back-link"
+      >
+        ← {{ displayName }}
+      </router-link>
+      <h1>{{ displayName }} — Perform</h1>
       <div class="status">
         <span class="state" :data-state="performance.state">{{ performance.state }}</span>
         <span v-if="performance.currentRiffId" class="current" data-test="current-riff">
@@ -118,6 +125,16 @@ function rowClasses(riff: RiffDocument): Record<string, boolean> {
 }
 header {
   margin-bottom: 1rem;
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  color: #555;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.back-link:hover {
+  text-decoration: underline;
 }
 .status {
   display: flex;

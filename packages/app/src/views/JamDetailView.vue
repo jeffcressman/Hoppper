@@ -1,6 +1,9 @@
 <template>
   <main class="jam-detail">
     <header>
+      <router-link to="/jams" class="back-link" data-test="back-link">
+        ← Jams
+      </router-link>
       <h1>{{ displayName }}</h1>
       <p v-if="profile?.bio" class="bio">{{ profile.bio }}</p>
       <router-link
@@ -89,6 +92,16 @@ header {
   margin-top: 0.5rem;
   font-weight: 600;
   text-decoration: none;
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  color: #555;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.back-link:hover {
+  text-decoration: underline;
 }
 .riffs {
   list-style: none;
