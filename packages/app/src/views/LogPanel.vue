@@ -11,7 +11,12 @@
     <div v-if="store.visible" class="panel">
       <div class="header">
         <span>Hoppper log — last {{ store.entries.length }} entries</span>
-        <button type="button" class="clear" @click="store.clear()">Clear</button>
+        <div class="actions">
+          <button type="button" class="btn" data-test="log-copy" @click="onCopy">
+            {{ copyLabel }}
+          </button>
+          <button type="button" class="btn" @click="store.clear()">Clear</button>
+        </div>
       </div>
       <ol class="entries">
         <li
@@ -32,12 +37,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useLogStore } from '../logging/log-store';
 
 const store = useLogStore();
 
 const reversed = computed(() => [...store.entries].reverse());
+const copyLabel = ref('Copy');
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -50,6 +56,47 @@ function fmtData(data: unknown): string {
   } catch {
     return String(data);
   }
+}
+
+function fmtForCopy(): string {
+  // Oldest-first so the copy reads top-to-bottom in chronological order,
+  // matching how a normal log file looks (the panel renders newest-first
+  // for live viewing, but that's the opposite of what you want when
+  // pasting into a bug report).
+  return store.entries
+    .map((e) => {
+      const head = `${fmtTime(e.at)} ${e.level.toUpperCase().padEnd(5)} ${e.category}: ${e.message}`;
+      return e.data !== undefined ? `${head}\n${fmtData(e.data)}` : head;
+    })
+    .join('\n');
+}
+
+async function onCopy(): Promise<void> {
+  const text = fmtForCopy();
+  try {
+    await navigator.clipboard.writeText(text);
+    copyLabel.value = 'Copied';
+  } catch {
+    // Older webviews / locked-down environments may reject Clipboard API.
+    // Fall back to a hidden textarea + execCommand('copy') which works
+    // everywhere a contenteditable surface does.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-1000px;top:-1000px;';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      copyLabel.value = 'Copied';
+    } catch {
+      copyLabel.value = 'Copy failed';
+    } finally {
+      ta.remove();
+    }
+  }
+  setTimeout(() => {
+    copyLabel.value = 'Copy';
+  }, 1500);
 }
 </script>
 
@@ -96,13 +143,21 @@ function fmtData(data: unknown): string {
   background: #1a1a1a;
   border-bottom: 1px solid #333;
 }
-.clear {
+.actions {
+  display: flex;
+  gap: 0.375rem;
+}
+.btn {
   background: #333;
   color: #ddd;
   border: 1px solid #555;
   border-radius: 3px;
   padding: 0.125rem 0.5rem;
   cursor: pointer;
+  font: inherit;
+}
+.btn:hover {
+  background: #3a3a3a;
 }
 .entries {
   list-style: none;
