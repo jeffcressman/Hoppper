@@ -1,4 +1,5 @@
 import type { AuthSession, TokenStore } from '@hoppper/sdk';
+import { log } from '../logging/log-store';
 
 // Minimal slice of @tauri-apps/plugin-stronghold's Store that the token store
 // actually uses. Defined structurally so tests can supply a stub and the real
@@ -28,7 +29,9 @@ export class StrongholdTokenStore implements TokenStore {
   }
 
   async load(): Promise<AuthSession | null> {
+    log('debug', 'vault', 'load: store.get');
     const bytes = await this.store.get(SESSION_KEY);
+    log('debug', 'vault', `load: store.get returned ${bytes ? `${bytes.byteLength} bytes` : 'null'}`);
     if (!bytes) return null;
     try {
       return JSON.parse(new TextDecoder().decode(bytes)) as AuthSession;
@@ -39,12 +42,18 @@ export class StrongholdTokenStore implements TokenStore {
 
   async save(session: AuthSession): Promise<void> {
     const bytes = new TextEncoder().encode(JSON.stringify(session));
+    log('debug', 'vault', `save: encoding ${bytes.byteLength} bytes; calling store.insert`);
     await this.store.insert(SESSION_KEY, Array.from(bytes));
+    log('debug', 'vault', 'save: store.insert returned; calling persist');
     await this.persist();
+    log('debug', 'vault', 'save: persist returned');
   }
 
   async clear(): Promise<void> {
+    log('debug', 'vault', 'clear: store.remove');
     await this.store.remove(SESSION_KEY);
+    log('debug', 'vault', 'clear: persist');
     await this.persist();
+    log('debug', 'vault', 'clear: persist returned');
   }
 }
