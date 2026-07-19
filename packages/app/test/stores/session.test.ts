@@ -55,6 +55,35 @@ describe('useSessionStore', () => {
     expect(store.isAuthenticated).toBe(false);
   });
 
+  it('logout clears in-memory state synchronously, before the slow disk persist', async () => {
+    // Stronghold's snapshot save can take tens of seconds. If we await
+    // client.logout() before clearing session.value, the router guard
+    // keeps treating the user as authenticated and the UI freezes.
+    let resolveDisk: (() => void) | null = null;
+    const client = makeStub({
+      logout: vi.fn(
+        () =>
+          new Promise<void>((res) => {
+            resolveDisk = res;
+          }),
+      ),
+    });
+    const useStore = defineSessionStore(client);
+    const store = useStore();
+    await store.login('alice', 'hunter2');
+    expect(store.isAuthenticated).toBe(true);
+
+    const p = store.logout();
+    // Synchronously after calling logout(), the in-memory session must
+    // be cleared so the router can navigate to /login immediately.
+    expect(store.isAuthenticated).toBe(false);
+    expect(store.session).toBeNull();
+
+    resolveDisk!();
+    await p;
+    expect(client.logout).toHaveBeenCalled();
+  });
+
   it('hydrate pulls a persisted session from the client', async () => {
     const client = makeStub({ getSession: vi.fn(async () => session) });
     const useStore = defineSessionStore(client);

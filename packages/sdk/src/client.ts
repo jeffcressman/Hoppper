@@ -1,4 +1,5 @@
 import {
+  HttpError,
   HttpTransport,
   type HttpTransportOptions,
   type LogEntry,
@@ -350,11 +351,22 @@ export class EndlesssClient {
     const path = escapeCouchJamId(jamId);
     const url = `${this.dataDomain}/user_appdata$${path}/Profile`;
 
-    const raw = await this.transport.request<RawJamProfile>({
-      url,
-      method: 'GET',
-      auth: { kind: 'basic', token: session.token, password: session.password },
-    });
+    let raw: RawJamProfile;
+    try {
+      raw = await this.transport.request<RawJamProfile>({
+        url,
+        method: 'GET',
+        auth: { kind: 'basic', token: session.token, password: session.password },
+      });
+    } catch (err) {
+      // A jam without a Profile doc returns 404 — common for personal
+      // jams whose owner never set a custom name/bio. Treat as "no
+      // profile metadata" and fall back to the jamId as displayName.
+      if (err instanceof HttpError && err.status === 404) {
+        return { jamId, displayName: jamId };
+      }
+      throw err;
+    }
 
     const profile: JamProfile = { jamId, displayName: raw.displayName };
     if (raw.bio !== undefined) profile.bio = raw.bio;

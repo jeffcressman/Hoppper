@@ -16,7 +16,11 @@ import type { FsAdapter } from '@hoppper/sdk';
 export function tauriFsAdapter(): FsAdapter {
   return {
     async readFile(path) {
-      return await readFile(path);
+      try {
+        return await readFile(path);
+      } catch (err) {
+        throw normalizeFsError(err);
+      }
     },
     async writeFile(path, bytes) {
       await writeFile(path, bytes);
@@ -36,8 +40,16 @@ export function tauriFsAdapter(): FsAdapter {
       await mkdir(path, opts);
     },
     async readdir(path) {
-      const entries = await readDir(path);
-      return entries.map((e) => e.name);
+      try {
+        const entries = await readDir(path);
+        return entries.map((e) => e.name);
+      } catch (err) {
+        // Translate Tauri's string-message error into a Node-shaped one
+        // so consumers using `err.code === 'ENOENT'` (e.g. the SDK's
+        // FilesystemStemCache.buildIndex, hop-recorder storage) can
+        // detect missing directories without platform-specific checks.
+        throw normalizeFsError(err);
+      }
     },
     async stat(path) {
       try {
@@ -62,4 +74,13 @@ function isNotFoundError(err: unknown): boolean {
     msg.includes('os error 2') ||
     msg.includes('cannot find')
   );
+}
+
+function normalizeFsError(err: unknown): Error {
+  if (!isNotFoundError(err)) {
+    return err instanceof Error ? err : new Error(String(err));
+  }
+  const wrapped = err instanceof Error ? err : new Error(String(err));
+  (wrapped as Error & { code: string }).code = 'ENOENT';
+  return wrapped;
 }

@@ -17,6 +17,7 @@ import type {
   HopResult,
 } from '../../src/audio/engine';
 import type { RiffPrefetcher } from '../../src/audio/prefetch';
+import type { HopRecorder } from '../../src/hop-recorder/recorder';
 
 const JAM = 'band-1' as JamCouchID;
 
@@ -202,5 +203,118 @@ describe('definePerformanceStore', () => {
     await store.prefetchWindow(JAM, riffs, 0, 2);
     // window = [0, min(3, 0+2+1)) = [0,3) → all 3
     expect(resolveStems).toHaveBeenCalledTimes(3);
+  });
+
+  describe('recorder integration', () => {
+    function mockRecorder(isRecording: boolean): HopRecorder {
+      let recording = isRecording;
+      return {
+        get isRecording() {
+          return recording;
+        },
+        start: vi.fn(() => {
+          recording = true;
+        }),
+        recordHop: vi.fn(),
+        stop: vi.fn(() => {
+          recording = false;
+          return {
+            schemaVersion: 1 as const,
+            id: 'seq',
+            title: 't',
+            jamId: JAM,
+            recordedAt: '',
+            durationSec: 0,
+            hops: [],
+          };
+        }),
+      };
+    }
+
+    it('calls recorder.recordHop when isRecording, before resolving stems', async () => {
+      const engine = mockEngine();
+      const recorder = mockRecorder(true);
+      const resolveStems: StemResolver = vi.fn(async () => [fakeStem('s')]);
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems,
+        recorder,
+        defaultCrossfadeMs: 250,
+      });
+      const store = useStore();
+      const r = riff('r1');
+      await store.hopTo(JAM, r);
+      expect(recorder.recordHop).toHaveBeenCalledWith({
+        riffId: 'r1',
+        jamId: JAM,
+        transitionMs: 250,
+      });
+    });
+
+    it('does NOT call recorder.recordHop when not recording', async () => {
+      const engine = mockEngine();
+      const recorder = mockRecorder(false);
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s')]),
+        recorder,
+      });
+      const store = useStore();
+      await store.hopTo(JAM, riff('r1'));
+      expect(recorder.recordHop).not.toHaveBeenCalled();
+    });
+
+    it('records the click even when the engine returns not-ready', async () => {
+      // User's click intent is the artifact — buffering is an audio
+      // outcome, not a performance outcome.
+      const engine = mockEngine();
+      engine.hopTo = vi.fn(
+        async (): Promise<HopResult> => ({
+          kind: 'not-ready',
+          missingStemIds: ['s' as StemCouchID],
+        }),
+      );
+      const recorder = mockRecorder(true);
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s')]),
+        recorder,
+      });
+      const store = useStore();
+      await store.hopTo(JAM, riff('r1'));
+      expect(recorder.recordHop).toHaveBeenCalledTimes(1);
+    });
+
+    it('records the click even when stem resolution throws', async () => {
+      // Same reasoning: the user clicked. The fact that we couldn't
+      // fetch the stem list doesn't change what they did.
+      const engine = mockEngine();
+      const recorder = mockRecorder(true);
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => {
+          throw new Error('offline');
+        }),
+        recorder,
+      });
+      const store = useStore();
+      await store.hopTo(JAM, riff('r1'));
+      expect(recorder.recordHop).toHaveBeenCalledTimes(1);
+    });
+
+    it('works without a recorder injected (recorder is optional)', async () => {
+      const engine = mockEngine();
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s')]),
+      });
+      const store = useStore();
+      await expect(store.hopTo(JAM, riff('r1'))).resolves.toBeDefined();
+    });
   });
 });

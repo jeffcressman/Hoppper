@@ -294,6 +294,43 @@ describe('EndlesssClient.getJam', () => {
     const jam = await client.getJam('band123');
     expect(jam).toEqual({ jamId: 'band123', displayName: 'Bare Profile' });
   });
+
+  it('treats a 404 Profile as "no profile set" and falls back to jamId', async () => {
+    // Personal jams whose owner never set a custom name return 404 with
+    // {"error":"not_found"}. That's not an error condition — the jam is
+    // still browsable, it just has no human-readable name.
+    const { fetchImpl } = makeFetch({
+      '/auth/login': () => jsonResponse(validLoginBody),
+      '/Profile': () =>
+        new Response('{"error":"not_found","reason":"missing"}\n', {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
+    });
+    const client = new EndlesssClient({ fetch: fetchImpl });
+    await client.login('alice', 'secret');
+
+    const jam = await client.getJam('lwlkc');
+    expect(jam).toEqual({ jamId: 'lwlkc', displayName: 'lwlkc' });
+  });
+
+  it('still propagates non-404 HTTP errors from Profile', async () => {
+    const { fetchImpl } = makeFetch({
+      '/auth/login': () => jsonResponse(validLoginBody),
+      '/Profile': () =>
+        new Response('server angry', {
+          status: 500,
+          headers: { 'content-type': 'text/plain' },
+        }),
+    });
+    const client = new EndlesssClient({
+      fetch: fetchImpl,
+      retry: { maxAttempts: 1, baseDelayMs: 0, delayStepMs: 0, maxDelayMs: 0 },
+    });
+    await client.login('alice', 'secret');
+
+    await expect(client.getJam('band-real-failure')).rejects.toThrow(/HTTP 500/);
+  });
 });
 
 describe('EndlesssClient.listJams', () => {

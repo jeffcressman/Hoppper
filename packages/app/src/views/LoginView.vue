@@ -17,7 +17,13 @@
         />
       </label>
       <p v-if="session.authError" class="auth-error" role="alert">{{ session.authError }}</p>
-      <button type="submit" :disabled="busy">{{ busy ? 'Signing in…' : 'Sign in' }}</button>
+      <button type="submit" :disabled="busy">
+        <span v-if="busy" class="spinner" data-test="login-spinner" aria-hidden="true" />
+        <span>{{ busy ? 'Signing in…' : 'Sign in' }}</span>
+      </button>
+      <p v-if="busy" class="hint" aria-live="polite">
+        Endlesss can take 20–60 seconds to respond. Hold tight.
+      </p>
     </form>
   </main>
 </template>
@@ -77,5 +83,30 @@ label {
 .auth-error {
   color: #c33;
   margin: 0;
+}
+.hint {
+  color: #666;
+  font-size: 0.8125rem;
+  margin: 0;
+}
+button[type='submit'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+.spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid #ccc;
+  border-top-color: #555;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

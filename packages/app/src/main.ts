@@ -16,7 +16,11 @@ import JamDetailView from './views/JamDetailView.vue';
 import PerformView from './views/PerformView.vue';
 import { initClient } from './client';
 import { createAppRouter } from './router';
-import { initPerformanceStore, useSessionStore } from './stores';
+import {
+  initPerformanceStore,
+  initRecorderStore,
+  useSessionStore,
+} from './stores';
 import { openTokenStore } from './tauri/open-token-store';
 import { tauriFsAdapter } from './tauri/fs-adapter';
 import { endlesssHttpFetch } from './tauri/endlesss-http-fetch';
@@ -31,8 +35,18 @@ import {
   getOrCreateAudioContext,
   unlockAudioContext,
 } from './audio';
+import {
+  createHopPlayer,
+  createHopRecorder,
+  createSequenceStorage,
+} from './hop-recorder';
 import { installGlobalErrorCapture, log } from './logging/log-store';
-import type { JamCouchID, ResolvedStem, RiffDocument } from '@hoppper/sdk';
+import type {
+  JamCouchID,
+  ResolvedStem,
+  RiffCouchID,
+  RiffDocument,
+} from '@hoppper/sdk';
 
 async function bootstrap() {
   installGlobalErrorCapture();
@@ -129,8 +143,47 @@ async function bootstrap() {
     return filtered;
   };
 
-  initPerformanceStore({ engine, prefetcher, resolveStems });
+  const hopRecorder = createHopRecorder({
+    clock: () => audioContext.currentTime,
+    idGen: () => crypto.randomUUID(),
+  });
+  initPerformanceStore({
+    engine,
+    prefetcher,
+    resolveStems,
+    recorder: hopRecorder,
+  });
   log('info', 'boot', 'performance store initialized');
+
+  const sequencesRoot = await join(appData, 'sequences');
+  const sequenceStorage = createSequenceStorage({
+    fs: tauriFsAdapter(),
+    root: sequencesRoot,
+  });
+  const resolveRiff = async (jamId: JamCouchID, riffId: RiffCouchID) => {
+    const riffs = await client.getRiffs(jamId, [riffId]);
+    const riff = riffs[0];
+    if (!riff) throw new Error(`Riff not found: ${riffId}`);
+    const stems = await resolveStems(jamId, riff);
+    return { riff, stems };
+  };
+  const hopPlayer = createHopPlayer({
+    engine,
+    resolveRiff,
+    clock: () => audioContext.currentTime,
+    scheduler: {
+      schedule(delayMs, fn) {
+        const id = window.setTimeout(fn, delayMs);
+        return () => window.clearTimeout(id);
+      },
+    },
+  });
+  initRecorderStore({
+    recorder: hopRecorder,
+    storage: sequenceStorage,
+    player: hopPlayer,
+  });
+  log('info', 'boot', 'recorder store initialized');
 
   const router = createAppRouter({
     isAuthenticated: () => session.isAuthenticated,

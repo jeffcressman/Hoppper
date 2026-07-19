@@ -13,6 +13,7 @@ import type {
   HopResult,
 } from '../audio/engine.js';
 import type { RiffPrefetcher } from '../audio/prefetch.js';
+import type { HopRecorder } from '../hop-recorder/recorder.js';
 
 // The view needs a way to look up resolved stems for a riff. The SDK has
 // getStemUrls(jamId, riff); we accept any compatible function so tests can
@@ -26,6 +27,9 @@ export interface PerformanceDeps {
   engine: AudioEngine;
   prefetcher: RiffPrefetcher;
   resolveStems: StemResolver;
+  recorder?: HopRecorder;
+  /** Default crossfade duration recorded per click. Defaults to 250. */
+  defaultCrossfadeMs?: number;
 }
 
 export function definePerformanceStore(deps: PerformanceDeps) {
@@ -43,6 +47,16 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     async function hopTo(jamId: JamCouchID, riff: RiffDocument): Promise<HopResult> {
       lastError.value = null;
       missingStems.value = [];
+      // Record the click immediately. The user's intent is the artifact;
+      // buffering or stem-resolution failures are audio outcomes that
+      // don't change what they did. See phase-7-recording-captures-intent.
+      if (deps.recorder?.isRecording) {
+        deps.recorder.recordHop({
+          riffId: riff.riffId,
+          jamId,
+          transitionMs: deps.defaultCrossfadeMs ?? 250,
+        });
+      }
       let stems: ResolvedStem[];
       try {
         stems = await deps.resolveStems(jamId, riff);

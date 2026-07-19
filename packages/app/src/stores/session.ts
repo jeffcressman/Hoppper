@@ -31,9 +31,23 @@ export function defineSessionStore(client: SessionClient) {
     }
 
     async function logout(): Promise<void> {
-      await client.logout();
+      // Stronghold's snapshot save can take tens of seconds. Clear the
+      // in-memory state first so the router guard sees us as logged
+      // out and the UI can navigate immediately. The disk persist
+      // (client.logout → tokenStore.clear → stronghold.save) finishes
+      // in the background; if it fails we log a warning but the user
+      // is already on /login.
       session.value = null;
       authError.value = null;
+      try {
+        await client.logout();
+      } catch (err) {
+        log(
+          'warn',
+          'session',
+          `client.logout disk persist failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     async function hydrate(): Promise<void> {

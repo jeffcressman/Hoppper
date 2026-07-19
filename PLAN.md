@@ -134,10 +134,14 @@ Detailed design: [`docs/phases/phase-6-audio-engine.md`](docs/phases/phase-6-aud
 
 **Goal**: capture performance as an editable sequence.
 
-- [ ] Data model: `HopSequence = { hops: { tAbsolute, riffId, transitionMs }[], durationMs }`.
-- [ ] Recorder: hooks into the playback engine, records each hop with `AudioContext.currentTime` precision.
-- [ ] Persist sequences (Tauri filesystem, JSON, project-folder pattern).
-- [ ] Playback of a recorded sequence (read-only first).
+Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-hop-recording.md).
+
+- [x] Data model: `HopSequence = { schemaVersion, id, title, jamId, recordedAt, durationSec, hops: HopEvent[] }`.
+- [x] Recorder: hooks into the click handler (performance store), records every click with `AudioContext.currentTime` precision — including not-ready clicks (user's timing is the artifact).
+- [x] Persist sequences at `appLocalDataDir/sequences/<jamId>/<id>.json` (atomic write, FsAdapter for testability).
+- [x] Playback of a recorded sequence (read-only first) via `HopPlayer` driving the existing `AudioEngine`.
+
+**Checkpoint**: ~~code complete + tested at 217 unit tests; manual smoke confirmed live 2026-05-15.~~ ✓ Done — recording, save, list, replay, delete all working against live Endlesss jams.
 
 **Checkpoint**: record a session, save it, reopen and replay identically.
 

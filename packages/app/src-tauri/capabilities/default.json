@@ -10,12 +10,15 @@
       "allow": [
         { "url": "https://api.endlesss.fm/*" },
         { "url": "https://data.endlesss.fm/*" },
-        { "url": "https://*.amazonaws.com/*" }
+        { "url": "https://*.amazonaws.com/*" },
+        { "url": "https://*.digitaloceanspaces.com/*" }
       ]
     },
     "fs:allow-applocaldata-read-recursive",
     "fs:allow-applocaldata-write-recursive",
     "fs:allow-applocaldata-meta-recursive",
-    "stronghold:default"
+    "stronghold:default",
+    "stronghold:allow-remove-store-record",
+    "stronghold:allow-save"
   ]
 }

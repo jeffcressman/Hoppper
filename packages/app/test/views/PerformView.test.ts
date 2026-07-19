@@ -25,11 +25,33 @@ const performanceStub = vi.hoisted(() => ({
   prefetchWindow: vi.fn(async () => {}),
 }));
 
+const recorderStub = vi.hoisted(() => ({
+  isRecording: false,
+  isPlaying: false,
+  saved: [] as Array<{
+    id: string;
+    title: string;
+    jamId: string;
+    recordedAt: string;
+    durationSec: number;
+    hops: unknown[];
+    schemaVersion: 1;
+  }>,
+  lastError: null as string | null,
+  start: vi.fn(),
+  stop: vi.fn(async () => null),
+  loadSaved: vi.fn(async () => {}),
+  play: vi.fn(async () => {}),
+  stopPlayback: vi.fn(),
+  delete: vi.fn(async () => {}),
+}));
+
 vi.mock('../../src/stores', () => ({
   useSessionStore: () => ({}),
   useJamsStore: () => jamsStub,
   useCurrentJamStore: () => currentJamStub,
   usePerformanceStore: () => performanceStub,
+  useRecorderStore: () => recorderStub,
 }));
 
 const routeParams = vi.hoisted(() => ({ jamId: 'band1' as string }));
@@ -60,6 +82,20 @@ beforeEach(() => {
   performanceStub.lastError = null;
   performanceStub.hopTo.mockReset();
   performanceStub.stop.mockReset();
+
+  recorderStub.isRecording = false;
+  recorderStub.isPlaying = false;
+  recorderStub.saved = [];
+  recorderStub.start.mockReset();
+  recorderStub.stop.mockReset();
+  recorderStub.stop.mockResolvedValue(null);
+  recorderStub.loadSaved.mockReset();
+  recorderStub.loadSaved.mockResolvedValue(undefined);
+  recorderStub.play.mockReset();
+  recorderStub.play.mockResolvedValue(undefined);
+  recorderStub.stopPlayback.mockReset();
+  recorderStub.delete.mockReset();
+  recorderStub.delete.mockResolvedValue(undefined);
 });
 
 describe('PerformView', () => {
@@ -143,5 +179,147 @@ describe('PerformView', () => {
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.find('[data-test="error"]').text()).toContain('no stems');
+  });
+
+  describe('recording', () => {
+    it('loads saved sequences on mount', async () => {
+      mount(PerformView);
+      await flushPromises();
+      expect(recorderStub.loadSaved).toHaveBeenCalledWith('band1');
+    });
+
+    it('Record button is visible when idle', async () => {
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.find('[data-test="record"]').exists()).toBe(true);
+    });
+
+    it('clicking Record calls recorder.start with the route jamId', async () => {
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="record"]').trigger('click');
+      expect(recorderStub.start).toHaveBeenCalledWith('band1');
+    });
+
+    it('shows a Stop Recording button while recording', async () => {
+      recorderStub.isRecording = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.find('[data-test="stop-recording"]').exists()).toBe(true);
+    });
+
+    it('clicking Stop Recording calls recorder.stop', async () => {
+      recorderStub.isRecording = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="stop-recording"]').trigger('click');
+      await flushPromises();
+      expect(recorderStub.stop).toHaveBeenCalled();
+    });
+
+    it('renders a row per saved sequence', async () => {
+      recorderStub.saved = [
+        {
+          schemaVersion: 1,
+          id: 'a',
+          title: 'Take A',
+          jamId: 'band1',
+          recordedAt: '2026-05-14T00:00:00.000Z',
+          durationSec: 30,
+          hops: [],
+        },
+        {
+          schemaVersion: 1,
+          id: 'b',
+          title: 'Take B',
+          jamId: 'band1',
+          recordedAt: '2026-05-14T01:00:00.000Z',
+          durationSec: 60,
+          hops: [],
+        },
+      ];
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.findAll('[data-test="saved-row"]')).toHaveLength(2);
+    });
+
+    it('clicking Play on a saved row calls recorder.play with that sequence', async () => {
+      const seq = {
+        schemaVersion: 1 as const,
+        id: 'a',
+        title: 'Take A',
+        jamId: 'band1',
+        recordedAt: '',
+        durationSec: 30,
+        hops: [],
+      };
+      recorderStub.saved = [seq];
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="play-saved"]').trigger('click');
+      expect(recorderStub.play).toHaveBeenCalledWith(seq);
+    });
+
+    it('clicking Delete on a saved row calls recorder.delete', async () => {
+      recorderStub.saved = [
+        {
+          schemaVersion: 1,
+          id: 'a',
+          title: 'Take A',
+          jamId: 'band1',
+          recordedAt: '',
+          durationSec: 30,
+          hops: [],
+        },
+      ];
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="delete-saved"]').trigger('click');
+      expect(recorderStub.delete).toHaveBeenCalledWith('band1', 'a');
+    });
+
+    it('renders the saved sequence duration in mm:ss format', async () => {
+      recorderStub.saved = [
+        {
+          schemaVersion: 1,
+          id: 'a',
+          title: 'Take A',
+          jamId: 'band1',
+          recordedAt: '',
+          durationSec: 75, // 1:15
+          hops: [],
+        },
+      ];
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.find('[data-test="saved-duration"]').text()).toBe('1:15');
+    });
+
+    it('does not show an elapsed clock when not recording', async () => {
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.find('[data-test="recording-elapsed"]').exists()).toBe(false);
+    });
+
+    it('shows a live elapsed clock when mounted while recording', async () => {
+      vi.useFakeTimers();
+      try {
+        recorderStub.isRecording = true;
+        const wrapper = mount(PerformView);
+        await flushPromises();
+        const clock = wrapper.find('[data-test="recording-elapsed"]');
+        expect(clock.exists()).toBe(true);
+        expect(clock.text()).toBe('0:00');
+
+        // Advance fake clock and tick the interval to update elapsed.
+        vi.advanceTimersByTime(2500);
+        await flushPromises();
+        expect(
+          wrapper.find('[data-test="recording-elapsed"]').text(),
+        ).toBe('0:02');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

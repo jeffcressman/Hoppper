@@ -3,6 +3,7 @@ import { defineSessionStore } from './session';
 import { defineJamsStore } from './jams';
 import { defineCurrentJamStore } from './current-jam';
 import { definePerformanceStore, type PerformanceDeps } from './performance';
+import { defineRecorderStore, type RecorderDeps } from './recorder';
 
 // Bind each store factory to the production client lazily, so that store
 // definitions stay tree-shakeable in tests (which never call these) and so
@@ -13,6 +14,8 @@ let _useJamsStore: ReturnType<typeof defineJamsStore> | undefined;
 let _useCurrentJamStore: ReturnType<typeof defineCurrentJamStore> | undefined;
 let _usePerformanceStore: ReturnType<typeof definePerformanceStore> | undefined;
 let _performanceDeps: PerformanceDeps | undefined;
+let _useRecorderStore: ReturnType<typeof defineRecorderStore> | undefined;
+let _recorderDeps: RecorderDeps | undefined;
 
 export function useSessionStore() {
   _useSessionStore ??= defineSessionStore(getClient());
@@ -43,4 +46,20 @@ export function usePerformanceStore() {
     );
   }
   return _usePerformanceStore();
+}
+
+// Recorder, like performance, depends on the AudioContext-backed engine and
+// the Tauri filesystem — both only available after bootstrap.
+export function initRecorderStore(deps: RecorderDeps): void {
+  _recorderDeps = deps;
+  _useRecorderStore = defineRecorderStore(deps);
+}
+
+export function useRecorderStore() {
+  if (!_useRecorderStore || !_recorderDeps) {
+    throw new Error(
+      'Recorder store not initialized — call initRecorderStore() during bootstrap',
+    );
+  }
+  return _useRecorderStore();
 }

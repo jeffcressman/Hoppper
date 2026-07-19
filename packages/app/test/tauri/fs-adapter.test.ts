@@ -106,4 +106,33 @@ describe('tauriFsAdapter', () => {
 
     await expect(fs.stat('/locked')).rejects.toThrow(/permission denied/);
   });
+
+  it('readdir attaches code=ENOENT on not-found errors (Node compatibility)', async () => {
+    // Tauri's plugin-fs throws an Error with a string message; consumers
+    // (FilesystemStemCache, hop-recorder storage) detect missing dirs
+    // via err.code === 'ENOENT'. The adapter must bridge the shapes.
+    pluginMocks.readDir.mockRejectedValue(
+      new Error(
+        'failed to read directory at path: /x with error: No such file or directory (os error 2)',
+      ),
+    );
+    const fs = tauriFsAdapter();
+    await expect(fs.readdir('/x')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('readFile attaches code=ENOENT on not-found errors', async () => {
+    pluginMocks.readFile.mockRejectedValue(
+      new Error('file not found at /missing.json'),
+    );
+    const fs = tauriFsAdapter();
+    await expect(fs.readFile('/missing.json')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('readdir rethrows non-not-found errors unchanged', async () => {
+    pluginMocks.readDir.mockRejectedValue(new Error('permission denied'));
+    const fs = tauriFsAdapter();
+    await expect(fs.readdir('/locked')).rejects.toThrow(/permission denied/);
+  });
 });

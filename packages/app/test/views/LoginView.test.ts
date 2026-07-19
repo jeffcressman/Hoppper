@@ -68,4 +68,30 @@ describe('LoginView', () => {
     const wrapper = mount(LoginView);
     expect(wrapper.text()).toContain('bad password');
   });
+
+  it('shows a spinner while the login request is in flight', async () => {
+    // Endlesss's login can take many seconds — users need to see that
+    // something is happening, not just a disabled button.
+    let resolveLogin: (() => void) | null = null;
+    sessionStub.login.mockImplementationOnce(
+      () =>
+        new Promise<void>((res) => {
+          resolveLogin = res;
+        }),
+    );
+    const wrapper = mount(LoginView);
+    expect(wrapper.find('[data-test="login-spinner"]').exists()).toBe(false);
+
+    await wrapper.find('input[name="username"]').setValue('a');
+    await wrapper.find('input[name="password"]').setValue('b');
+    wrapper.find('form').trigger('submit.prevent');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="login-spinner"]').exists()).toBe(true);
+
+    resolveLogin!();
+    await new Promise((r) => setTimeout(r, 0));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="login-spinner"]').exists()).toBe(false);
+  });
 });
