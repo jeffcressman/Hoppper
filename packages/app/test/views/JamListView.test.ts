@@ -26,6 +26,8 @@ beforeEach(() => {
   jamsStub.profilesById = new Map();
   jamsStub.refresh.mockReset();
   jamsStub.refresh.mockResolvedValue(undefined);
+  jamsStub.loadProfile.mockReset();
+  jamsStub.loadProfile.mockResolvedValue(undefined);
 });
 
 describe('JamListView', () => {
@@ -80,5 +82,43 @@ describe('JamListView', () => {
     const wrapper = mount(JamListView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } });
     await flushPromises();
     expect(wrapper.text()).toContain('Cool Band');
+  });
+
+  it('loads profiles for every listed jam on mount, without waiting for detail view', async () => {
+    jamsStub.listing = {
+      personal: { jamId: 'alice', category: 'personal' },
+      subscribed: [
+        { jamId: 'band1', category: 'subscribed' },
+        { jamId: 'band2', category: 'subscribed' },
+      ],
+      joinable: [{ jamId: 'band3', category: 'joinable' }],
+    };
+    mount(JamListView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } });
+    await flushPromises();
+    expect(jamsStub.loadProfile).toHaveBeenCalledWith('alice');
+    expect(jamsStub.loadProfile).toHaveBeenCalledWith('band1');
+    expect(jamsStub.loadProfile).toHaveBeenCalledWith('band2');
+    expect(jamsStub.loadProfile).toHaveBeenCalledWith('band3');
+  });
+
+  it('displays subscribed and joinable jams newest-first', () => {
+    jamsStub.listing = {
+      personal: { jamId: 'alice', category: 'personal' },
+      subscribed: [
+        { jamId: 'band-oldest', category: 'subscribed' },
+        { jamId: 'band-middle', category: 'subscribed' },
+        { jamId: 'band-newest', category: 'subscribed' },
+      ],
+      joinable: [
+        { jamId: 'joinable-oldest', category: 'joinable' },
+        { jamId: 'joinable-newest', category: 'joinable' },
+      ],
+    };
+    const wrapper = mount(JamListView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } });
+    const sections = wrapper.findAll('section');
+    const subscribedItems = sections[1].findAll('li').map((li) => li.text());
+    const joinableItems = sections[2].findAll('li').map((li) => li.text());
+    expect(subscribedItems).toEqual(['band-newest', 'band-middle', 'band-oldest']);
+    expect(joinableItems).toEqual(['joinable-newest', 'joinable-oldest']);
   });
 });

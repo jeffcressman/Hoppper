@@ -18,7 +18,7 @@
       <section>
         <h2>Subscribed ({{ listing.subscribed.length }})</h2>
         <ul>
-          <li v-for="jam in listing.subscribed" :key="jam.jamId">
+          <li v-for="jam in subscribedNewestFirst" :key="jam.jamId">
             <RouterLink :to="`/jams/${jam.jamId}`">{{ jamLabel(jam.jamId) }}</RouterLink>
           </li>
         </ul>
@@ -26,7 +26,7 @@
       <section>
         <h2>Joinable ({{ listing.joinable.length }})</h2>
         <ul>
-          <li v-for="jam in listing.joinable" :key="jam.jamId">
+          <li v-for="jam in joinableNewestFirst" :key="jam.jamId">
             <RouterLink :to="`/jams/${jam.jamId}`">{{ jamLabel(jam.jamId) }}</RouterLink>
           </li>
         </ul>
@@ -42,8 +42,20 @@ import { useJamsStore } from '../stores';
 const jamsStore = useJamsStore();
 const listing = computed(() => jamsStore.listing);
 
-onMounted(() => {
-  void jamsStore.refresh();
+// Store order is oldest-first (matches the CouchDB view); the list displays newest-first.
+const subscribedNewestFirst = computed(() => [...(listing.value?.subscribed ?? [])].reverse());
+const joinableNewestFirst = computed(() => [...(listing.value?.joinable ?? [])].reverse());
+
+onMounted(async () => {
+  await jamsStore.refresh();
+  const listed = jamsStore.listing;
+  if (!listed) return;
+  const jamIds = [
+    listed.personal.jamId,
+    ...listed.subscribed.map((jam) => jam.jamId),
+    ...listed.joinable.map((jam) => jam.jamId),
+  ];
+  await Promise.all(jamIds.map((jamId) => jamsStore.loadProfile(jamId)));
 });
 
 function jamLabel(jamId: string): string {
