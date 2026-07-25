@@ -39,5 +39,8 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Local resources
+local/
+
 # Local reference repos (we use the dev container mount, this is just a safety net)
 reference/
