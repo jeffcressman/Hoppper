@@ -126,6 +126,57 @@ describe('definePerformanceStore', () => {
     expect(store.currentRiffId).toBe('r1');
   });
 
+  describe('quantised entry', () => {
+    it('is off by default, and hops carry no quantise option', async () => {
+      const engine = mockEngine();
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s1')]),
+      });
+      const store = useStore();
+      expect(store.quantiseEntry).toBe(false);
+
+      const r = riff('r1');
+      await store.hopTo(JAM, r);
+      expect(engine.hopTo).toHaveBeenCalledWith(JAM, r, [fakeStem('s1')]);
+    });
+
+    it('passes quantise=beat to the engine once switched on', async () => {
+      const engine = mockEngine();
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s1')]),
+      });
+      const store = useStore();
+      store.quantiseEntry = true;
+
+      const r = riff('r1');
+      await store.hopTo(JAM, r);
+      expect(engine.hopTo).toHaveBeenCalledWith(JAM, r, [fakeStem('s1')], {
+        quantise: 'beat',
+      });
+    });
+
+    it('honours a non-default quantisation grid', async () => {
+      const engine = mockEngine();
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s1')]),
+        quantiseGrid: 'bar',
+      });
+      const store = useStore();
+      store.quantiseEntry = true;
+
+      await store.hopTo(JAM, riff('r1'));
+      expect(engine.hopTo).toHaveBeenCalledWith(JAM, riff('r1'), [fakeStem('s1')], {
+        quantise: 'bar',
+      });
+    });
+  });
+
   it('hopTo with not-ready surfaces missing stem IDs', async () => {
     const engine = mockEngine();
     engine.hopTo = vi.fn(

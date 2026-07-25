@@ -47,6 +47,14 @@
         >
           {{ formatDuration(recordingElapsed) }}
         </span>
+        <label class="quantise" title="Hold each hop until the next beat">
+          <input
+            v-model="performance.quantiseEntry"
+            type="checkbox"
+            data-test="quantise-entry"
+          />
+          Quantise hops to the beat
+        </label>
       </div>
       <p v-if="performance.lastError" class="error" data-test="error">
         {{ performance.lastError }}
@@ -232,6 +240,15 @@ header {
 }
 .back-link:hover {
   text-decoration: underline;
+}
+.quantise {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: #555;
+  user-select: none;
+  cursor: pointer;
 }
 .status {
   display: flex;

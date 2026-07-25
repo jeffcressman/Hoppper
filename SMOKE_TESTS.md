@@ -42,6 +42,18 @@ many builds if the checklist gets too long.
 - [ ] **Perform view: phase-locked hops.** Hopping between adjacent
       rifffs is gapless and beat-aligned; no clicks, no restart, no
       silence between transitions.
+- [ ] **Hops land on the beat.** With a jam whose rifffs are quantised,
+      hop repeatedly at arbitrary moments. Every rifff stays on the same
+      beat grid — no lurch, no stumble, whatever the gap between clicks.
+      (Regression signal for hops being measured from the previous hop
+      instead of the grid: the error is a random fraction of a beat, and
+      the *first* hop of a run is always correct even when it's broken,
+      so click at least three times.)
+- [ ] **Quantised entry toggle.** The checkbox in the Perform header is
+      off by default and hops enter immediately. Ticked, each hop waits
+      for the next beat before the crossfade starts — audible as a
+      deliberate entry, and the log line reads
+      `quantise=beat +0.xxs`.
 - [ ] **DigitalOcean Spaces stems.** Any jam whose stems are hosted at
       `*.digitaloceanspaces.com` plays — no "url not allowed on the
       configured scope" errors in the log panel.

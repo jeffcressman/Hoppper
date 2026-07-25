@@ -10,6 +10,7 @@ import type {
 import type {
   AudioEngine,
   AudioEngineState,
+  HopQuantise,
   HopResult,
 } from '../audio/engine.js';
 import type { RiffPrefetcher } from '../audio/prefetch.js';
@@ -30,6 +31,11 @@ export interface PerformanceDeps {
   recorder?: HopRecorder;
   /** Default crossfade duration recorded per click. Defaults to 250. */
   defaultCrossfadeMs?: number;
+  /**
+   * Which grid quantised entry snaps to when the user turns it on. A beat by
+   * default: a bar can mean waiting a couple of seconds, which reads as lag.
+   */
+  quantiseGrid?: HopQuantise;
 }
 
 export function definePerformanceStore(deps: PerformanceDeps) {
@@ -38,6 +44,10 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     const currentRiffId = ref<RiffCouchID | null>(deps.engine.currentRiffId);
     const missingStems = ref<StemCouchID[]>([]);
     const lastError = ref<string | null>(null);
+    // Off by default: a hop lands in time either way now, and holding the
+    // click back is a deliberate performance choice, not a fix.
+    const quantiseEntry = ref(false);
+    const quantiseGrid: HopQuantise = deps.quantiseGrid ?? 'beat';
 
     deps.engine.onStateChange((s) => {
       state.value = s;
@@ -67,7 +77,9 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       // Warm before hopping — if buffers are absent, the hop returns
       // not-ready and the UI shows a busy badge.
       await deps.engine.warmRiff(jamId, riff, stems);
-      const result = await deps.engine.hopTo(jamId, riff, stems);
+      const result = quantiseEntry.value
+        ? await deps.engine.hopTo(jamId, riff, stems, { quantise: quantiseGrid })
+        : await deps.engine.hopTo(jamId, riff, stems);
       if (result.kind === 'not-ready') {
         missingStems.value = result.missingStemIds;
       } else {
@@ -95,6 +107,15 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       deps.prefetcher.setWindow(jamId, items);
     }
 
-    return { state, currentRiffId, missingStems, lastError, hopTo, stop, prefetchWindow };
+    return {
+      state,
+      currentRiffId,
+      missingStems,
+      lastError,
+      quantiseEntry,
+      hopTo,
+      stop,
+      prefetchWindow,
+    };
   });
 }

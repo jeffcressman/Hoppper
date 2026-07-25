@@ -20,6 +20,7 @@ const performanceStub = vi.hoisted(() => ({
   currentRiffId: null as string | null,
   missingStems: [] as string[],
   lastError: null as string | null,
+  quantiseEntry: false,
   hopTo: vi.fn(),
   stop: vi.fn(),
   prefetchWindow: vi.fn(async () => {}),
@@ -78,6 +79,7 @@ beforeEach(() => {
 
   performanceStub.state = 'idle';
   performanceStub.currentRiffId = null;
+  performanceStub.quantiseEntry = false;
   performanceStub.missingStems = [];
   performanceStub.lastError = null;
   performanceStub.hopTo.mockReset();
@@ -172,6 +174,33 @@ describe('PerformView', () => {
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.find('[data-test="stop"]').exists()).toBe(false);
+  });
+
+  describe('quantised entry toggle', () => {
+    it('renders unchecked, since quantised entry is off by default', async () => {
+      performanceStub.quantiseEntry = false;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      const box = wrapper.find('[data-test="quantise-entry"]');
+      expect(box.exists()).toBe(true);
+      expect((box.element as HTMLInputElement).checked).toBe(false);
+    });
+
+    it('switches the store flag when ticked', async () => {
+      performanceStub.quantiseEntry = false;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="quantise-entry"]').setValue(true);
+      expect(performanceStub.quantiseEntry).toBe(true);
+    });
+
+    it('reflects the flag being on', async () => {
+      performanceStub.quantiseEntry = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      const box = wrapper.find('[data-test="quantise-entry"]');
+      expect((box.element as HTMLInputElement).checked).toBe(true);
+    });
   });
 
   it('shows error text when performance.lastError is set', async () => {
