@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Context for Claude Code working on this project. Read this first, then `PLAN.md` for the current phase.
+Context for Claude Code working on this project. Read this first, then `MEMORY.md` for what past sessions learned, then `PLAN.md` for the current phase.
 
 ## What we're building
 
@@ -23,7 +23,8 @@ hoppper/
 │   └── app/        # Tauri + Vue 3 + Vite
 ├── PLAN.md
 ├── README.md
-└── CLAUDE.md
+├── CLAUDE.md
+└── MEMORY.md
 ```
 
 Use TypeScript everywhere. Strict mode. `vitest` for tests.
@@ -60,10 +61,27 @@ Inside the container:
 
 The protocol knowledge we need is at **`/refs/OUROVEON`** inside the container (read-only).
 
-LORE is C++. We are not porting C++. We are re-implementing the *protocol layer* in TypeScript using LORE as the spec. Areas of interest:
+**LORE must always be available.** It is the spec for everything we
+re-implement. If `/refs/OUROVEON` is missing or empty and the task at hand
+would benefit from reading it — anything touching the protocol, data shapes,
+timing, or playback semantics — **stop and tell the user**, rather than
+guessing or reasoning from our own docs alone. Say what you needed it for.
+Check with `ls /refs/OUROVEON`, and never suppress the error (a bare
+`2>/dev/null` on a path that turns out to be wrong reads exactly like a
+missing mount — it isn't).
 
-- `src/r0.endlesss/` — auth, API endpoints, data types, WebSocket protocol
-- `src/r2.ouro/` — jam syncing, stem cache, sqlite archive format
+LORE is C++. We are not porting C++. We are re-implementing the *protocol layer*
+in TypeScript using LORE as the spec. Areas of interest:
+
+- `src/r3.endlesss/endlesss/` — auth, API endpoints, data types, riff/stem
+  timing, WebSocket protocol. Most useful files: `api.h`, `core.types.h`,
+  `live.riff.cpp` (riff timing and stem length reconciliation),
+  `live.stem.cpp`, `cache.stems.cpp`, `toolkit.warehouse.cpp` (sqlite archive).
+- `src/r2.ouro/` — shared app-level services.
+
+LORE renames its directory prefixes as it grows (`r0.endlesss` became
+`r3.endlesss`), so confirm the path with `ls /refs/OUROVEON/src` before
+concluding something isn't there.
 
 We **ignore BEAM-specific code** and we ignore the C++ audio engine (PortAudio, r8brain, FLAC mixing, ImGui). Web Audio + Tone.js replace all of that.
 
@@ -86,6 +104,48 @@ When you need to understand how Endlesss does something, read the relevant LORE 
 - All Endlesss endpoint calls go through one HTTP client in the SDK with retry/backoff (Endlesss servers are known-flaky).
 - Every reverse-engineered endpoint gets a short note in `docs/protocol/<endpoint>.md`: URL, method, request shape, response shape, observed quirks, LORE source reference.
 - No secrets in the repo. `.env.local` for dev only; gitignored.
+
+## Working memory — `MEMORY.md`
+
+`MEMORY.md` is the project's accumulated hard-won knowledge: platform
+behaviours that surprised us, why a piece of code is shaped the way it is,
+known gaps we chose to leave, environment quirks. It exists so a later
+session doesn't pay again for something an earlier one already learned.
+
+**Every session, both ends:**
+
+- **At the start** — read it, right after this file. If it contradicts what
+  you find in the code, the code wins; fix the entry.
+- **Before you finish** — add what this session learned. Do this as part of
+  wrapping up the work, not only when asked. If a session genuinely turned up
+  nothing durable, say so and leave the file alone.
+
+What belongs there:
+
+- Behaviour of a dependency, browser API or Endlesss server that isn't in its
+  documentation, or that contradicts the obvious reading of it.
+- The reason behind a non-obvious design choice, where the code can only show
+  the *what*.
+- Known gaps, deferred decisions, and anything raised with the user and still
+  awaiting an answer — with the date and what was asked.
+- Debugging techniques and test seams that actually cracked a hard problem, so
+  the next session reaches for them first.
+- Dev-container and tooling quirks (broken commands, missing mounts, which
+  typecheck CI actually runs).
+
+What does **not** belong there:
+
+- Anything git already records: what changed, when, by whom. Notes describe
+  what is *true now*, not a changelog.
+- Anything already in `CLAUDE.md`, `PLAN.md`, `README.md` or `docs/` — put
+  protocol findings in `docs/protocol/`, phase design in `docs/phases/`, and
+  link to them from `MEMORY.md` rather than restating.
+- Secrets, credentials, or anything from `.env.local`.
+
+Keep entries short and durable. Group under the existing headings, newest
+first, and date anything time-sensitive absolutely (`2026-07-24`, never
+"recently"). Correct or delete entries that turn out to be wrong — a stale
+memory is worse than none.
 
 ## Spelling: "Riff" vs "Rifff"
 

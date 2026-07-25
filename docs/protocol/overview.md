@@ -534,7 +534,35 @@ LORE organises cached stem files on disk (Version 2, from 0.7.7+):
 
 Version 1 (pre-0.7.7) was a single root directory partitioned by first char only, without the jam subdirectory. The SDK should use Version 2.
 
-Stems are stored as-is (no re-encoding). If the stem's `sampleRate` differs from the playback target, LORE resamples at load time (r8brain). We will do this in the browser with the Web Audio API.
+Stems are stored as-is (no re-encoding). If the stem's `sampleRate` differs from the playback target, LORE resamples at load time (r8brain).
+
+**Two separate things get conflated here — they are not the same fix** (this
+note previously implied they were, and cost a wrong diagnosis in July 2026):
+
+1. **Device rate.** LORE resamples a decoded stem to the output device's rate.
+   In the browser `decodeAudioData` already resamples to the `AudioContext`
+   rate, from the rate the *file* declares in its own header. Measured on 14
+   stems (`Stem timing probe` in `packages/sdk/test/integration.test.ts`), the
+   stem document's `sampleRate` matched the encoded rate every time, so there
+   is nothing extra to do here.
+
+2. **Tempo.** A rifff can reuse a stem recorded at a *different tempo*, and
+   that is what actually needs correcting. LORE
+   (`src/r3.endlesss/endlesss/live.riff.cpp`):
+
+   ```cpp
+   // stems can be used across riffs with changed tempos, we have to scale to cope
+   const auto stemTimeScale = theRiff.BPS / stemData.BPS;
+   ```
+
+   The scale comes from the stem's own `bps`, not its `sampleRate`, and it is
+   applied to the stem's sample count *before* the rifff's length is settled.
+   We do the same with `AudioBufferSourceNode.playbackRate`, which is why
+   `ResolvedStem` carries `bps` and `length16ths`.
+
+LORE also does not trust `bps`/`barLength` alone for rifff length: it starts
+from them, then sets `m_lengthInSec = max(computed, longest time-scaled stem)`
+and lets shorter stems repeat inside (`repeats = round(riffLen / stemLen)`).
 
 ---
 
