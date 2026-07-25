@@ -19,8 +19,10 @@ const sampleStem: ResolvedStem = {
   stemId: 'stem-1',
   format: 'flac',
   url: 'https://cdn.example/stem-1.flac',
-  length: 8,
+  byteLength: 8,
   mime: 'audio/flac',
+  bps: 2,
+  length16ths: 64,
 };
 
 const bytes = new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0x00, 0x01, 0x02, 0x03]);
@@ -30,8 +32,10 @@ function makeStem(i: number, len = 8): ResolvedStem {
     stemId: `stem-${i}`,
     format: 'flac',
     url: `https://cdn.example/stem-${i}.flac`,
-    length: len,
+    byteLength: len,
     mime: 'audio/flac',
+    bps: 2,
+    length16ths: 64,
   };
 }
 

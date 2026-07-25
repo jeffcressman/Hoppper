@@ -206,8 +206,10 @@ export function resolveStemUrl(stem: StemDocument): ResolvedStem | null {
     stemId: stem.stemId,
     format: chosen.format,
     url,
-    length: chosen.length,
+    byteLength: chosen.length,
     mime: chosen.mime,
+    bps: stem.bps,
+    length16ths: stem.length16ths,
   };
 }
 

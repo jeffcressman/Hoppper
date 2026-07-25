@@ -50,14 +50,14 @@ export class StemFetcher {
       accept: resolved.mime,
     });
 
-    if (bytes.length !== resolved.length) {
+    if (bytes.length !== resolved.byteLength) {
       if (!this.allowSizeMismatch) {
-        throw new StemIntegrityError(resolved.stemId, resolved.length, bytes.length);
+        throw new StemIntegrityError(resolved.stemId, resolved.byteLength, bytes.length);
       }
       this.logger?.({
         kind: 'size-mismatch',
         stemId: resolved.stemId,
-        expected: resolved.length,
+        expected: resolved.byteLength,
         actual: bytes.length,
       });
     }

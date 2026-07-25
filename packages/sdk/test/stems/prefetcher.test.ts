@@ -11,8 +11,10 @@ function makeStem(i: number, len = 4): ResolvedStem {
     stemId: `stem-${i}`,
     format: 'flac',
     url: `https://cdn.example/stem-${i}.flac`,
-    length: len,
+    byteLength: len,
     mime: 'audio/flac',
+    bps: 2,
+    length16ths: 64,
   };
 }
 

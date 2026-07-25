@@ -137,8 +137,18 @@ describe('resolveStemUrl', () => {
     const resolved = resolveStemUrl(stem);
     expect(resolved?.format).toBe('flac');
     expect(resolved?.url).toContain('endlesss-dev');
-    expect(resolved?.length).toBe(67890);
+    expect(resolved?.byteLength).toBe(67890);
     expect(resolved?.mime).toBe('audio/flac');
+  });
+
+  it('carries the stem own tempo and length through to the player', () => {
+    // A stem can be reused by a rifff at a different tempo, and playback has
+    // to scale to cope (LORE live.riff.cpp: riff.BPS / stem.BPS), so its own
+    // bps has to survive resolution. length16ths gives its musical length
+    // independently of the decoded audio.
+    const resolved = resolveStemUrl(parseStemDocument(rawStemDoc()));
+    expect(resolved?.bps).toBeCloseTo(2.0, 6);
+    expect(resolved?.length16ths).toBe(16);
   });
 
   it('falls back to OGG when FLAC length is 0', () => {

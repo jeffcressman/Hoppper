@@ -20,8 +20,10 @@ function resolved(stemId: string, format: StemFormat = 'ogg'): ResolvedStem {
     stemId: stemId as StemCouchID,
     format,
     url: `https://cdn.example/${stemId}.${format}`,
-    length: 4,
+    byteLength: 4,
     mime: format === 'ogg' ? 'audio/ogg' : 'audio/flac',
+  bps: 2,
+    length16ths: 128,
   };
 }
 

@@ -156,7 +156,7 @@ describe.skipIf(!liveJamReady)('StemFetcher (live) — Phase 4 acceptance', () =
     for (const stem of playable) {
       const blob = await cache.get(stem.stemId);
       expect(blob).not.toBeNull();
-      expect(blob!.bytes.length).toBe(stem.length);
+      expect(blob!.bytes.length).toBe(stem.byteLength);
     }
 
     // Slowest individual stem time from the wrapper.

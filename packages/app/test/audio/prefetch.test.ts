@@ -17,8 +17,10 @@ function stem(id: string): ResolvedStem {
     stemId: id as StemCouchID,
     format: 'ogg',
     url: '',
-    length: 0,
+    byteLength: 0,
     mime: 'audio/ogg',
+  bps: 2,
+    length16ths: 128,
   };
 }
 
