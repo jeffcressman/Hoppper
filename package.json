@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "pnpm --filter @hoppper/app dev",
+    "dev": "pnpm --filter @hoppper/sdk build && pnpm -r --parallel dev",
     "build": "pnpm --filter @hoppper/sdk build && pnpm --filter @hoppper/app build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
