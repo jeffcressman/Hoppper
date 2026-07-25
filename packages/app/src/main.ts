@@ -126,7 +126,11 @@ async function bootstrap() {
     decoder,
     cache: bufferCache,
   });
-  const engine = createAudioEngine({ context: audioContext, loader });
+  const engine = createAudioEngine({
+    context: audioContext,
+    loader,
+    logger: (level, message) => log(level, 'audio', message),
+  });
   const prefetcher = createPrefetchRing({ loader });
   engine.onStateChange((s) => log('info', 'audio', `engine state → ${s}`));
 

@@ -38,18 +38,30 @@ function stem(id: string): ResolvedStem {
     stemId: id as StemCouchID,
     format: 'ogg',
     url: `https://cdn.example/${id}.ogg`,
-    length: 4,
+    byteLength: 4,
     mime: 'audio/ogg',
+    // Matches riff()'s bps and a 16s loop, so nothing is rate-scaled unless a
+    // test says so.
+    bps: 2,
+    length16ths: 128,
   };
 }
 
-function fakeBuffer(): AudioBufferLike {
-  return { length: 100, numberOfChannels: 2, sampleRate: 48000, duration: 0.002 };
+// The riffs above compute a 16s loop, so give stems a duration that actually
+// holds it — a stem shorter than the loop is a distinct case (see riff-voice).
+function fakeBuffer(duration = 16): AudioBufferLike {
+  return {
+    length: Math.round(duration * 48000),
+    numberOfChannels: 2,
+    sampleRate: 48000,
+    duration,
+  };
 }
 
 interface MockSource extends AudioBufferSourceLike {
   startedAt?: { when: number; offset: number };
   stoppedAt?: number;
+  disconnected: boolean;
 }
 interface MockGain extends GainNodeLike {
   events: { kind: string; value?: number; time: number }[];
@@ -76,6 +88,8 @@ function createMockContext(): MockCtx {
         loopStart: 0,
         loopEnd: 0,
         onended: null,
+        playbackRate: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {} },
+        disconnected: false,
         start: vi.fn(function (this: MockSource, when = 0, offset = 0) {
           this.startedAt = { when, offset };
         }),
@@ -83,7 +97,9 @@ function createMockContext(): MockCtx {
           this.stoppedAt = when;
         }),
         connect: vi.fn(),
-        disconnect: vi.fn(),
+        disconnect: vi.fn(function (this: MockSource) {
+          this.disconnected = true;
+        }),
       };
       sources.push(src);
       return src;
@@ -215,6 +231,67 @@ describe('createAudioEngine', () => {
     expect(ctx.sources.length).toBe(2); // r1's source + r2's source
   });
 
+  it('keeps the outgoing voice audible for the whole crossfade, then disposes it', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+    // Anything queued on the microtask queue has run by now.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const outgoing = ctx.sources[0]!;
+    // Still connected — the fade to 0 hasn't landed yet.
+    expect(outgoing.disconnected).toBe(false);
+    // Stopped just after the crossfade completes, not before.
+    expect(outgoing.stoppedAt).toBeGreaterThanOrEqual(4.25);
+
+    // When the browser reports the stop, the voice tears itself down.
+    outgoing.onended?.({});
+    expect(outgoing.disconnected).toBe(true);
+  });
+
+  it('phase-locks on the riff grid, and each stem lands in its own repetition', async () => {
+    // r1's stem holds only 4s of a 16s (8-bar) riff, so it repeats 4× inside
+    // it. Hopping 6s in means 3 bars in, so r2 starts 6s into its own grid —
+    // and r2's 4s stem plays from 2s, its position within that bar.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['short' as StemCouchID, fakeBuffer(4)],
+      ['long' as StemCouchID, fakeBuffer(16)],
+      ['short2' as StemCouchID, fakeBuffer(4)],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('short')]);
+    ctx.currentTime = 6;
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('long'), stem('short2')]);
+
+    expect(result.kind).toBe('phase-locked');
+    if (result.kind === 'phase-locked') {
+      expect(result.offsetSec).toBeCloseTo(6, 6);
+    }
+    const incoming = ctx.sources.slice(1);
+    expect(incoming[0]?.startedAt?.offset).toBeCloseTo(6, 6); // 16s stem
+    expect(incoming[1]?.startedAt?.offset).toBeCloseTo(2, 6); // 4s stem, 6 mod 4
+  });
+
   it('stop() halts all voices and returns to idle', async () => {
     const ctx = createMockContext();
     const buffers = new Map<StemCouchID, AudioBufferLike>([
@@ -250,6 +327,184 @@ describe('createAudioEngine', () => {
     cb.mockClear();
     engine.stop();
     expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('plays a stem borrowed from another tempo at the rifff tempo', async () => {
+    // LORE live.riff.cpp: stemTimeScale = riff.BPS / stem.BPS. The riff runs
+    // at 2 bps; the stem was cut at 1.6, so it plays 1.25× as fast.
+    const ctx = createMockContext();
+    const borrowed = { ...stem('slow'), bps: 1.6 };
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['slow' as StemCouchID, fakeBuffer(20)],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+
+    await engine.hopTo(JAM, riff('r1'), [borrowed]);
+    expect(ctx.sources[0]?.playbackRate.value).toBeCloseTo(1.25, 6);
+  });
+
+  it('plays a stem at its recorded rate when its tempo matches, or is unusable', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['same' as StemCouchID, fakeBuffer()],
+      ['broken' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+
+    // riff('r1') is 2 bps; stem() defaults to the same. A stem document with
+    // bps 0 (damaged) must not produce an infinite rate.
+    await engine.hopTo(JAM, riff('r1'), [stem('same'), { ...stem('broken'), bps: 0 }]);
+    expect(ctx.sources[0]?.playbackRate.value).toBe(1);
+    expect(ctx.sources[1]?.playbackRate.value).toBe(1);
+  });
+
+  it('warns when a stem decoded length disagrees with its declared length16ths', async () => {
+    // length16ths / 4 / bps is what the document says the stem holds. A
+    // disagreement means a truncated or corrupt cached file (LORE carries a
+    // hackAllowStemSizeMismatch flag for the same class of damage).
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['truncated' as StemCouchID, fakeBuffer(8)], // declared 16s below
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    // bps 2, length16ths 128 → 16s declared, but the buffer holds 8s.
+    await engine.hopTo(JAM, riff('r1'), [
+      { ...stem('truncated'), bps: 2, length16ths: 128 },
+    ]);
+
+    const warning = lines.find((l) => l.message.includes('declared'));
+    expect(warning?.level).toBe('warn');
+    expect(warning?.message).toContain('truncated');
+    expect(warning?.message).toContain('16.00s');
+    expect(warning?.message).toContain('8.00s');
+  });
+
+  it('reports rate-scaled stems in the log line, and stays quiet when there are none', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['same' as StemCouchID, fakeBuffer()],
+      ['slow' as StemCouchID, fakeBuffer(20)],
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    await engine.hopTo(JAM, riff('r1'), [stem('same')]);
+    expect(lines[0]?.message).not.toContain('scaled');
+
+    // r2 borrows a stem cut at 1.6 bps into a 2 bps rifff → 1.25×.
+    ctx.currentTime = 4;
+    await engine.hopTo(JAM, riff('r2'), [
+      stem('same'),
+      { ...stem('slow'), bps: 1.6, length16ths: 64 },
+    ]);
+    const hopLine = lines.find((l) => l.message.includes('hop r1'));
+    expect(hopLine?.message).toContain('scaled=1/2');
+    expect(hopLine?.message).toContain('1.250');
+  });
+
+  it('reports each hop through the logger: offset, loop, stem count', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+
+    expect(lines[0]?.message).toContain('start r1');
+    expect(lines[0]?.message).toContain('loop=16.00s');
+    expect(lines[0]?.message).toContain('stems=1');
+    expect(lines[1]?.message).toContain('hop r1 → r2');
+    expect(lines[1]?.message).toContain('offset=4.25s');
+    expect(lines[1]?.message).toContain('crossfade=250ms');
+  });
+
+  it('stays quiet when stems repeat a whole number of times in the loop', async () => {
+    // A 4s stem in a 16s riff is normal — it repeats 4×. Nothing to report.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['short' as StemCouchID, fakeBuffer(4)],
+      ['full' as StemCouchID, fakeBuffer(16)],
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    // length16ths matches each buffer: 32/4/2 = 4s, 128/4/2 = 16s.
+    await engine.hopTo(JAM, riff('r1'), [
+      { ...stem('short'), length16ths: 32 },
+      stem('full'),
+    ]);
+    expect(lines.filter((l) => l.level === 'warn')).toEqual([]);
+  });
+
+  it('warns when a stem does not fit a whole number of times in the loop', async () => {
+    // LORE computes repeats = round(riffLength / stemLength); a ragged ratio
+    // means the stem cannot line up on every repeat, which is audible.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['ragged' as StemCouchID, fakeBuffer(6)],
+      ['full' as StemCouchID, fakeBuffer(16)],
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    // 48/4/2 = 6s, so the declared length agrees with the audio; only the
+    // ragged fit against the 16s loop is at issue.
+    await engine.hopTo(JAM, riff('r1'), [
+      { ...stem('ragged'), length16ths: 48 },
+      stem('full'),
+    ]);
+
+    const warning = lines.find((l) => l.message.includes("don't fit"));
+    expect(warning?.message).toContain('r1');
+    expect(warning?.message).toContain('ragged');
+    expect(warning?.message).toContain('2.67'); // 16 / 6 repetitions
+    // The stem that fits exactly isn't named.
+    expect(warning?.message).not.toContain('full');
+  });
+
+  it('reports not-ready hops through the logger', async () => {
+    const ctx = createMockContext();
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(new Map()),
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    await engine.hopTo(JAM, riff('r1'), [stem('s1'), stem('s2')]);
+
+    expect(lines[0]?.level).toBe('warn');
+    expect(lines[0]?.message).toContain('not-ready');
+    expect(lines[0]?.message).toContain('r1');
   });
 
   it('warmRiff calls loader.load for each stem', async () => {

@@ -62,6 +62,7 @@ function createMockContext(): AudioContextLike & MockNodeRecord {
         loop: false,
         loopStart: 0,
         loopEnd: 0,
+        playbackRate: makeParam(1),
         onended: null,
         connections: [],
         disconnected: false,
@@ -104,12 +105,15 @@ function createMockContext(): AudioContextLike & MockNodeRecord {
   return ctx;
 }
 
-function buf(label = 'b'): AudioBufferLike {
+// Stems are real recordings — default to one comfortably longer than the
+// riff loops used below so tests that don't care about length aren't
+// accidentally exercising the buffer-shorter-than-loop path.
+function buf(label = 'b', duration = 32): AudioBufferLike {
   return {
-    length: 100,
+    length: Math.round(duration * 48000),
     numberOfChannels: 2,
     sampleRate: 48000,
-    duration: 0.002,
+    duration,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...({ _label: label } as any),
   };
@@ -118,8 +122,8 @@ function buf(label = 'b'): AudioBufferLike {
 describe('createRiffVoice', () => {
   it('creates one BufferSource per non-null slot and a single shared GainNode', () => {
     const ctx = createMockContext();
-    const buffers = [buf('a'), null, buf('c'), null, buf('e'), null, null, buf('h')];
-    const voice = createRiffVoice({ context: ctx, buffers, loopDurationSec: 8 });
+    const stems = [{ buffer: buf('a') }, null, { buffer: buf('c') }, null, { buffer: buf('e') }, null, null, { buffer: buf('h') }];
+    const voice = createRiffVoice({ context: ctx, stems, loopDurationSec: 8 });
 
     expect(ctx.sources.length).toBe(4);
     expect(ctx.gains.length).toBe(1);
@@ -130,7 +134,7 @@ describe('createRiffVoice', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), buf(), buf(), buf(), null, null, null, null],
+      stems: [{ buffer: buf() }, { buffer: buf() }, { buffer: buf() }, { buffer: buf() }, null, null, null, null],
       loopDurationSec: 4,
     });
     void voice;
@@ -142,11 +146,11 @@ describe('createRiffVoice', () => {
     expect(gain.connections).toContain(ctx.destination);
   });
 
-  it('enables looping over [0, loopDurationSec] on every source', () => {
+  it('enables looping from the start of every source', () => {
     const ctx = createMockContext();
     createRiffVoice({
       context: ctx,
-      buffers: [buf(), buf(), null, null, null, null, null, null],
+      stems: [{ buffer: buf('a', 12) }, { buffer: buf('b', 12) }, null, null, null, null, null, null],
       loopDurationSec: 12,
     });
     for (const src of ctx.sources) {
@@ -160,7 +164,7 @@ describe('createRiffVoice', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), buf(), buf(), null, null, null, null, null],
+      stems: [{ buffer: buf() }, { buffer: buf() }, { buffer: buf() }, null, null, null, null, null],
       loopDurationSec: 8,
     });
     voice.start(2.5, 1.25);
@@ -173,46 +177,241 @@ describe('createRiffVoice', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), null, null, null, null, null, null, null],
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
       loopDurationSec: 4,
     });
     voice.start(0, 0);
     expect(() => voice.start(1, 0)).toThrow();
   });
 
+  it('loops each source at its own stem length, short or long', () => {
+    // LORE (live.riff.cpp): a stem shorter than the riff repeats inside it,
+    // and a stem longer than the computed riff length pushes the riff length
+    // out rather than being truncated. Either way each stem loops at its own
+    // length — Web Audio would otherwise loop a short stem at its buffer end
+    // while we computed offsets against a different number.
+    const ctx = createMockContext();
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('short', 4) }, { buffer: buf('exact', 16) }, { buffer: buf('long', 24) }, null, null, null, null, null],
+      loopDurationSec: 16,
+    });
+    expect(ctx.sources[0]?.loopEnd).toBe(4);
+    expect(ctx.sources[1]?.loopEnd).toBe(16);
+    expect(ctx.sources[2]?.loopEnd).toBe(24);
+  });
+
+  it('wraps the start offset into each stem own loop length', () => {
+    // A 4s stem asked to start 9.2s in must land at 1.2s — its position in
+    // the same grid — not be clamped to its end by the browser.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('short', 4) }, { buffer: buf('long', 16) }, null, null, null, null, null, null],
+      loopDurationSec: 16,
+    });
+    voice.start(2.5, 9.2);
+    expect(ctx.sources[0]?.startedAt?.when).toBe(2.5);
+    expect(ctx.sources[0]?.startedAt?.offset).toBeCloseTo(1.2, 6);
+    expect(ctx.sources[1]?.startedAt?.offset).toBeCloseTo(9.2, 6);
+  });
+
+  it('plays a stem recorded at another tempo at the rifff tempo', () => {
+    // LORE live.riff.cpp: stemTimeScale = riff.BPS / stem.BPS, applied to the
+    // stem's samples. A stem cut at 120bpm reused by a 144bpm rifff plays 1.2×
+    // as fast, so its 8s of audio occupies 6.667s of the rifff.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('borrowed', 8), playbackRate: 1.2 }, null, null, null, null, null, null, null],
+      loopDurationSec: 6.6667,
+    });
+    expect(ctx.sources[0]?.playbackRate.value).toBeCloseTo(1.2, 6);
+    // loopEnd is in buffer time, so it stays the stem's own length.
+    expect(ctx.sources[0]?.loopEnd).toBeCloseTo(8, 6);
+    // The loop it occupies in rifff time is the scaled length.
+    expect(voice.effectiveLoopSec).toBeCloseTo(8 / 1.2, 4);
+  });
+
+  it('converts a rifff-time start offset into buffer time for a scaled stem', () => {
+    // 8s of audio at rate 2 occupies 4s of the rifff. Asked to start 5s in
+    // (rifff time) it wraps to 1s, which is 2s into the buffer.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('fast', 8), playbackRate: 2 }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.start(0, 5);
+    expect(ctx.sources[0]?.startedAt?.offset).toBeCloseTo(2, 6);
+  });
+
+  it('defaults to rate 1 when a stem is at the rifff tempo', () => {
+    const ctx = createMockContext();
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('b', 8) }, null, null, null, null, null, null, null],
+      loopDurationSec: 8,
+    });
+    expect(ctx.sources[0]?.playbackRate.value).toBe(1);
+  });
+
+  it('ignores an unusable playback rate rather than throwing', () => {
+    // A stem document with bps 0 would produce Infinity here; a non-finite
+    // playbackRate throws, taking the voice down mid-hop.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [
+        { buffer: buf('b', 8), playbackRate: Number.POSITIVE_INFINITY },
+        { buffer: buf('c', 8), playbackRate: 0 },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ],
+      loopDurationSec: 8,
+    });
+    expect(ctx.sources[0]?.playbackRate.value).toBe(1);
+    expect(ctx.sources[1]?.playbackRate.value).toBe(1);
+    expect(voice.effectiveLoopSec).toBeCloseTo(8, 6);
+  });
+
+  it('falls back to the stem own length when the riff loop is unusable', () => {
+    // Damaged riff timing (bps of 0 or NaN) must not take the hop down with
+    // it: a non-finite loopEnd or offset throws, which would leave the rest
+    // of the voice unscheduled and still connected.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('b', 8) }, null, null, null, null, null, null, null],
+      loopDurationSec: Number.NaN,
+    });
+    expect(voice.effectiveLoopSec).toBe(8);
+    expect(ctx.sources[0]?.loopEnd).toBe(8);
+    voice.start(1, 12);
+    expect(ctx.sources[0]?.startedAt).toEqual({ when: 1, offset: 4 });
+  });
+
+  it('reports effectiveLoopSec as the computed loop, pushed out to fit the longest stem', () => {
+    // Mirrors LORE: m_lengthInSec = max(computed, longest stem). Short stems
+    // repeat inside the riff, so they never shorten it.
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf('short', 4) }, { buffer: buf('mid', 8) }, null, null, null, null, null, null],
+      loopDurationSec: 16,
+    });
+    expect(voice.effectiveLoopSec).toBeCloseTo(16, 6);
+
+    const ctx2 = createMockContext();
+    const voice2 = createRiffVoice({
+      context: ctx2,
+      stems: [{ buffer: buf('long', 32) }, null, null, null, null, null, null, null],
+      loopDurationSec: 16,
+    });
+    expect(voice2.effectiveLoopSec).toBeCloseTo(32, 6);
+  });
+
+  it('effectiveLoopSec falls back to the riff loop for a silent voice', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [null, null, null, null, null, null, null, null],
+      loopDurationSec: 12,
+    });
+    expect(voice.effectiveLoopSec).toBeCloseTo(12, 6);
+  });
+
+  it('tears itself down once every stopped source has ended', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, { buffer: buf() }, null, null, null, null, null, null],
+      loopDurationSec: 8,
+    });
+    voice.start(0, 0);
+    voice.stop(2.5);
+
+    // Still connected: the crossfade is still running until `when`.
+    expect(ctx.sources.every((s) => !s.disconnected)).toBe(true);
+    expect((ctx.gains[0] as MockGain).disconnected).toBe(false);
+
+    // The browser fires onended per source when the scheduled stop lands.
+    for (const src of ctx.sources) src.onended?.({} as Event);
+
+    expect(ctx.sources.every((s) => s.disconnected)).toBe(true);
+    expect((ctx.gains[0] as MockGain).disconnected).toBe(true);
+  });
+
+  it('does not tear down until the last source has ended', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, { buffer: buf() }, null, null, null, null, null, null],
+      loopDurationSec: 8,
+    });
+    voice.start(0, 0);
+    voice.stop(1);
+    ctx.sources[0]?.onended?.({} as Event);
+    expect((ctx.gains[0] as MockGain).disconnected).toBe(false);
+    ctx.sources[1]?.onended?.({} as Event);
+    expect((ctx.gains[0] as MockGain).disconnected).toBe(true);
+  });
+
+  it('stop() on a silent voice tears down immediately (no sources to end)', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [null, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.start(0, 0);
+    voice.stop(1);
+    expect((ctx.gains[0] as MockGain).disconnected).toBe(true);
+  });
+
   it('fadeIn schedules a 0 → 1 linear ramp on the gain param', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), null, null, null, null, null, null, null],
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
       loopDurationSec: 4,
     });
     voice.fadeIn(3.0, 0.25);
     const events = (ctx.gains[0] as MockGain).param.events;
-    expect(events[0]).toEqual({ kind: 'set', value: 0, time: 3.0 });
-    expect(events[1]).toEqual({ kind: 'ramp', value: 1, time: 3.25 });
+    // Pending automation is dropped first, so a fade started mid-fade can't
+    // be overtaken by the ramp it replaces.
+    expect(events[0]).toEqual({ kind: 'cancel', time: 3.0 });
+    expect(events[1]).toEqual({ kind: 'set', value: 0, time: 3.0 });
+    expect(events[2]).toEqual({ kind: 'ramp', value: 1, time: 3.25 });
   });
 
   it('fadeOut schedules a current → 0 linear ramp ending at startTime + durationSec', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), null, null, null, null, null, null, null],
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
       loopDurationSec: 4,
     });
     voice.fadeOut(5.0, 0.25);
     const events = (ctx.gains[0] as MockGain).param.events;
-    // Anchors current value at startTime so the ramp starts from a defined point.
-    expect(events[0]?.kind).toBe('set');
-    expect(events[0]?.time).toBe(5.0);
-    expect(events[1]).toEqual({ kind: 'ramp', value: 0, time: 5.25 });
+    // Cancel first, then anchor the current value at startTime so the ramp
+    // starts from a defined point and nothing scheduled earlier can raise it
+    // again on the way down.
+    expect(events[0]).toEqual({ kind: 'cancel', time: 5.0 });
+    expect(events[1]?.kind).toBe('set');
+    expect(events[1]?.time).toBe(5.0);
+    expect(events[2]).toEqual({ kind: 'ramp', value: 0, time: 5.25 });
   });
 
   it('stop(when) stops every source at `when`', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), buf(), null, null, null, null, null, null],
+      stems: [{ buffer: buf() }, { buffer: buf() }, null, null, null, null, null, null],
       loopDurationSec: 8,
     });
     voice.start(0, 0);
@@ -226,7 +425,7 @@ describe('createRiffVoice', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [buf(), buf(), null, null, null, null, null, null],
+      stems: [{ buffer: buf() }, { buffer: buf() }, null, null, null, null, null, null],
       loopDurationSec: 8,
     });
     voice.dispose();
@@ -240,7 +439,7 @@ describe('createRiffVoice', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
-      buffers: [null, null, null, null, null, null, null, null],
+      stems: [null, null, null, null, null, null, null, null],
       loopDurationSec: 4,
     });
     expect(voice.stemCount).toBe(0);
