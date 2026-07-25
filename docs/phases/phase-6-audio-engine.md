@@ -186,30 +186,86 @@ export type HopResult =
   | { kind: 'not-ready';  missingStemIds: StemCouchID[] };
 ```
 
-## Phase-lock math (canonical form)
+## Hop phase model (canonical form)
+
+Playback runs against **one continuous grid**, starting the moment a cold
+start begins and running until playback stops. Whatever rifff is playing
+plays the position the grid is at, wrapped into its own loop length.
 
 ```
-prevStart        = (engine-recorded) start time of currently playing rifff
-prevLoopDur      = computeRiffTiming(prevRiff).loopDurationSec
-newLoopDur       = computeRiffTiming(newRiff).loopDurationSec
+gridOrigin       = audioContext.currentTime at the cold start
+                   (reset to null on stop, so the next play starts over)
+newLoopDur       = the loop the incoming rifff's stems actually play
+                   (RiffVoice.effectiveLoopSec, not the computed length)
 now              = audioContext.currentTime
 crossfadeSec     = crossfadeMs / 1000
 
-elapsedInPrev    = ((now + crossfadeSec) - prevStart) mod prevLoopDur
-offsetInNew      = elapsedInPrev mod newLoopDur
-startWhen        = now + crossfadeSec  // schedule new rifff to begin
-                                       // when crossfade midpoint hits
+startWhen        = now + crossfadeSec
+elapsedOnGrid    = startWhen - gridOrigin
+offsetInNew      = elapsedOnGrid mod newLoopDur
 ```
 
-Two subtleties:
+So a hop seven bars into a run lands the incoming rifff at its bar 7 if
+it is long enough to have one, at bar 3 of a four-bar rifff, and at bar 1
+of a two-bar rifff — every one of them at the same point *within* the
+bar, which is what keeps a hop on the beat. If the longer rifffs are
+built from repeats of the shorter one, a sound on bar 7 is heard on bar 7
+whichever rifff you hop to. See `local/issue resources/Rifff timing.pdf`.
 
-1. We schedule the new rifff slightly in the future (`now +
-   crossfadeSec`) so the offset accounts for the time the crossfade
-   takes. This means a hop "lands" at the end of the crossfade window.
-2. If the user enables snap-to-bar, round `startWhen` up to the next
-   `prevStart + k * prevSecPerBar` and recompute `offsetInNew` from that
-   `startWhen`. Keep snap-to-bar off by default — feels laggy on slow
-   loops.
+Three subtleties:
+
+1. We schedule the new rifff slightly in the future (`now + crossfadeSec`)
+   so the offset accounts for the time the crossfade takes: a hop "lands"
+   at the end of the crossfade window. The voice is therefore started at
+   `now` with offset `offsetInNew - crossfadeSec`, which makes its
+   playhead equal grid-elapsed at *every* instant, including during the
+   fade while both rifffs are audible.
+2. **Never measure from the previous hop.** An earlier implementation
+   recorded each hop's `startWhen` as the outgoing voice's start time and
+   measured the next hop from that, so every hop after the first landed at
+   "time since the last hop" instead of the grid position. Because the
+   discrepancy is arbitrary — it is whatever the gap between clicks was —
+   the audio landed a random fraction of a beat off, which is audible
+   immediately. Measured on a recorded session: hops 2, 3 and 4 were 170,
+   100 and 140ms off a 120bpm grid.
+3. **Quantised entry** (`HopOptions.quantise`, `'beat' | 'bar'`) rounds
+   `startWhen` up to the next `gridOrigin + k * quantiseSec` and
+   recomputes from there, so the incoming rifff enters on a beat or a bar
+   instead of wherever the click landed. `quantiseSec` is `1 / bps` for a
+   beat and `secPerBar` for a bar. **Default off** — a hop lands in time
+   either way now that phase is continuous, so holding the click back is
+   a performance choice rather than a fix, and a bar of hold reads as lag
+   on slow loops. The Perform view exposes it as a checkbox
+   (`performance.quantiseEntry`), which selects the store's
+   `quantiseGrid`, a beat unless configured otherwise.
+
+   Note the interaction with hop recording: the recorder captures the
+   *click*, per phase 7, not the quantised entry, and replay does not
+   quantise. So a sequence recorded with quantisation on replays at the
+   click times — up to one interval away from what was heard. Fine for
+   now; revisit if replay fidelity starts to matter.
+
+### Divergence from LORE
+
+LORE keeps a single continuous cursor too (`mix/preview.cpp`,
+`m_riffPlaybackSample`), advanced with the output and reset to 0 only when
+playback goes idle — the same principle, deliberately so, per its comment
+that a rifff enqueued after idle should "start from scratch rather than
+just wherever the playback head had wandered onto".
+
+It differs in one respect: LORE wraps that cursor by the **current**
+rifff's length every render quantum, so hopping from a two-bar rifff into
+a sixteen-bar one lands in the latter's first two bars. We keep the grid
+position instead, so it lands at bar 7. This is a deliberate divergence —
+it is what Endlesss does when you click a rifff in the Rifff Journal, and
+what the project wants.
+
+LORE also supports quantising the swap itself to a bar subdivision
+(`m_lockTransitionBarCount`: eighth / quarter / half / bar), i.e. waiting
+for the next transition point before switching. We do not; our `snapToBar`
+option is the nearest equivalent and is unused by the UI. Worth revisiting
+if entering mid-bar turns out to feel wrong — it is a separate question
+from phase, which is now continuous either way.
 
 ## Pre-cache strategy
 

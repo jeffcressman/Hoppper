@@ -41,9 +41,17 @@ export interface AudioEngineOptions {
   logger?: (level: 'debug' | 'warn', message: string) => void;
 }
 
+/** Musical grid the incoming rifff may be held back to. */
+export type HopQuantise = 'beat' | 'bar';
+
 export interface HopOptions {
   crossfadeMs?: number;
-  snapToBar?: boolean;
+  /**
+   * Hold the hop until the next beat or bar on the grid, so the incoming
+   * rifff enters in time rather than wherever the click landed. Omitted means
+   * enter immediately, which is the default everywhere.
+   */
+  quantise?: HopQuantise;
 }
 
 export interface AudioEngine {
@@ -68,7 +76,7 @@ export interface AudioEngine {
 interface ActiveVoice {
   riffId: RiffCouchID;
   voice: RiffVoice;
-  startedAt: number;
+  /** The loop this voice plays, kept for the log line's context. */
   loopDurationSec: number;
 }
 
@@ -79,6 +87,11 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
 
   let state: AudioEngineState = 'idle';
   let current: ActiveVoice | null = null;
+  // The grid every hop is measured against: the AudioContext time playback
+  // started. Reset only on stop, so a run of hops stays on one continuous
+  // grid — measuring from the previous hop instead is what put hops off the
+  // beat (see docs/phases/phase-6-audio-engine.md).
+  let gridOrigin: number | null = null;
   const listeners = new Set<(s: AudioEngineState) => void>();
 
   const sec = (n: number): string => `${n.toFixed(2)}s`;
@@ -247,6 +260,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           stems: voiceStems,
           loopDurationSec: timing.loopDurationSec,
         });
+        gridOrigin = now;
         voice.start(now, 0);
         warnOnDeclaredLengthMismatch(riff.riffId, stems, buffers);
         warnOnRaggedStems(riff.riffId, stems, buffers, voice.effectiveLoopSec);
@@ -259,7 +273,6 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         current = {
           riffId: riff.riffId,
           voice,
-          startedAt: now,
           loopDurationSec: voice.effectiveLoopSec,
         };
         setState('playing');
@@ -275,15 +288,21 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         loopDurationSec: timing.loopDurationSec,
       });
 
-      // Hop: phase-lock against the currently playing riff.
+      // A beat is a quarter note — the unit `bps` counts.
+      const quantiseSec =
+        hopOpts?.quantise === 'beat'
+          ? 1 / timing.bps
+          : hopOpts?.quantise === 'bar'
+            ? timing.secPerBar
+            : undefined;
+
+      // Hop: pick up at the grid's position, wrapped into the new riff.
       const hop = computeHop({
         now,
-        prevStart: current.startedAt,
-        prevLoopDur: current.loopDurationSec,
+        gridOrigin: gridOrigin ?? now,
         newLoopDur: newVoice.effectiveLoopSec,
         crossfadeSec,
-        snapToBar: hopOpts?.snapToBar,
-        prevSecPerBar: hopOpts?.snapToBar ? timing.secPerBar : undefined,
+        quantiseSec,
       });
 
       // We start it `crossfadeSec` early so its playhead reaches
@@ -308,13 +327,15 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           `offset=${sec(hop.offsetInNew)} loop=${sec(newVoice.effectiveLoopSec)} ` +
           `prevLoop=${sec(old.loopDurationSec)} stems=${newVoice.stemCount} ` +
           `crossfade=${crossfadeMs}ms` +
+          (hopOpts?.quantise === undefined
+            ? ''
+            : ` quantise=${hopOpts.quantise} +${sec(hop.quantiseDelaySec)}`) +
           describeScaling(voiceStems),
       );
 
       current = {
         riffId: riff.riffId,
         voice: newVoice,
-        startedAt: hop.startWhen,
         loopDurationSec: newVoice.effectiveLoopSec,
       };
       setState('playing');
@@ -335,6 +356,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       current.voice.stop(stopAt);
       current.voice.dispose();
       current = null;
+      gridOrigin = null;
       setState('idle');
     },
 

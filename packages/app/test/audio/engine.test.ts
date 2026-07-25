@@ -262,6 +262,191 @@ describe('createAudioEngine', () => {
     expect(outgoing.disconnected).toBe(true);
   });
 
+  it('measures every hop from the grid origin, not from the previous hop', async () => {
+    // The recorded off-beat session, replayed: cold start then four hops, all
+    // 8s loops. Each offset must be the position on the grid — elapsed since
+    // the cold start — not the time since the last hop.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer(8)],
+      ['b' as StemCouchID, fakeBuffer(8)],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+    const r = (id: string) => riff(id, { bps: 2, barLength: 8 }); // → 8s loop
+
+    ctx.currentTime = 29.5;
+    await engine.hopTo(JAM, r('r1'), [stem('a')]);
+
+    const offsets: number[] = [];
+    for (const [when, stemId] of [
+      [31.67, 'b'],
+      [33.6, 'a'],
+      [35.86, 'b'],
+      [38.42, 'a'],
+    ] as const) {
+      ctx.currentTime = when;
+      const result = await engine.hopTo(JAM, r(`riff-${when}`), [stem(stemId)]);
+      if (result.kind !== 'phase-locked') throw new Error(`expected a hop, got ${result.kind}`);
+      offsets.push(result.offsetSec);
+    }
+
+    expect(offsets[0]).toBeCloseTo(2.17, 2);
+    expect(offsets[1]).toBeCloseTo(4.1, 2);
+    expect(offsets[2]).toBeCloseTo(6.36, 2);
+    expect(offsets[3]).toBeCloseTo(0.92, 2);
+  });
+
+  it('quantised entry holds the hop until the next beat on the grid', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+
+    // riff() is 2 bps → 0.5s beats, 2s bars.
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'beat' });
+
+    if (result.kind !== 'phase-locked') throw new Error('expected a hop');
+    expect(result.whenSec).toBeCloseTo(4.5, 6);
+    expect(result.offsetSec).toBeCloseTo(4.5, 6);
+  });
+
+  it('quantised entry can hold for a whole bar instead', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'bar' });
+
+    if (result.kind !== 'phase-locked') throw new Error('expected a hop');
+    expect(result.whenSec).toBeCloseTo(6, 6);
+  });
+
+  it('enters immediately when quantisation is off (the default)', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+
+    if (result.kind !== 'phase-locked') throw new Error('expected a hop');
+    expect(result.whenSec).toBeCloseTo(4.1, 6);
+  });
+
+  it('reports a quantised hop delay in the log line', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const lines: { level: string; message: string }[] = [];
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+      logger: (level, message) => lines.push({ level, message }),
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'beat' });
+
+    const hopLine = lines.find((l) => l.message.includes('hop r1'));
+    expect(hopLine?.message).toContain('quantise=beat');
+    expect(hopLine?.message).toContain('+0.40s');
+    // An unquantised hop says nothing about it.
+    ctx.currentTime = 6;
+    await engine.hopTo(JAM, riff('r3'), [stem('a')]);
+    expect(lines.find((l) => l.message.includes('hop r2'))?.message).not.toContain('quantise');
+  });
+
+  it('starts the incoming sources at the grid position, so the crossfade is in time', async () => {
+    // The new voice starts at `now` and reaches the phase anchor when the
+    // crossfade completes, which means its playhead equals grid-elapsed at
+    // every instant — including throughout the fade, while both are audible.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    ctx.currentTime = 5;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 9;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+
+    const incoming = ctx.sources[1]!;
+    expect(incoming.startedAt?.when).toBeCloseTo(9, 6);
+    // 4s onto the grid at the moment it starts, not 4.25s.
+    expect(incoming.startedAt?.offset).toBeCloseTo(4, 6);
+  });
+
+  it('starts a new grid after stopping', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer(8)],
+      ['b' as StemCouchID, fakeBuffer(8)],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 0,
+    });
+    const r = (id: string) => riff(id, { bps: 2, barLength: 8 });
+
+    ctx.currentTime = 10;
+    await engine.hopTo(JAM, r('r1'), [stem('a')]);
+    ctx.currentTime = 13;
+    engine.stop();
+
+    // Playing again starts the grid over, rather than picking up wherever the
+    // cursor would have wandered to (LORE does the same on going idle).
+    ctx.currentTime = 100;
+    await engine.hopTo(JAM, r('r2'), [stem('b')]);
+    ctx.currentTime = 101.5;
+    const result = await engine.hopTo(JAM, r('r3'), [stem('a')]);
+    if (result.kind !== 'phase-locked') throw new Error('expected a hop');
+    expect(result.offsetSec).toBeCloseTo(1.5, 6);
+  });
+
   it('phase-locks on the riff grid, and each stem lands in its own repetition', async () => {
     // r1's stem holds only 4s of a 16s (8-bar) riff, so it repeats 4× inside
     // it. Hopping 6s in means 3 bars in, so r2 starts 6s into its own grid —
