@@ -8,7 +8,7 @@ file carries plugin choices, adapter shapes, UI structure, and TDD order.
 Phase 4 finished the SDK's stem fetching + cache. Phase 5 puts that SDK
 behind a real Tauri 2.x desktop app: CORS-free HTTP, filesystem-backed
 stem cache, encrypted token storage, and a minimal navigation flow
-(login → jam list → riff list). **No audio yet** — that's Phase 6.
+(login → jam list → rifff list). **No audio yet** — that's Phase 6.
 
 ## Strategy
 
@@ -174,13 +174,13 @@ src/
 └── views/
     ├── LoginView.vue          # form + AuthError banner
     ├── JamListView.vue        # personal + subscribed + joinable lists
-    └── JamDetailView.vue      # profile header + paginated riff list
+    └── JamDetailView.vue      # profile header + paginated rifff list
 ```
 
 Looks
 - Plain HTML + minimal CSS for Phase 5 — no design system yet.
-- Riff list shows: `createdAt`, slot count (active/8), and the riff's
-  short ID. Click a riff = no-op for now (placeholder for Phase 6).
+- Rifff list shows: `createdAt`, slot count (active/8), and the rifff's
+  short ID. Click a rifff = no-op for now (placeholder for Phase 6).
 - Pagination: a "Load more" button calls `loadNextPage()`. No
   infinite scroll yet.
 
@@ -217,14 +217,14 @@ tests come *with* the component, not before.
    `sessionStore.login`. Test uses mounted component with a stub
    store.
 10. **`JamListView`** — smoke render of three sections.
-11. **`JamDetailView`** — smoke render of profile + riff rows.
+11. **`JamDetailView`** — smoke render of profile + rifff rows.
 12. **Tauri sanity command** `__stem_cache_self_test`: Rust command
     that, given a write byte, writes and reads back via the
     FilesystemStemCache constructed against tauriFsAdapter. No JS
     test (integration-only); manually verified via dev console on
     first dev-server run.
 13. **Wire `client.ts`** with real Tauri fetch + StrongholdTokenStore;
-    run `pnpm dev`, exercise login → jam list → riff list, and
+    run `pnpm dev`, exercise login → jam list → rifff list, and
     confirm the checkpoint.
 
 ## Files
@@ -265,7 +265,7 @@ To modify:
 `pnpm --filter @hoppper/app test` (unit): all stores + adapters pass.
 
 `pnpm dev` (manual): log in with `.env.local` creds; see jam list;
-click a jam; see riffs. Restart the app, confirm session persists
+click a jam; see rifffs. Restart the app, confirm session persists
 (stronghold round-trip). Check that the cache directory and `vault.key`
 both appear under `appLocalDataDir`. Open dev tools and call
 `window.__hoppperSelfTest()` (a dev-only wrapper around the Rust
@@ -274,9 +274,9 @@ command) to verify the FsAdapter wiring writes + reads a byte.
 ## Deferred / explicitly NOT in Phase 5
 
 - **Audio playback** → Phase 6.
-- **Riff click behavior** → Phase 6 (will trigger stem prefetch +
+- **Rifff click behavior** → Phase 6 (will trigger stem prefetch +
   decode).
-- **Riff cursor / N±2 lookahead scheduling** → Phase 6 / app layer.
+- **Rifff cursor / N±2 lookahead scheduling** → Phase 6 / app layer.
 - **OS-keychain-backed vault key** → post-v1 hardening. Document the
   current `vault.key` model in the README.
 - **LORE warehouse.db3 metadata import** → not in any phase yet;

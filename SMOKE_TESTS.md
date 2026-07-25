@@ -34,13 +34,13 @@ many builds if the checklist gets too long.
       saved token — the same indicator is visible during hydrate.
 - [ ] **Jam list loads.** Post-login `/jams` renders the subscribed
       jams. Titles populate as `getJam` calls resolve.
-- [ ] **Jam detail loads.** Clicking a jam opens `/jams/:jamId`; riffs
+- [ ] **Jam detail loads.** Clicking a jam opens `/jams/:jamId`; rifffs
       list renders.
 - [ ] **Perform view: audio on cold start.** Open a small jam →
-      Perform, click a riff, hear audio within a couple seconds.
+      Perform, click a rifff, hear audio within a couple seconds.
       (Regression signal for the ENOENT / stem cache path.)
 - [ ] **Perform view: phase-locked hops.** Hopping between adjacent
-      riffs is gapless and beat-aligned; no clicks, no restart, no
+      rifffs is gapless and beat-aligned; no clicks, no restart, no
       silence between transitions.
 - [ ] **DigitalOcean Spaces stems.** Any jam whose stems are hosted at
       `*.digitaloceanspaces.com` plays — no "url not allowed on the
@@ -59,7 +59,7 @@ many builds if the checklist gets too long.
 - [ ] **Start recording.** Clicking Record flips the button to **■
       Stop Recording** (red) and an elapsed-time clock appears next
       to it, ticking up as `m:ss`.
-- [ ] **Hops captured while recording.** Clicking through riffs
+- [ ] **Hops captured while recording.** Clicking through rifffs
       during a recording adds events to the sequence, including any
       clicks flagged not-ready — the click itself is the artifact.
 - [ ] **Stop recording writes to disk.** Clicking Stop Recording adds

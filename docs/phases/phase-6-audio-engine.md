@@ -6,18 +6,18 @@ layering, TDD order, and deferred items.
 
 ## Background
 
-Phases 2–4 produced the SDK: auth, jam/riff enumeration, stem URL
+Phases 2–4 produced the SDK: auth, jam/rifff enumeration, stem URL
 resolution, and a layered byte-cache for stem files. Phase 5 wired that
-SDK into a Tauri shell with login, jam list, and jam detail (riff list)
+SDK into a Tauri shell with login, jam list, and jam detail (rifff list)
 views. **No audio has been played yet.**
 
 Phase 6 turns the app from a browser into an instrument: a user can pick
-a jam, click riffs in sequence, and hear phase-locked, gapless
+a jam, click rifffs in sequence, and hear phase-locked, gapless
 transitions between them. This is the foundation for Phase 7 (record the
 performance) and Phase 9 (render to disk).
 
-The product concept is "riff hopping": the next riff begins at the same
-position-within-the-loop where the previous riff was, so accents and bar
+The product concept is "rifff hopping": the next rifff begins at the same
+position-within-the-loop where the previous rifff was, so accents and bar
 lines stay aligned even though the underlying audio changes. See
 `README.md` for the user-facing pitch.
 
@@ -40,13 +40,13 @@ lines stay aligned even though the underlying audio changes. See
     `StemCouchID`. Lives in memory only. Decoded buffers are 5–10×
     larger than the encoded bytes, so this tier evicts aggressively
     (default cap: ~256MB, configurable).
-- **Phase-locked hop.** When the user picks a new riff while another is
+- **Phase-locked hop.** When the user picks a new rifff while another is
   playing, we compute `elapsedInPrevLoop = (now - prevRiffStart) %
   prevLoopDurationSec`, start the new riff with `offset =
   elapsedInPrevLoop % newLoopDurationSec`, schedule a crossfade between
   two `GainNode`s over `crossfadeMs` (default 250ms, snap-to-bar
-  optional). Both riffs' loops are independent — we do not retime.
-- **Prefetch ring.** When viewing riff `N`, decode `N` plus `N±2` into
+  optional). Both rifffs' loops are independent — we do not retime.
+- **Prefetch ring.** When viewing rifff `N`, decode `N` plus `N±2` into
   the AudioBuffer cache in the background. Bytes-tier prefetch is
   already provided by `prefetchRiffs` from Phase 4; Phase 6 stacks a
   decode-prefetch on top.
@@ -58,16 +58,16 @@ lines stay aligned even though the underlying audio changes. See
   `packages/app/src/audio/`. SDK exposes `RiffDocument`, `StemDocument`,
   and `ResolvedStem` types — that's all the audio engine consumes from
   it.
-- **Riff-aware, not stem-aware, at the public boundary.** The audio
-  engine's public API takes whole riffs (`AudioEngine.queueRiff(riff,
+- **Rifff-aware, not stem-aware, at the public boundary.** The audio
+  engine's public API takes whole rifffs (`AudioEngine.queueRiff(riff,
   stems)`), not individual stems. Per-stem mute/solo is post-v1
   (Phase 8+). Phase 6 plays all eight slots at their stored gains.
 - **Single `Tone.Transport` instance, not used for sync.** We don't put
-  riffs on the Transport timeline because each riff has its own loop
-  length. Instead each riff is a set of 8 `Tone.Player`s started with
+  rifffs on the Transport timeline because each rifff has its own loop
+  length. Instead each rifff is a set of 8 `Tone.Player`s started with
   explicit `start(when, offset)` calls. Transport is reserved for the
   Phase 7 recorder's wall-clock alignment.
-- **No retiming, no pitch-shifting.** If the next riff has a different
+- **No retiming, no pitch-shifting.** If the next rifff has a different
   BPM, its loop runs at its own tempo — phase-lock is positional, not
   tempo-locked. (Tempo-locking is a v2 idea; document it but don't
   build.)
@@ -82,7 +82,7 @@ lines stay aligned even though the underlying audio changes. See
   ```
   Pure function. Same input → same output. Lives in
   `audio/riff-timing.ts`.
-- **Decoder picks format per stem, not per riff.** `ResolvedStem` already
+- **Decoder picks format per stem, not per rifff.** `ResolvedStem` already
   reports `format`. FLAC if present, Ogg otherwise — SDK already does
   this preference. The decoder just switches on `format`.
 - **One Tauri command for byte loading; no `fetch('file://...')`.** The
@@ -90,9 +90,9 @@ lines stay aligned even though the underlying audio changes. See
   cache lives in JS land already (Phase 5 `TauriFsAdapter`), so no new
   Rust command is needed.
 - **Crossfade graph is two stem-channel groups, not per-stem
-  crossfades.** Each riff renders into a `Tone.Channel` (its own
-  `GainNode`). The active riff's channel fades from 1→0 over
-  `crossfadeMs`; the incoming riff's channel fades from 0→1 in the same
+  crossfades.** Each rifff renders into a `Tone.Channel` (its own
+  `GainNode`). The active rifff's channel fades from 1→0 over
+  `crossfadeMs`; the incoming rifff's channel fades from 0→1 in the same
   window. Both connect to the master bus. After the crossfade
   completes, the outgoing players are stopped and disposed.
 - **AudioBuffer cache has a synchronous `get` and an async `getOrDecode`.**
@@ -110,9 +110,9 @@ packages/app/src/audio/
 ├── decoder.ts              # bytes + format → AudioBuffer (FLAC | Ogg)
 ├── audio-buffer-cache.ts   # LRU<StemCouchID, AudioBuffer> with size cap
 ├── stem-loader.ts          # composes: StemCache (bytes) → Decoder → AudioBufferCache
-├── riff-voice.ts           # one playing riff: 8 Players + Channel + state machine
+├── riff-voice.ts           # one playing rifff: 8 Players + Channel + state machine
 ├── engine.ts               # AudioEngine: queueRiff, hop, stop, status
-├── prefetch.ts             # decode-prefetch ring around current riff
+├── prefetch.ts             # decode-prefetch ring around current rifff
 └── index.ts
 ```
 
@@ -120,10 +120,10 @@ UI layer (Phase 6 also lands the perform view):
 
 ```
 packages/app/src/views/
-└── PerformView.vue         # riff list + hop button + playhead indicator
+└── PerformView.vue         # rifff list + hop button + playhead indicator
 
 packages/app/src/stores/
-└── performance.ts          # Pinia: current riff, queued riff, playhead, error state
+└── performance.ts          # Pinia: current rifff, queued rifff, playhead, error state
 ```
 
 Route: `/jams/:jamId/perform` (existing `JamDetailView` gets a "Perform"
@@ -163,7 +163,7 @@ export interface AudioEngine {
 
   /**
    * Start playing `riff`. If something is already playing, phase-lock
-   * and crossfade. Returns when the new riff is scheduled (not when the
+   * and crossfade. Returns when the new rifff is scheduled (not when the
    * crossfade completes).
    */
   hopTo(riff: RiffDocument, stems: ResolvedStem[]): Promise<HopResult>;
@@ -189,7 +189,7 @@ export type HopResult =
 ## Phase-lock math (canonical form)
 
 ```
-prevStart        = (engine-recorded) start time of currently playing riff
+prevStart        = (engine-recorded) start time of currently playing rifff
 prevLoopDur      = computeRiffTiming(prevRiff).loopDurationSec
 newLoopDur       = computeRiffTiming(newRiff).loopDurationSec
 now              = audioContext.currentTime
@@ -197,13 +197,13 @@ crossfadeSec     = crossfadeMs / 1000
 
 elapsedInPrev    = ((now + crossfadeSec) - prevStart) mod prevLoopDur
 offsetInNew      = elapsedInPrev mod newLoopDur
-startWhen        = now + crossfadeSec  // schedule new riff to begin
+startWhen        = now + crossfadeSec  // schedule new rifff to begin
                                        // when crossfade midpoint hits
 ```
 
 Two subtleties:
 
-1. We schedule the new riff slightly in the future (`now +
+1. We schedule the new rifff slightly in the future (`now +
    crossfadeSec`) so the offset accounts for the time the crossfade
    takes. This means a hop "lands" at the end of the crossfade window.
 2. If the user enables snap-to-bar, round `startWhen` up to the next
@@ -213,16 +213,16 @@ Two subtleties:
 
 ## Pre-cache strategy
 
-Two prefetch loops, both anchored to "currently viewed riff":
+Two prefetch loops, both anchored to "currently viewed rifff":
 
 - **Bytes** (already exists in SDK Phase 4): `prefetchRiffs(jamId,
   centerIdx ± 2)` — keeps stem bytes resident on disk.
-- **Decoded buffers** (new in Phase 6): for each of the 5 riffs in the
+- **Decoded buffers** (new in Phase 6): for each of the 5 rifffs in the
   window, ensure every stem's `AudioBuffer` is in
   `AudioBufferCache`. Decode in series (FLAC decode is heavy), cancel
-  if the window moves before this riff is reached.
+  if the window moves before this rifff is reached.
 
-The window updates whenever the user navigates the riff list. We
+The window updates whenever the user navigates the rifff list. We
 **don't** prefetch on play — by the time you hop, it's too late.
 
 ## TDD order
@@ -256,16 +256,16 @@ Pure-first, then I/O, then UI. Each entry is a small commit.
    playing; second queueRiff → phase-lock + crossfade; stop → idle.
 8. **`prefetch.ts`** — window math, cancellation. Stub the loader.
 9. **`PerformView.vue`** — view-level test with `@vue/test-utils`:
-   clicking a riff fires `engine.hopTo`; "not-ready" state shows a
+   clicking a rifff fires `engine.hopTo`; "not-ready" state shows a
    busy badge.
 10. **Manual smoke**: `pnpm dev`, log in, pick a small jam, click
-    through riffs, listen. (Tests can't verify "it sounds right.")
+    through rifffs, listen. (Tests can't verify "it sounds right.")
 
 ## Deferred to later phases
 
 - Per-stem mute/solo, gain trim → Phase 8.
 - Waveform display → Phase 8 (likely `wavesurfer.js`).
-- Tempo-locking across riffs (timestretch) → post-v1; would need
+- Tempo-locking across rifffs (timestretch) → post-v1; would need
   AudioWorklet timestretch.
 - Latency compensation for the crossfade scheduling vs. perceived
   click moment → revisit in Phase 7 when recording timestamps matter.
@@ -290,10 +290,10 @@ Pure-first, then I/O, then UI. Each entry is a small commit.
 A user can:
 
 1. Open a jam in the perform view.
-2. Click any riff → it starts playing, looping at the bar.
-3. Click another riff → seamless phase-locked crossfade, audibly aligned.
+2. Click any rifff → it starts playing, looping at the bar.
+3. Click another rifff → seamless phase-locked crossfade, audibly aligned.
 4. Click stop → silence within `crossfadeMs`.
-5. Navigate the riff list → next/prev riffs are pre-decoded in the
+5. Navigate the rifff list → next/prev rifffs are pre-decoded in the
    background (verify via dev panel or log).
 
 Pause for user review before starting Phase 7.

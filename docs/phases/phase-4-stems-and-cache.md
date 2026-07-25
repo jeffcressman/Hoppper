@@ -33,7 +33,7 @@ full LORE archive size.
 **Prefetch progress** is an async iterator with `cancel()` and `done()` on the
 handle.
 
-The Phase 4 acceptance gate from `PLAN.md` remains: an app can request a riff
+The Phase 4 acceptance gate from `PLAN.md` remains: an app can request a rifff
 and have all 8 stems on disk in under 2× the slowest stem's download time.
 
 ## Architectural decisions
@@ -47,8 +47,8 @@ and have all 8 stems on disk in under 2× the slowest stem's download time.
   loop is refactored into a private `attempt()` helper so JSON and binary code
   paths share it; a new `requestBinary()` method returns `Uint8Array`.
 - **Backpressure** = bounded in-flight count via a semaphore. Default
-  concurrency 4. A riff is 8 stems, so 4 keeps two waves and never starves a
-  single riff.
+  concurrency 4. A rifff is 8 stems, so 4 keeps two waves and never starves a
+  single rifff.
 - **Filesystem access via an `FsAdapter` interface**, default
   `node:fs/promises`. Tauri injects a different adapter in Phase 5. Mirrors the
   existing `fetch` and `TokenStore` injection pattern.
@@ -252,7 +252,7 @@ already has.
 - Eviction / LRU / per-jam size accounting UI → post-v1 per `CLAUDE.md`.
 - Tauri `FsAdapter` injection (filesystem via Tauri commands) → Phase 5.
 - AudioBuffer decoding → Phase 6.
-- Riff-cursor-aware speculative pre-fetch scheduler (the *consumer* of
+- Rifff-cursor-aware speculative pre-fetch scheduler (the *consumer* of
   `prefetchRiffs`) → Phase 6 / app layer.
 - Magic-byte format sniffing — left to the decoder; integrity check is
   byte-length only.

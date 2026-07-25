@@ -1,8 +1,10 @@
 # Hoppper
 
-A non-linear editor for Endlesss riff-hop sequences. Listen through a jam, record the timing of your riff hops, then go back and adjust the transitions on a timeline.
+A non-linear editor for Endlesss rifff-hop sequences. Listen through a jam, record the timing of your rifff hops, then go back and adjust the transitions on a timeline.
 
-(Name is intentional — three p's. A nod to *hopping* between riffs.)
+(Name is intentional — three p's. A nod to *hopping* between rifffs.)
+
+> **Spelling note:** Endlesss spells it *Rifff* (three f's), and that's what this README and other docs use. Our code follows LORE's own convention instead, which uses *Riff* (one f) for identifiers. See "Spelling: Riff vs Rifff" in `CLAUDE.md` for the full rule.
 
 ## Status
 
@@ -10,10 +12,10 @@ Early development. Not yet functional.
 
 ## Concept
 
-In the Endlesss app, clicking through riff history creates an ad-hoc track: each new riff phase-locks to where the previous one was playing and crossfades in. This editor:
+In the Endlesss app, clicking through rifff history creates an ad-hoc track: each new rifff phase-locks to where the previous one was playing and crossfades in. This editor:
 
 1. **Captures** the sequence and timing of those hops as you perform them
-2. **Pre-caches** the involved riffs locally so editing has no network latency
+2. **Pre-caches** the involved rifffs locally so editing has no network latency
 3. **Lets you adjust** hop timing and transition length on a timeline
 4. **Exports** the final sequence as a multitrack or stereo render
 
@@ -21,7 +23,7 @@ In the Endlesss app, clicking through riff history creates an ad-hoc track: each
 
 Two packages in one repo:
 
-- **`packages/sdk`** — `endlesss-sdk`, a TypeScript client for Endlesss' (unofficial, reverse-engineered) HTTP/WebSocket API. Auth, jam/riff/stem fetching, data types. Reusable by other projects.
+- **`packages/sdk`** — `endlesss-sdk`, a TypeScript client for Endlesss' (unofficial, reverse-engineered) HTTP/WebSocket API. Auth, jam/rifff/stem fetching, data types. Reusable by other projects.
 - **`packages/app`** — The editor itself. Vue 3 + Vite + Tauri. Web Audio (via Tone.js) for sample-accurate playback and OfflineAudioContext rendering.
 
 Tauri handles what the browser can't: CORS-free HTTP to Endlesss servers, keychain storage for session tokens, persistent disk cache for stems.
@@ -36,7 +38,7 @@ Not affiliated with or endorsed by Endlesss / Hablab London Limited.
 
 Endlesss is run by a tiny team and was offline for over a year. **Please don't hammer their API.** Hoppper is built around the principle of *fetch once, keep forever*:
 
-- Riff and stem documents are immutable and are cached by ID — once on disk, they are never re-fetched.
+- Rifff and stem documents are immutable and are cached by ID — once on disk, they are never re-fetched.
 - Stem audio is downloaded once and stored locally.
 - Pre-fetching is limited to a small window around the user's current position.
 - The integration test that hits live servers is opt-in (`.env.local` credentials) and is **not** run in CI.

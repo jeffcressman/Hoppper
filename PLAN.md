@@ -23,8 +23,8 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 - [x] Read `../OUROVEON/src/r0.endlesss/` end to end. Produce `docs/protocol/overview.md` summarising:
   - Base URLs and authentication flow (login, session, token refresh)
   - Public-only "fallback" endpoint set vs authenticated endpoint set
-  - Core data shapes: `Jam`, `Riff`, `Stem`, `Shared Riff`
-  - WebSocket protocol (the one BEAM/LORE use for pushing riff sequences)
+  - Core data shapes: `Jam`, `Riff`, `Stem`, `Shared Riff` (code type names, matching LORE)
+  - WebSocket protocol (the one BEAM/LORE use for pushing rifff sequences)
   - Known quirks / damaged-data handling LORE accounts for
 - [x] Check LORE's git log since August 2025 for any commits related to Hablab's reactivated servers. Note any endpoint changes.
 - [x] Decide: do we support unauthenticated public-endpoints mode in v1, or auth-only? **Decision: auth-only.**
@@ -63,13 +63,13 @@ Phase checkpoints below describe **outcomes**, not implementation order. Within 
 
 ---
 
-## Phase 3 — SDK: jam & riff data
+## Phase 3 — SDK: jam & rifff data
 
-**Goal**: list jams, get riffs, get stem URLs.
+**Goal**: list jams, get rifffs, get stem URLs.
 
 - [x] `listJams()` — returns subscribed + personal + joinable jams as `JamRef`s. Names are NOT eagerly fetched (server-etiquette); caller uses `getJam` per ID.
 - [x] `getJam(jamId)` — JamProfile (displayName, bio?, appVersion?). Hyphen→(2d) escape applied for personal jam IDs.
-- [x] `getRiffIds(jamId, opts)` + `getRiffs(jamId, ids)` + `iterateRiffs(jamId, opts)` — paginated, async iterator handles 50k+ riff jams without loading all at once.
+- [x] `getRiffIds(jamId, opts)` + `getRiffs(jamId, ids)` + `iterateRiffs(jamId, opts)` — paginated, async iterator handles 50k+ rifff jams without loading all at once.
 - [x] `resolveStemUrl(stemDoc)` (pure) + `getStemUrls(jamId, riff)` — handles quirks #1 (length-as-string), #4 (missing OGG key), #5 (http(s):// in endpoint), #6 (bucket-in-endpoint). Prefers FLAC when present.
 - [x] Types split into `packages/sdk/src/types/` (auth, ids, jam, riff, stem).
 - [x] Live integration test against a known small jam, gated behind `HOPPPER_RUN_LIVE_TESTS=1` to avoid hitting servers on routine `pnpm test`.
@@ -92,7 +92,7 @@ Detailed design: [`docs/phases/phase-4-stems-and-cache.md`](docs/phases/phase-4-
 - [x] `prefetchRiffs(...)`: async-iterator progress handle with `cancel()` and `done()`.
 - [x] **LORE piggyback (reframed from "importer")**: `ReadonlyLoreStemDir` is a first-class read-only cache tier, composed via `LayeredStemCache` with `promoteOnRead: true`. Stems live where LORE put them; touched stems get promoted into Hoppper's own cache so Hoppper becomes self-contained over time. **No byte duplication of untouched stems.** The sqlite `warehouse.db3` metadata importer is deferred to Phase 5 where the Tauri sqlite plugin lives.
 
-**Checkpoint**: app can request a riff and have all 8 stems on disk in under 2× the slowest stem's download time. Live-test acceptance gate gated behind `HOPPPER_RUN_LIVE_TESTS=1`; optional LORE-archive smoke test gated behind `HOPPPER_LORE_STEM_V2_ROOT=...`.
+**Checkpoint**: app can request a rifff and have all 8 stems on disk in under 2× the slowest stem's download time. Live-test acceptance gate gated behind `HOPPPER_RUN_LIVE_TESTS=1`; optional LORE-archive smoke test gated behind `HOPPPER_LORE_STEM_V2_ROOT=...`.
 
 ---
 
@@ -109,7 +109,7 @@ Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-
 - [x] Vue Router with `/login`, `/jams`, `/jams/:jamId`; auth guard redirects to login.
 - [x] Views: `LoginView`, `JamListView`, `JamDetailView` — no audio yet.
 
-**Checkpoint**: log in, browse jams, browse riffs — all from the Tauri app.
+**Checkpoint**: log in, browse jams, browse rifffs — all from the Tauri app.
 
 ---
 
@@ -119,14 +119,14 @@ Detailed design: [`docs/phases/phase-5-app-shell-tauri.md`](docs/phases/phase-5-
 
 Detailed design: [`docs/phases/phase-6-audio-engine.md`](docs/phases/phase-6-audio-engine.md).
 
-- [x] Per-riff voice graph: 8 BufferSources → shared GainNode → destination (`riff-voice.ts`). Tone.js deferred — raw Web Audio behind a thin AudioContextLike facade keeps the engine testable and avoids the dependency footprint. Master bus is just `context.destination` for now.
+- [x] Per-rifff voice graph: 8 BufferSources → shared GainNode → destination (`riff-voice.ts`). Tone.js deferred — raw Web Audio behind a thin AudioContextLike facade keeps the engine testable and avoids the dependency footprint. Master bus is just `context.destination` for now.
 - [x] Stem loader: decode cached bytes → `AudioBuffer` via per-format dispatch (`decoder.ts` + `native-decoder.ts`). Both formats currently use `decodeAudioData`; libflac.js remains a deferred fallback if a webview lacks native FLAC.
 - [x] Playback engine: cold-start path in `AudioEngine.hopTo` schedules every BufferSource with `start(now, 0)`, `loop = true`, `loopEnd = loopDurationSec`.
-- [x] Hop: `computeHop` + engine wiring start the new riff `crossfadeSec` early so its playhead reaches `offsetInNew` at the phase-anchor moment; old voice fades 1→0 and new voice fades 0→1 over the same window. Snap-to-bar supported, off by default.
-- [x] Pre-cache: `PrefetchRing.setWindow(jamId, [N-2..N+2])` walks each riff's stems through the StemLoader in series; window moves cancel further decodes.
-- [x] UI: `PerformView.vue` with Hop button per riff, current-riff indicator, Stop button, busy badge on not-ready hops. Route `/jams/:jamId/perform`, linked from the jam detail header.
+- [x] Hop: `computeHop` + engine wiring start the new rifff `crossfadeSec` early so its playhead reaches `offsetInNew` at the phase-anchor moment; old voice fades 1→0 and new voice fades 0→1 over the same window. Snap-to-bar supported, off by default.
+- [x] Pre-cache: `PrefetchRing.setWindow(jamId, [N-2..N+2])` walks each rifff's stems through the StemLoader in series; window moves cancel further decodes.
+- [x] UI: `PerformView.vue` with Hop button per rifff, current-rifff indicator, Stop button, busy badge on not-ready hops. Route `/jams/:jamId/perform`, linked from the jam detail header.
 
-**Checkpoint**: user can play a jam by clicking through riffs, transitions are seamless and phase-locked. **Awaiting manual smoke** (TDD step 10 in the design doc) — the unit suite is green at 146 tests but the audible behavior can only be verified by a real listen-through. Run `pnpm dev`, log in, open a small jam → Perform, click a few riffs.
+**Checkpoint**: user can play a jam by clicking through rifffs, transitions are seamless and phase-locked. **Awaiting manual smoke** (TDD step 10 in the design doc) — the unit suite is green at 146 tests but the audible behavior can only be verified by a real listen-through. Run `pnpm dev`, log in, open a small jam → Perform, click a few rifffs.
 
 ---
 
@@ -152,7 +152,7 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 **Goal**: the actual product — non-linear hop editing.
 
 - [ ] Timeline component (consider `wavesurfer.js` for waveform display; build hop UI on top).
-- [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from riff browser.
+- [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from rifff browser.
 - [ ] Live preview: edits play back instantly using the AudioBuffer cache.
 - [ ] Undo/redo.
 
@@ -166,7 +166,7 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 
 - [ ] `OfflineAudioContext` render path matching the live engine exactly.
 - [ ] Stereo WAV export (16/24-bit).
-- [ ] Multitrack export: 8 stems × N riffs collapsed onto 8 output tracks at hop boundaries (FLAC, individual files).
+- [ ] Multitrack export: 8 stems × N rifffs collapsed onto 8 output tracks at hop boundaries (FLAC, individual files).
 - [ ] Project export: `.zip` with sequence JSON + referenced stems for portability.
 
 **Checkpoint**: render is bit-identical to live playback for the same sequence. (Or close enough — document any drift.)

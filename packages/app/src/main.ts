@@ -163,7 +163,7 @@ async function bootstrap() {
   const resolveRiff = async (jamId: JamCouchID, riffId: RiffCouchID) => {
     const riffs = await client.getRiffs(jamId, [riffId]);
     const riff = riffs[0];
-    if (!riff) throw new Error(`Riff not found: ${riffId}`);
+    if (!riff) throw new Error(`Rifff not found: ${riffId}`);
     const stems = await resolveStems(jamId, riff);
     return { riff, stems };
   };

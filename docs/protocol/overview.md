@@ -78,16 +78,16 @@ There is no explicit refresh endpoint visible in LORE. LORE stores `expires` but
 
 ### Authenticated-only (require `token`/`password`)
 
-- All CouchDB endpoints (`data.endlesss.fm/user_appdata$...`) — jam profiles, riff history, stem documents, subscribed jam list
-- Shared riff feed when accessing private shares (`WebWithAuth`)
-- Riff sharing / riff copy write actions
+- All CouchDB endpoints (`data.endlesss.fm/user_appdata$...`) — jam profiles, rifff history, stem documents, subscribed jam list
+- Shared rifff feed when accessing private shares (`WebWithAuth`)
+- Rifff sharing / rifff copy write actions
 
 ### Public (no credentials)
 
 - `GET /api/band/{jamCouchID}/permalink` — jam display name lookup
-- `GET /jam/{longJamID}/rifffs?pageNo=...` — public riff page (also gives current jam name)
-- `GET /api/v3/feed/shared_by/{username}?...` — user's public shared riffs
-- `GET /api/v3/feed/shared_rifff/{id}` — single shared riff
+- `GET /jam/{longJamID}/rifffs?pageNo=...` — public rifff page (also gives current jam name)
+- `GET /api/v3/feed/shared_by/{username}?...` — user's public shared rifffs
+- `GET /api/v3/feed/shared_rifff/{id}` — single shared rifff
 - `GET /marketplace/collectible-jams?...` — NFT/collectible jams
 
 **Recommendation for v1:** Auth-only. The primary use case — hopping through a user's own jams — requires CouchDB access, which requires credentials. Building an unauthenticated fallback mode adds complexity for little v1 benefit.
@@ -145,7 +145,7 @@ LORE source: `api.cpp::JamChanges::fetch` / `fetchSince`
 
 ---
 
-#### Latest Riff in Jam
+#### Latest Rifff in Jam
 ```
 GET /user_appdata${jamID}/_design/types/_view/rifffLoopsByCreateTime?descending=true&limit=1
 ```
@@ -155,22 +155,22 @@ LORE source: `api.cpp::JamLatestState::fetch`
 
 ---
 
-#### Full Jam Snapshot (all riff IDs)
+#### Full Jam Snapshot (all rifff IDs)
 ```
 GET /user_appdata${jamID}/_design/types/_view/rifffLoopsByCreateTime?descending=true
 ```
-Same shape as above but no limit. Returns all riffs ordered newest-first.  
+Same shape as above but no limit. Returns all rifffs ordered newest-first.  
 `total_rows` is the server-side total, not the length of `rows[]`.  
-**Warning:** 50,000+ riff jams will return huge payloads. Consider streaming or paging if Endlesss ever supports it; for now LORE loads the full snapshot.  
+**Warning:** 50,000+ rifff jams will return huge payloads. Consider streaming or paging if Endlesss ever supports it; for now LORE loads the full snapshot.  
 LORE source: `api.cpp::JamFullSnapshot::fetch`
 
 ---
 
-#### Riff Count Only
+#### Rifff Count Only
 ```
 GET /user_appdata${jamID}/_design/types/_view/rifffsByCreateTime
 ```
-Returns only `{ total_rows: int }` — used to check riff count without fetching IDs.  
+Returns only `{ total_rows: int }` — used to check rifff count without fetching IDs.  
 LORE source: `api.cpp::JamRiffCount::fetch`
 
 ---
@@ -234,16 +234,16 @@ LORE source: `api.cpp::BandNameFromExtendedID::fetch`
 
 ---
 
-#### Riff Structure Page (public jams)
+#### Rifff Structure Page (public jams)
 ```
 GET /jam/{longJamID}/rifffs?pageNo={n}&pageSize={n}
 ```
-No auth. Returns paginated riff list with full state and stem documents embedded.  
+No auth. Returns paginated rifff list with full state and stem documents embedded.  
 LORE source: `api.cpp::RiffStructureValidation::fetch`
 
 ---
 
-#### User's Shared Riffs
+#### User's Shared Rifffs
 ```
 GET /api/v3/feed/shared_by/{username}?size={count}&from={offset}
 ```
@@ -253,7 +253,7 @@ LORE source: `api.cpp::SharedRiffsByUser::fetch`
 
 ---
 
-#### Single Shared Riff
+#### Single Shared Rifff
 ```
 GET /api/v3/feed/shared_rifff/{sharedRiffID}
 ```
@@ -271,7 +271,7 @@ LORE source: `api.cpp::CurrentCollectibleJams::fetch`
 
 ---
 
-#### Share Riff on Feed (write)
+#### Share Rifff on Feed (write)
 ```
 POST /rifff-feed/share
 Authorization: Bearer token:password
@@ -291,7 +291,7 @@ LORE source: `api.cpp::push::ShareRiffOnFeed::action`
 
 ---
 
-#### Copy Riff to Another Jam (write)
+#### Copy Rifff to Another Jam (write)
 ```
 POST /jam/{destLongJamID}/rifffs/import
 Authorization: Bearer token:password
@@ -312,7 +312,7 @@ LORE source: `api.cpp::push::RiffCopy::action`
 | `JamCouchID` | `band12345678` | Public/subscribed jams start with `band`. Personal (solo) jams use the username as the ID. |
 | `RiffCouchID` | `afa5e840694f11eaa8405fee66bfbe0f` | 32-char hex |
 | `StemCouchID` | `1641d000ef9911ed9000d1062b20bdd7` | 32-char hex |
-| `SharedRiffCouchID` | UUID | Unique ID for the share object, not the riff |
+| `SharedRiffCouchID` | UUID | Unique ID for the share object, not the rifff |
 | Long jam ID | `296a74e8a64d254c0df007dda8a205d08e63915959ac5e912bdb8dde7077c638` | 64-char hex; needed for web API write calls |
 
 ---
@@ -452,7 +452,7 @@ LORE does **not** use a WebSocket connection to the Endlesss server for live upd
 
 1. `POST /user_appdata${jamID}/_changes?descending=true&limit=1` to get current `last_seq`
 2. Compare `last_seq` against previously seen value
-3. On change: call `JamLatestState` to get the newest riff ID + stem IDs, then fetch full details
+3. On change: call `JamLatestState` to get the newest rifff ID + stem IDs, then fetch full details
 4. Poll rate: configurable via `jamSentinelPollRateInSeconds` (default 5 seconds)
 
 A long-poll variant (`/user_appdata${jamID}/_changes?feed=longpoll`) exists in the CouchDB protocol and would be more efficient, but LORE notes it as a "better approach" not yet implemented.
@@ -497,8 +497,8 @@ CouchDB returns a record for deleted documents: `{ "id": "...", "value": { "rev"
 **Handling:** parse with all fields optional; check `error` or `value.deleted` and skip.  
 LORE source: `api.h::ResultDocsSafeHeader`
 
-### 8. Null elements in `loops` arrays (shared riffs)
-Shared riff `loops` arrays can contain `null` entries: `"loops": [null, null, {...}]`.  
+### 8. Null elements in `loops` arrays (shared rifffs)
+Shared rifff `loops` arrays can contain `null` entries: `"loops": [null, null, {...}]`.  
 **Fix (multi-pass):** 
 1. Replace `"current":null` → `"current":{"on":false,"gain":0.0}`
 2. Remove `"key":null,` type patterns
@@ -544,7 +544,7 @@ Stems are stored as-is (no re-encoding). If the stem's `sampleRate` differs from
 
 **Recommendation: auth-only in v1.**
 
-Public endpoints only give you public jam browsing and shared riff feed — no access to the user's own private jams or their riff history. The core use case (record and edit riff hop sequences from your own jams) requires CouchDB auth for every riff and stem fetch. Building a public-only mode would be a separate, limited product. Ship auth-only first.
+Public endpoints only give you public jam browsing and shared rifff feed — no access to the user's own private jams or their rifff history. The core use case (record and edit rifff hop sequences from your own jams) requires CouchDB auth for every rifff and stem fetch. Building a public-only mode would be a separate, limited product. Ship auth-only first.
 
 ### LORE reference note
 

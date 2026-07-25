@@ -4,7 +4,7 @@ Context for Claude Code working on this project. Read this first, then `PLAN.md`
 
 ## What we're building
 
-A desktop app (Tauri + Vue 3) that lets a user record and edit sequences of "riff hops" against the Endlesss jamming platform. See `README.md` for the user-facing concept.
+A desktop app (Tauri + Vue 3) that lets a user record and edit sequences of "rifff hops" against the Endlesss jamming platform. See `README.md` for the user-facing concept.
 
 Two deliverables:
 
@@ -77,7 +77,7 @@ When you need to understand how Endlesss does something, read the relevant LORE 
 - **Codecs in browser**: `libflac.js` for lossless FLAC stems; native `decodeAudioData` for Ogg Vorbis.
 - **Stem cache**: Tauri filesystem (real disk), keyed by stem hash. LRU eviction with size cap (user-configurable).
 - **Auth storage**: Tauri stronghold or OS keychain via plugin. Never plaintext on disk.
-- **Riff hopping**: phase-locked. New riff starts at `(now - prevRiffStart) % prevLoopDuration`. Crossfade via two `GainNode`s.
+- **Rifff hopping**: phase-locked. New rifff starts at `(now - prevStart) % prevLoopDuration`. Crossfade via two `GainNode`s.
 
 ## Conventions
 
@@ -87,14 +87,27 @@ When you need to understand how Endlesss does something, read the relevant LORE 
 - Every reverse-engineered endpoint gets a short note in `docs/protocol/<endpoint>.md`: URL, method, request shape, response shape, observed quirks, LORE source reference.
 - No secrets in the repo. `.env.local` for dev only; gitignored.
 
+## Spelling: "Riff" vs "Rifff"
+
+Endlesss's own product and wire protocol spell it **Rifff** (three f's) — e.g. the API paths `/jam/{id}/rifffs`, `shared_rifff`, `rifff-feed/share`, the JSON field `rifffId`, and the CouchDB view `rifffLoopsByCreateTime`. LORE itself diverges from this: its C++ identifiers (types, classes, variables) consistently use **Riff** (one f), reserving the triple-f spelling only for literal strings that must match the wire protocol exactly.
+
+We follow LORE's convention in code rather than Endlesss's, since this project mirrors LORE's structure and is built alongside it — consistency with LORE makes the code easier to read and cross-reference:
+
+- **Code** (TypeScript identifiers: types, classes, functions, variables, file names) — use `Riff`/`riff`, matching LORE. Example: `RiffDocument`, `RiffCouchID`, `riff-timing.ts`, `computeRiffTiming`.
+- **Literal wire-protocol strings** (URL paths, JSON field/key names) — use `rifff`, matching the real server. Example: `` `/jam/${jamId}/rifffs` ``, the JSON field `rifffId`. Never "fix" these back to single-f — that breaks at the wire level.
+- **Anything a human reads — no exceptions — use `Rifff`/`rifff`, the real Endlesss spelling:**
+  - **Documentation prose**: this file, `README.md`, `PLAN.md`, `docs/**/*.md` — anywhere we're describing Endlesss the product/concept rather than naming a specific code symbol.
+  - **User-facing app text**: every string a user of the app actually sees or hears — button labels, headings, menu items, tooltips, error/status messages, empty states, dialogs, notifications, alt text. This holds *even when the copy sits right next to single-f code* — e.g. a button bound to `hopTo(riff)` still reads "Hop to rifff", a component named `RiffDocument`-something still renders a heading that says "Rifff", an error surfaced from a `RiffCouchID` lookup still says "Rifff not found". The code identifier's spelling never leaks into the rendered string.
+  - When prose or UI copy needs to name a specific code identifier directly (e.g. in a dev-facing log line or a code comment), keep that identifier's actual spelling (`Riff`) even inside the sentence — the "human-reads-it" rule is about naming the *concept*, not quoting a symbol.
+
 ## Server etiquette (important)
 
 Endlesss is run by a small team on infrastructure that has already gone dark once. **Treat their servers as a fragile shared resource.** Concretely:
 
-- **Make the minimum calls required.** If we have the data on disk, we don't fetch it again. Ever. Riff documents, stem documents, stem audio bytes — once retrieved, they're ours.
-- **No speculative pre-fetching beyond a small look-ahead window.** Pre-cache N±2 riffs around the user's current position, not the whole jam.
+- **Make the minimum calls required.** If we have the data on disk, we don't fetch it again. Ever. Rifff documents, stem documents, stem audio bytes — once retrieved, they're ours.
+- **No speculative pre-fetching beyond a small look-ahead window.** Pre-cache N±2 rifffs around the user's current position, not the whole jam.
 - **Never poll faster than LORE does.** The sentinel poll rate is 5 seconds; don't go below that.
-- **Riff/stem data is immutable.** A given `RiffCouchID` or `StemCouchID` always points to the same payload, so cache hits are safe forever.
+- **Rifff/stem data is immutable.** A given `RiffCouchID` or `StemCouchID` always points to the same payload, so cache hits are safe forever.
 - **Cache by ID, not by URL.** CDN URLs may change; the CouchID never does.
 - **Tests don't hit live servers in CI.** The integration test in `packages/sdk/test/integration.test.ts` is gated on `.env.local` credentials and is opt-in for local runs only.
 

@@ -7,7 +7,7 @@ layout, TDD order, and deferred items.
 ## Background
 
 Phase 6 made the app an instrument: the user can pick a jam and hop
-between riffs with phase-locked, gapless transitions. Phase 7 turns
+between rifffs with phase-locked, gapless transitions. Phase 7 turns
 those clicks into a saved artifact — a `HopSequence` that captures
 *what was played and when*, so it can be reopened and replayed
 identically. This is the foundation Phase 8 will edit and Phase 9 will
@@ -15,7 +15,7 @@ render to disk.
 
 The recording captures the **timing of user decisions**, not audio
 samples. Audio is already addressable: each stem lives in the layered
-cache by `StemCouchID`, and each riff resolves deterministically from
+cache by `StemCouchID`, and each rifff resolves deterministically from
 its `RiffDocument`. A `HopSequence` is therefore a sparse, structural
 description — a few hundred bytes of JSON for a multi-minute
 performance — and replay reconstructs the audio from the same stems
@@ -24,8 +24,8 @@ that produced it live.
 ## Strategy
 
 - **Capture at the click, not at the engine.** The user is *playing*
-  the riff feed; their timing is the performance. When they click a
-  riff that's still buffering, the engine returns `not-ready` and no
+  the rifff feed; their timing is the performance. When they click a
+  rifff that's still buffering, the engine returns `not-ready` and no
   audio transition happens — but the click still matters and gets
   recorded. The recorder is wired into the click handler (via the
   performance store), not into the engine. On replay we pre-warm the
@@ -34,7 +34,7 @@ that produced it live.
   `now()` at `start()`; every event stores `tSec = now() - t0`.
   `AudioContext.currentTime` is the clock at runtime; tests inject a
   controllable function. The first event's `tSec` is whatever time the
-  click happens — `0` if the user clicked Record and a riff in the
+  click happens — `0` if the user clicked Record and a rifff in the
   same tick, otherwise the gap between the two.
 - **Hop-level transition durations.** `transitionMs` is recorded per
   event, not on the sequence — different hops can use different
@@ -43,7 +43,7 @@ that produced it live.
   tail is meaningfully different from a sequence with one hop and no
   tail. We capture the tail by storing the time of `stop()` as
   `durationSec`, separate from the last hop's `tSec`.
-- **Riff-level granularity.** Per-stem mute/solo events are post-v1
+- **Rifff-level granularity.** Per-stem mute/solo events are post-v1
   (Phase 8+). v1 records `(riffId, jamId, transitionMs)` per hop.
 - **Persist as JSON, on disk, one file per sequence.** Lives at
   `<appLocalDataDir>/sequences/<sequenceId>.json`. Atomic write via the
@@ -67,7 +67,7 @@ that produced it live.
 - **Every click is recorded, including not-ready ones.** Replay
   re-issues the same `hopTo` at the same relative time; the player
   pre-warms a window around each upcoming event so buffering is much
-  less likely on replay than it was during the live take. If a riff
+  less likely on replay than it was during the live take. If a rifff
   truly can't be loaded at replay time, the player surfaces an error
   but the sequence as recorded stays intact.
 - **One `HopSequence` per file.** No bundle format. Sequences reference
@@ -90,13 +90,13 @@ interface HopEvent {
   // whatever time the click happens — 0 if Record + click are in the
   // same tick, otherwise the gap between them.
   tSec: number;
-  // The riff that became active at this moment.
+  // The rifff that became active at this moment.
   riffId: RiffCouchID;
-  // The jam this riff belongs to. v1 sequences are single-jam, but we
+  // The jam this rifff belongs to. v1 sequences are single-jam, but we
   // store this per-event so cross-jam recordings are trivial later.
   jamId: JamCouchID;
   // Crossfade duration used at this hop, in ms. 0 for the cold-start
-  // event (no previous riff to fade out).
+  // event (no previous rifff to fade out).
   transitionMs: number;
 }
 
@@ -164,7 +164,7 @@ App changes:
    via a controllable clock + scheduler. Asserts the engine sees
    `hopTo` calls at the right relative times with the right
    `transitionMs`. `stop()` cancels pending hops. Pre-warms a small
-   window of upcoming riffs before each hop.
+   window of upcoming rifffs before each hop.
 6. **`useRecorderStore`** — Pinia store wrapping recorder/storage/
    player. Tests assert state transitions and that `play(id)` reloads
    stems via the same `StemResolver` the perform store uses.
@@ -175,7 +175,7 @@ App changes:
 ## Deferred (Phase 8+)
 
 - Editing operations (drag hop, change `tSec`/`transitionMs`, delete,
-  insert from riff browser).
+  insert from rifff browser).
 - Multi-jam sequences (data model already supports; UI doesn't).
 - Stem-level mute/solo per hop.
 - Waveform display in the timeline.
@@ -193,6 +193,6 @@ App changes:
   `setTimeout` keyed off `audioContext.currentTime` deltas, recomputed
   each tick to absorb drift. Sample-accurate scheduling can come later
   if needed.
-- **What happens when a sequence references a riff the user no longer
+- **What happens when a sequence references a rifff the user no longer
   has access to?** v1: `HopPlayer.play()` rejects with a clear error
-  identifying the missing riff. Phase 8 can surface this in the UI.
+  identifying the missing rifff. Phase 8 can surface this in the UI.
