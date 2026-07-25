@@ -33,6 +33,7 @@ pnpm-debug.log*
 .idea/
 *.swp
 *.swo
+.obsidian
 
 # OS
 .DS_Store
