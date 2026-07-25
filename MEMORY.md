@@ -48,6 +48,33 @@ Newest entries at the top of each section. Date entries absolutely
 
 ## Rifff and stem timing
 
+- **Hops are measured from one continuous grid, never from the previous hop.**
+  `gridOrigin` is the AudioContext time of the cold start; a hop lands at
+  `(startWhen - gridOrigin) mod newLoopDur`, and the origin is cleared only on
+  stop. Getting this wrong is immediately audible and was the 2026-07-25 bug:
+  each hop recorded its own `startWhen` as the outgoing voice's start time, so
+  every hop after the first landed at *time since the last hop*. The error is
+  whatever the gap between clicks happened to be, so it is an arbitrary
+  fraction of a beat — measured 170ms, 100ms and 140ms off a 120bpm grid on
+  three consecutive hops. Full model in
+  `docs/phases/phase-6-audio-engine.md` → "Hop phase model".
+- **Quantised entry is a separate concern from phase, and defaults off.**
+  `HopOptions.quantise` (`'beat' | 'bar'`) holds a hop until the next interval
+  on the grid; the Perform view exposes it as a checkbox bound to
+  `performance.quantiseEntry`, grid selectable via the store's `quantiseGrid`
+  (beat by default — a bar reads as lag). Phase continuity already keeps hops
+  in time, so this is about *feel*, not correctness. Recording captures the
+  click, not the quantised entry, and replay does not quantise — so a sequence
+  recorded with it on replays up to one interval off what was heard.
+- **We deliberately diverge from LORE here.** LORE keeps a continuous cursor
+  too (`mix/preview.cpp`, `m_riffPlaybackSample`, reset on idle) but wraps it
+  by the *current* rifff's length, so a hop from a 2-bar rifff into a 16-bar
+  one lands in the latter's first 2 bars. We keep the grid position, so it
+  lands at bar 7 — that is what Endlesss does from the Rifff Journal and what
+  the project wants (`local/issue resources/Rifff timing.pdf`). LORE also
+  quantises the *swap* to a bar subdivision (`m_lockTransitionBarCount`); we
+  don't, and that is a separate question from phase.
+
 - **`computeRiffTiming` is a heuristic, not ground truth.** It mirrors LORE's
   formula from `bps` + `barLength`, which lands on 8 bars for essentially
   every real rifff (any loop under 60s). The stems a rifff actually holds may
@@ -126,6 +153,22 @@ Newest entries at the top of each section. Date entries absolutely
   "two rifffs at once" report: Stop silenced everything, so it was intra-voice
   misalignment, and rifffs reusing the previous rifff's stems is what made it
   sound like the two rifffs they had clicked.
+- **`tools/hop-timing-analysis.py` measures whether hops land on the beat.**
+
+      python3 tools/hop-timing-analysis.py <recording.wav> [hoppper.log]
+
+  It finds onsets, fits a beat grid to the opening, groups the rest into
+  segments of constant error — each step is a hop that moved the beat — then,
+  given a log panel dump, parses the `start`/`hop` lines, computes where each
+  hop should have landed, aligns the two clocks and prints predicted vs
+  measured per hop. Pure stdlib: no numpy or ffmpeg in this container, and
+  `wave` refuses float32 WAVs, so it parses RIFF itself (float32/int16/int24).
+  It is the fastest way to turn "that sounded wrong" into a number, and it is
+  how the 2026-07-25 grid bug was pinned: predicted 0/170/100/-140ms from the
+  log, measured 0.2/168.3/99.0/-143.7ms from the audio.
+  User recordings land in `local/issue resources/` (gitignored). Ask for the
+  log panel's Copy output alongside the audio — the audio says *that* it is
+  wrong, the log says *why*.
 - **Model audibility, don't just assert calls.** `test/audio/hop-audibility.test.ts`
   has a mock `AudioContext` that tracks, per source: started / scheduled stop /
   still connected / its voice's gain automation — so a test can ask "which
