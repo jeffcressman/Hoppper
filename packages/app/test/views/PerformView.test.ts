@@ -84,6 +84,8 @@ beforeEach(() => {
   currentJamStub.open.mockReset();
   currentJamStub.open.mockResolvedValue(undefined);
   currentJamStub.close.mockReset();
+  currentJamStub.loadNextPage.mockReset();
+  currentJamStub.loadNextPage.mockResolvedValue(undefined);
   routeParams.jamId = 'band1';
 
   performanceStub.state = 'idle';
@@ -117,6 +119,22 @@ describe('PerformView', () => {
     await flushPromises();
     expect(jamsStub.loadProfile).toHaveBeenCalledWith('band1');
     expect(currentJamStub.open).toHaveBeenCalledWith('band1');
+  });
+
+  it('offers older rifffs when the jam has more', async () => {
+    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.hasMore = true;
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    await wrapper.find('[data-test="load-more"]').trigger('click');
+    expect(currentJamStub.loadNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no more rifffs once they are all shown', async () => {
+    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    expect(wrapper.find('[data-test="load-more"]').exists()).toBe(false);
   });
 
   it('renders a Hop button per riff', async () => {

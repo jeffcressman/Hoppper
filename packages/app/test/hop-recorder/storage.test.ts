@@ -175,4 +175,33 @@ describe('createSequenceStorage', () => {
     );
     await expect(storage.loadSequence(JAM, 'x')).rejects.toThrow(/schemaVersion/i);
   });
+
+  it('listAllSequences gathers the takes of every jam, newest first', async () => {
+    const storage = createSequenceStorage({ fs, root: ROOT });
+    await storage.saveSequence(fixture({ id: 'a-old', recordedAt: '2026-05-01T00:00:00.000Z' }));
+    await storage.saveSequence(
+      fixture({ id: 'b-new', jamId: 'band-B', recordedAt: '2026-05-20T00:00:00.000Z' }),
+    );
+    await storage.saveSequence(fixture({ id: 'a-mid', recordedAt: '2026-05-10T00:00:00.000Z' }));
+    const list = await storage.listAllSequences();
+    expect(list.map((s) => s.id)).toEqual(['b-new', 'a-mid', 'a-old']);
+  });
+
+  it('listAllSequences returns [] before anything has been recorded', async () => {
+    const storage = createSequenceStorage({ fs, root: ROOT });
+    expect(await storage.listAllSequences()).toEqual([]);
+  });
+
+  it('listAllSequences skips a stray file beside the jam folders', async () => {
+    const storage = createSequenceStorage({ fs, root: ROOT });
+    await storage.saveSequence(fixture({ id: 'ok' }));
+    fs.files.set(`${ROOT}/.DS_Store`, new Uint8Array([0]));
+    const realReaddir = fs.readdir.bind(fs);
+    fs.readdir = async (path) => {
+      if (path === `${ROOT}/.DS_Store`) throw new Error('Not a directory');
+      return realReaddir(path);
+    };
+    const list = await storage.listAllSequences();
+    expect(list.map((s) => s.id)).toEqual(['ok']);
+  });
 });

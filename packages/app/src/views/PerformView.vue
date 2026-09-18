@@ -1,55 +1,56 @@
 <template>
-  <main class="perform">
-    <header>
-      <router-link
-        :to="{ name: 'jam-detail', params: { jamId } }"
-        class="back-link"
-        data-test="back-link"
-      >
-        ← {{ displayName }}
-      </router-link>
-      <h1>{{ displayName }} — Perform</h1>
-      <div class="status">
-        <span class="state" :data-state="performance.state">{{ performance.state }}</span>
-        <span v-if="performance.currentRiffId" class="current" data-test="current-riff">
-          ▶ {{ performance.currentRiffId }}
+  <div class="perform">
+    <div class="strip">
+      <div class="strip__title">
+        <span class="lwlkc-eyebrow">Jam</span>
+        <h1 class="strip__name">{{ displayName }}</h1>
+      </div>
+      <span v-if="performance.currentRiffId" class="strip__meta lwlkc-readout" data-test="current-riff">
+        ▶ {{ performance.currentRiffId }}
+      </span>
+    </div>
+
+    <div class="lw-view">
+      <div class="controls">
+        <span class="lw-badge" :class="{ 'lw-badge--success': performance.state === 'playing' }" :data-state="performance.state">
+          {{ performance.state }}
         </span>
         <button
           v-if="performance.state !== 'idle' || recorder.isPlaying"
           type="button"
+          class="lw-btn lw-btn--secondary lw-btn--sm"
           data-test="stop"
           @click="onStop"
         >
+          <LwIcon name="stop" />
           Stop
         </button>
         <button
           v-if="!recorder.isRecording"
           type="button"
-          class="record"
+          class="lw-btn lw-btn--danger lw-btn--sm"
           data-test="record"
           @click="onRecord"
         >
-          ● Record
+          <LwIcon name="record" />
+          Record
         </button>
         <button
           v-else
           type="button"
-          class="record recording"
+          class="lw-btn lw-btn--secondary lw-btn--sm recording"
           data-test="stop-recording"
           @click="onStopRecording"
         >
-          ■ Stop Recording
+          <LwIcon name="stop" />
+          Stop Recording
         </button>
-        <span
-          v-if="recorder.isArmed"
-          class="rec-waiting"
-          data-test="recording-waiting"
-        >
+        <span v-if="recorder.isArmed" class="lw-badge lw-badge--danger lw-badge--dot" data-test="recording-waiting">
           Waiting for first rifff…
         </span>
         <span
           v-else-if="recorder.isRecording"
-          class="rec-clock"
+          class="rec-clock lwlkc-readout"
           data-test="recording-elapsed"
         >
           {{ formatDuration(recordingElapsed) }}
@@ -66,69 +67,82 @@
       <p v-if="performance.lastError" class="error" data-test="error">
         {{ performance.lastError }}
       </p>
-    </header>
 
-    <section v-if="recorder.saved.length > 0" class="saved">
-      <h2>Saved sequences</h2>
-      <ul>
+      <section v-if="recorder.saved.length > 0" class="saved">
+        <h2 class="lwlkc-eyebrow">Saved sequences</h2>
+        <ul>
+          <li
+            v-for="seq in recorder.saved"
+            :key="seq.id"
+            :class="['saved-row', { playing: recorder.playingId === seq.id }]"
+            data-test="saved-row"
+          >
+            <button
+              type="button"
+              class="lw-iconbtn lw-iconbtn--solid lw-iconbtn--round lw-iconbtn--sm"
+              title="Play"
+              data-test="play-saved"
+              :disabled="recorder.isPlaying"
+              @click="recorder.play(seq)"
+            >
+              <LwIcon name="play" />
+            </button>
+            <span class="saved-title">{{ seq.title }}</span>
+            <span class="saved-duration lwlkc-readout" data-test="saved-duration">
+              {{ formatDuration(seq.durationSec) }}
+            </span>
+            <button
+              type="button"
+              class="lw-iconbtn lw-iconbtn--sm delete"
+              title="Delete"
+              data-test="delete-saved"
+              @click="recorder.delete(seq.jamId, seq.id)"
+            >
+              <LwIcon name="trash" />
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <ul class="riffs">
         <li
-          v-for="seq in recorder.saved"
-          :key="seq.id"
-          :class="['saved-row', { playing: recorder.playingId === seq.id }]"
-          data-test="saved-row"
+          v-for="riff in currentJam.riffPage"
+          :key="riff.riffId"
+          :class="rowClasses(riff)"
+          data-test="riff-row"
         >
           <button
             type="button"
-            data-test="play-saved"
-            :disabled="recorder.isPlaying"
-            @click="recorder.play(seq)"
+            class="lw-btn lw-btn--secondary lw-btn--sm hop"
+            data-test="hop"
+            :disabled="loading.has(riff.riffId)"
+            @click="onHop(riff)"
           >
-            ▶ Play
+            Hop
           </button>
-          <span class="saved-title">{{ seq.title }}</span>
-          <span class="saved-duration" data-test="saved-duration">
-            {{ formatDuration(seq.durationSec) }}
+          <span class="riff-id lwlkc-readout">{{ riff.riffId }}</span>
+          <span class="riff-meta">{{ riff.bpm }} bpm</span>
+          <span
+            v-if="lastNotReady === riff.riffId"
+            class="lw-badge lw-badge--accent"
+            data-test="busy-badge"
+          >
+            buffering…
           </span>
-          <button
-            type="button"
-            class="delete"
-            data-test="delete-saved"
-            @click="recorder.delete(seq.jamId, seq.id)"
-          >
-            🗑
-          </button>
         </li>
       </ul>
-    </section>
-
-    <ul class="riffs">
-      <li
-        v-for="riff in currentJam.riffPage"
-        :key="riff.riffId"
-        :class="rowClasses(riff)"
-        data-test="riff-row"
+      <button
+        v-if="currentJam.hasMore"
+        type="button"
+        class="lw-btn lw-btn--ghost load-more"
+        data-test="load-more"
+        :disabled="loadingMore"
+        @click="onLoadMore"
       >
-        <button
-          type="button"
-          class="hop"
-          data-test="hop"
-          :disabled="loading.has(riff.riffId)"
-          @click="onHop(riff)"
-        >
-          Hop
-        </button>
-        <span class="riff-id">{{ riff.riffId }}</span>
-        <span class="riff-meta">{{ riff.bpm }} bpm</span>
-        <span
-          v-if="lastNotReady === riff.riffId"
-          class="busy"
-          data-test="busy-badge"
-        >
-          buffering…
-        </span>
-      </li>
-    </ul>
-  </main>
+        {{ loadingMore ? 'Loading…' : 'Load more' }}
+      </button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -141,6 +155,8 @@ import {
   usePerformanceStore,
   useRecorderStore,
 } from '../stores';
+import LwIcon from '../components/LwIcon.vue';
+import { formatDuration } from '../ui/format';
 
 const route = useRoute();
 const jamsStore = useJamsStore();
@@ -206,10 +222,15 @@ async function onStopRecording(): Promise<void> {
   await onStop();
 }
 
-function formatDuration(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+const loadingMore = ref(false);
+
+async function onLoadMore(): Promise<void> {
+  loadingMore.value = true;
+  try {
+    await currentJam.loadNextPage();
+  } finally {
+    loadingMore.value = false;
+  }
 }
 
 async function onHop(riff: RiffDocument): Promise<void> {
@@ -251,157 +272,127 @@ function rowClasses(riff: RiffDocument): Record<string, boolean> {
 </script>
 
 <style scoped>
-.perform {
-  max-width: 48rem;
-  margin: 2rem auto;
-  font-family: system-ui, sans-serif;
+/* A holding pattern until Slice B's Hop Recording layout replaces this page
+   (docs/phases/phase-8-redesign-and-editor.md). */
+.strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 48px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
 }
-header {
-  margin-bottom: 1rem;
+.strip__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
 }
-.back-link {
-  display: inline-block;
-  margin-bottom: 0.5rem;
-  color: #555;
-  text-decoration: none;
-  font-size: 0.875rem;
+.strip__name {
+  font-size: var(--text-md);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
-.back-link:hover {
-  text-decoration: underline;
+.strip__meta {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
 }
 .quantise {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.875rem;
-  color: #555;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--text-2);
   user-select: none;
   cursor: pointer;
 }
-.status {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  margin-top: 0.5rem;
-}
-.state {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.125rem 0.5rem;
-  border-radius: 999px;
-  background: #f0f0f0;
-}
-.state[data-state='playing'] {
-  background: #e6f7e6;
-  color: #1a6e1a;
-}
-.current {
-  font-family: ui-monospace, monospace;
+.quantise input {
+  accent-color: var(--accent);
 }
 .error {
-  color: #b00020;
-  font-size: 0.875rem;
-}
-.record.recording {
-  color: #b00020;
-}
-.rec-waiting {
-  color: #b00020;
-  font-size: 0.875rem;
+  margin-bottom: 16px;
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 .rec-clock {
-  font-family: ui-monospace, monospace;
-  color: #b00020;
-  font-variant-numeric: tabular-nums;
+  color: var(--danger);
 }
 .saved {
-  margin: 1rem 0;
+  margin-bottom: 20px;
 }
 .saved h2 {
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #555;
-  margin: 0 0 0.5rem;
+  margin-bottom: 8px;
 }
-.saved ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.saved-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.375rem 0;
-  border-bottom: 1px solid #eee;
-}
-.saved-title {
-  flex: 1;
-}
-.saved-duration {
-  font-family: ui-monospace, monospace;
-  color: #666;
-  font-variant-numeric: tabular-nums;
-}
-.saved .delete {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0.25rem 0.5rem;
-}
-.saved .delete:hover {
-  background: #f8f8f8;
-  border-radius: 4px;
-}
+.saved ul,
 .riffs {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
 }
+.saved-row,
 .riff-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #eee;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line-faint);
+}
+.saved-row:first-child,
+.riff-row:first-child {
+  border-top: none;
+}
+.saved-title {
+  flex: 1;
+  color: var(--text-1);
+}
+.saved-duration,
+.riff-meta {
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+.saved .delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .riff-row.current,
 .saved-row.playing {
-  background: #fff7c2;
-}
-.hop {
-  min-width: 3.5rem;
+  background: var(--accent-soft);
 }
 .riff-row.loading {
   animation: riff-loading 0.7s ease-in-out infinite alternate;
 }
 @keyframes riff-loading {
   from {
-    background: #fff7c2;
+    background: var(--accent-soft);
   }
   to {
-    background: #ffd23f;
+    background: var(--accent-line);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .riff-row.loading {
     animation: none;
-    background: #ffd23f;
+    background: var(--accent-line);
   }
 }
 .riff-id {
-  font-family: ui-monospace, monospace;
   flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-2);
 }
-.riff-meta {
-  color: #666;
-  font-size: 0.875rem;
-}
-.busy {
-  color: #b87a00;
-  font-size: 0.75rem;
+.load-more {
+  margin-top: 12px;
 }
 </style>

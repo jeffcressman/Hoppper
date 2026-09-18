@@ -199,6 +199,10 @@ Newest entries at the top of each section. Date entries absolutely
   reach a `watch` in the view. The mock hands out `reactive(recorderStub)`,
   and a test that needs a watcher to fire mutates `reactive(recorderStub)`.
   Do the same for another stub if a view watcher depends on it.
+- **A view test that serves a store stub through `reactive()` needs
+  `enableAutoUnmount(afterEach)`.** Otherwise the watchers of views mounted by
+  earlier tests stay alive and fire on the shared stub, so a call count that
+  should be 1 comes out as 3. Found 2026-09-18 in `PublicJamsView.test.ts`.
 - **Model audibility, don't just assert calls.** `test/audio/hop-audibility.test.ts`
   has a mock `AudioContext` that tracks, per source: started / scheduled stop /
   still connected / its voice's gain automation — so a test can ask "which
@@ -281,6 +285,25 @@ Newest entries at the top of each section. Date entries absolutely
 - Public Jams and My Jams both need a session: `listJams` calls
   `requireValidSession`, and the joinable list is an authenticated call. So
   the logged-out state is a login prompt, not a browsable grid.
+
+- **The app's design tokens are the design system's files, copied unchanged**
+  (`packages/app/src/styles/lwlkcing/`, except `fonts.css`), so a later sync
+  is a plain diff. `fonts.css` is the one deliberate difference: fonts come
+  from `@fontsource/*` packages bundled into the app instead of the design
+  system's Google Fonts import, because the app has to look the same offline.
+  Component styles (`styles/components.css`) are the design system's JSX
+  component CSS as plain `lw-*` classes.
+- **Jam tiles have generated covers** (`ui/jam-cover.ts`). Endlesss jam
+  profiles carry no image, and neither ours nor LORE's `JamProfile` has one.
+- **The jam list is fetched once per session** (2026-09-18): Public Jams and
+  My Jams only call `jams.refresh()` while `listing` is null, and Settings →
+  Log out clears it. A jam joined elsewhere shows up after the next log-in or
+  restart. That's server etiquette, not an oversight.
+- **Waiting on the user (asked 2026-09-18):** what a Hop Recording splat is
+  drawn from. Stem documents per page of rifffs would give colours (one batched
+  request per page); the rifff document alone gives only layer count and
+  gains. Slice B shouldn't start without an answer. See
+  `docs/phases/phase-8-redesign-and-editor.md`.
 
 ## Build and dev loop
 

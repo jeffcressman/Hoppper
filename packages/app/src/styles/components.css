@@ -1,0 +1,114 @@
+/* LwlkcIng components as plain CSS classes. The rules are the design system's
+   own component styles (components/<group>/<Name>.jsx on claude.ai/design),
+   lifted out of their React wrappers so Vue templates can use them directly. */
+
+/* ── Button (core/Button) ─────────────────────────────────────── */
+.lw-btn {
+  --_h: var(--control-h-md);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--_h); padding: 0 18px; border: 1px solid transparent;
+  border-radius: var(--r-pill); font-family: var(--font-sans); font-weight: 600;
+  font-size: var(--text-base); line-height: 1; letter-spacing: -0.005em;
+  cursor: pointer; user-select: none; white-space: nowrap; text-decoration: none;
+  transition: var(--transition-control); -webkit-tap-highlight-color: transparent;
+}
+.lw-btn:focus-visible { outline: none; box-shadow: var(--glow-focus-ring); }
+.lw-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.lw-btn:active { transform: translateY(0.5px) scale(0.985); }
+.lw-btn--sm { --_h: var(--control-h-sm); padding: 0 13px; font-size: var(--text-sm); gap: 6px; }
+.lw-btn--lg { --_h: var(--control-h-lg); padding: 0 24px; font-size: var(--text-md); }
+.lw-btn--block { display: flex; width: 100%; }
+.lw-btn--primary { background: var(--accent); color: var(--on-accent); }
+.lw-btn--primary:hover { background: var(--accent-hover); color: var(--on-accent); }
+.lw-btn--primary:active { background: var(--accent-press); }
+.lw-btn--contrast { background: var(--text-1); color: var(--bg); }
+.lw-btn--contrast:hover { background: #fff; }
+.lw-btn--secondary { background: var(--surface-2); color: var(--text-1); border-color: var(--line); }
+.lw-btn--secondary:hover { background: var(--surface-3); border-color: var(--line-strong); color: var(--text-1); }
+.lw-btn--ghost { background: transparent; color: var(--text-2); }
+.lw-btn--ghost:hover { background: var(--surface-2); color: var(--text-1); }
+.lw-btn--outline { background: transparent; color: var(--accent); border-color: var(--accent-line); }
+.lw-btn--outline:hover { background: var(--accent-soft); }
+.lw-btn--danger { background: var(--danger); color: var(--on-accent); }
+.lw-btn--danger:hover { filter: brightness(1.08); }
+.lw-btn svg { width: 1.1em; height: 1.1em; flex: none; }
+
+/* ── IconButton (core/IconButton) ─────────────────────────────── */
+.lw-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--control-h-md); height: var(--control-h-md); flex: none; padding: 0;
+  border-radius: var(--r-md); border: 1px solid transparent; background: transparent;
+  color: var(--text-2); cursor: pointer; transition: var(--transition-control);
+  -webkit-tap-highlight-color: transparent;
+}
+.lw-iconbtn svg { width: 50%; height: 50%; }
+.lw-iconbtn:hover { background: var(--surface-2); color: var(--text-1); }
+.lw-iconbtn:active { transform: scale(0.93); }
+.lw-iconbtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.lw-iconbtn:disabled { opacity: 0.4; pointer-events: none; }
+.lw-iconbtn--sm { width: var(--control-h-sm); height: var(--control-h-sm); border-radius: var(--r-sm); }
+.lw-iconbtn--lg { width: var(--control-h-lg); height: var(--control-h-lg); }
+.lw-iconbtn--round { border-radius: var(--r-circle); }
+.lw-iconbtn--solid { background: var(--surface-2); border-color: var(--line); }
+.lw-iconbtn--solid:hover { background: var(--surface-3); }
+.lw-iconbtn--active { background: var(--accent); color: var(--on-accent); }
+.lw-iconbtn--active:hover { background: var(--accent-hover); color: var(--on-accent); }
+
+/* ── Badge (core/Badge) ───────────────────────────────────────── */
+.lw-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 8px; border-radius: var(--r-pill);
+  font-family: var(--font-sans); font-weight: 600; font-size: var(--text-2xs);
+  letter-spacing: 0.02em; line-height: 1; white-space: nowrap;
+  background: var(--surface-3); color: var(--text-2);
+}
+.lw-badge--accent { background: var(--accent-soft); color: var(--accent); }
+.lw-badge--success { background: var(--success-soft); color: var(--success); }
+.lw-badge--danger { background: var(--danger-soft); color: var(--danger); }
+.lw-badge--solid { background: var(--accent); color: var(--on-accent); }
+.lw-badge--dot::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; flex: none;
+}
+
+/* ── Input (forms/Input) ──────────────────────────────────────── */
+.lw-field { display: flex; flex-direction: column; gap: 6px; }
+.lw-field__label { font-family: var(--font-sans); font-weight: 600; font-size: var(--text-sm); color: var(--text-2); }
+.lw-input {
+  width: 100%; height: var(--control-h-md); padding: 0 13px;
+  background: var(--surface-inset); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--text-1); font-family: var(--font-sans); font-size: var(--text-base);
+  transition: var(--transition-control); outline: none;
+}
+.lw-input::placeholder { color: var(--text-4); }
+.lw-input:hover { border-color: var(--line-strong); }
+.lw-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lw-field__hint { font-size: var(--text-xs); color: var(--text-3); }
+.lw-field__hint--error { color: var(--danger); }
+
+/* ── Dialog (feedback/Dialog) ─────────────────────────────────── */
+.lw-dialog__scrim {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px;
+  background: oklch(0 0 0 / 0.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: lw-fade var(--dur-mid) var(--ease-out);
+}
+.lw-dialog {
+  width: 100%; max-width: var(--dlg-w, 460px); max-height: 86vh; display: flex; flex-direction: column;
+  background: var(--surface-1); border: 1px solid var(--line-strong); border-radius: var(--r-xl);
+  box-shadow: var(--shadow-xl); overflow: hidden; animation: lw-pop var(--dur-mid) var(--ease-spring);
+}
+.lw-dialog__head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.lw-dialog__title { flex: 1; font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg); color: var(--text-1); letter-spacing: -0.01em; }
+.lw-dialog__body { padding: 20px; overflow: auto; color: var(--text-2); font-size: var(--text-base); display: flex; flex-direction: column; gap: 14px; }
+.lw-dialog__foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line); }
+@keyframes lw-fade { from { opacity: 0; } }
+@keyframes lw-pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .lw-dialog__scrim, .lw-dialog { animation: none; }
+}
+
+/* ── Page scaffolding shared by the list views ────────────────── */
+.lw-view { padding: 28px 32px 40px; }
+.lw-view__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.lw-view__title { font-size: var(--text-2xl); }
+.lw-view__sub { color: var(--text-3); margin-top: 4px; }

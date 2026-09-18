@@ -1,0 +1,34 @@
+// Endlesss jam profiles carry no cover image, so each jam gets a generated
+// one: two colours from the design system's spectrum, picked by the jam ID so
+// a jam always looks the same.
+
+const SPECTRUM = [
+  'amber',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'indigo',
+  'violet',
+  'pink',
+  'red',
+] as const;
+const ANGLES = [110, 120, 135, 150, 160];
+
+function hash(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+export function jamCover(jamId: string): string {
+  const h = hash(jamId);
+  const first = h % SPECTRUM.length;
+  // An offset of 1..n-1 keeps the second colour different from the first.
+  const second = (first + 1 + (Math.floor(h / SPECTRUM.length) % (SPECTRUM.length - 1))) % SPECTRUM.length;
+  const angle = ANGLES[Math.floor(h / 81) % ANGLES.length];
+  return `linear-gradient(${angle}deg, var(--spectrum-${SPECTRUM[first]}), var(--spectrum-${SPECTRUM[second]}))`;
+}

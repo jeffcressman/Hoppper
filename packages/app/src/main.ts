@@ -10,10 +10,13 @@ import {
   StemFetcher,
 } from '@hoppper/sdk';
 import App from './App.vue';
-import LoginView from './views/LoginView.vue';
-import JamListView from './views/JamListView.vue';
-import JamDetailView from './views/JamDetailView.vue';
+import PublicJamsView from './views/PublicJamsView.vue';
+import MyJamsView from './views/MyJamsView.vue';
+import HopsView from './views/HopsView.vue';
+import SettingsView from './views/SettingsView.vue';
 import PerformView from './views/PerformView.vue';
+import './styles/lwlkcing/index.css';
+import './styles/components.css';
 import { initClient } from './client';
 import { createAppRouter } from './router';
 import {
@@ -192,10 +195,17 @@ async function bootstrap() {
   const router = createAppRouter({
     isAuthenticated: () => session.isAuthenticated,
     routes: [
-      { path: '/login', name: 'login', component: LoginView },
-      { path: '/jams', name: 'jams', component: JamListView },
-      { path: '/jams/:jamId', name: 'jam-detail', component: JamDetailView },
-      { path: '/jams/:jamId/perform', name: 'perform', component: PerformView },
+      { path: '/public', name: 'public-jams', component: PublicJamsView },
+      { path: '/mine', name: 'my-jams', component: MyJamsView },
+      { path: '/hops', name: 'hops', component: HopsView },
+      { path: '/settings', name: 'settings', component: SettingsView },
+      // Hop Recording. The Perform view stands in until Slice B.
+      {
+        path: '/jams/:jamId',
+        name: 'hop-recording',
+        component: PerformView,
+        meta: { requiresAuth: true },
+      },
     ],
     useWebHistory: true,
   });

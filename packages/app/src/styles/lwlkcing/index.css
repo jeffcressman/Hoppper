@@ -1,0 +1,10 @@
+/* LwlkcIng design system — the token and base-style closure.
+   Everything in this folder except fonts.css is copied unchanged from the
+   "LwlkcIng Design System" project on claude.ai/design (tokens/*.css). */
+
+@import './fonts.css';
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';
+@import './effects.css';
+@import './base.css';

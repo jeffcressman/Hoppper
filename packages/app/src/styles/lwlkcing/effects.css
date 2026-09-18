@@ -1,0 +1,52 @@
+/* LwlkcIng — Effects: elevation, glow, glass, focus, motion
+   Dark-first UI leans on subtle borders + accent GLOW for "live" audio
+   elements (active pads, armed knobs). Light theme leans on soft shadow.
+   Glass/vibrancy is the macOS-Sequoia layer for overlays & popovers. */
+
+:root {
+  /* ── Elevation (shadows) ────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-md: 0 4px 14px oklch(0 0 0 / 0.38);
+  --shadow-lg: 0 14px 40px oklch(0 0 0 / 0.46);
+  --shadow-xl: 0 28px 70px oklch(0 0 0 / 0.55);
+  --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.05);
+
+  /* ── Accent glow (signature "live" state) ───────────────────── */
+  --glow-accent: 0 0 0 1px var(--accent-line), 0 0 18px -2px var(--accent);
+  --glow-soft:   0 0 22px -6px var(--accent);
+  --glow-focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* ── Glass / vibrancy (overlays, popovers, top bars) ────────── */
+  --glass-bg:   oklch(0.185 0.011 var(--brand-hue) / 0.66);
+  --glass-blur: saturate(1.5) blur(22px);  /* @kind other */
+  --glass-line: oklch(1 0 0 / 0.10);
+
+  /* ── Focus ──────────────────────────────────────────────────── */
+  --focus-ring: 0 0 0 2px var(--accent-line);
+
+  /* ── Borders (named) ────────────────────────────────────────── */
+  --border-hairline: 1px solid var(--line);
+
+  /* ── Motion ─────────────────────────────────────────────────── */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);   /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);   /* @kind other */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);/* @kind other */
+  --dur-fast: 110ms;  /* @kind other */
+  --dur-mid:  190ms;  /* @kind other */
+  --dur-slow: 320ms;  /* @kind other */
+  --transition-control: background var(--dur-fast) var(--ease-out),
+                        border-color var(--dur-fast) var(--ease-out),
+                        color var(--dur-fast) var(--ease-out),
+                        box-shadow var(--dur-fast) var(--ease-out),
+                        transform var(--dur-fast) var(--ease-out);
+}
+
+[data-theme="light"] {
+  --shadow-sm: 0 1px 2px oklch(0.3 0.02 var(--brand-hue) / 0.10);
+  --shadow-md: 0 6px 18px oklch(0.3 0.02 var(--brand-hue) / 0.12);
+  --shadow-lg: 0 16px 44px oklch(0.3 0.02 var(--brand-hue) / 0.16);
+  --shadow-xl: 0 30px 72px oklch(0.3 0.02 var(--brand-hue) / 0.20);
+  --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.6);
+  --glass-bg:   oklch(0.99 0.003 var(--brand-hue) / 0.7);
+  --glass-line: oklch(0.3 0.02 var(--brand-hue) / 0.12);
+}

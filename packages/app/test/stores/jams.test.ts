@@ -79,4 +79,13 @@ describe('useJamsStore', () => {
 
     expect(client.getJam).toHaveBeenCalledTimes(1);
   });
+
+  it('clear() drops the listing, which belongs to whoever was logged in, but keeps jam names', async () => {
+    const store = defineJamsStore(makeStub())();
+    await store.refresh();
+    await store.loadProfile('band1');
+    store.clear();
+    expect(store.listing).toBeNull();
+    expect(store.profilesById.get('band1')).toEqual(band1Profile);
+  });
 });

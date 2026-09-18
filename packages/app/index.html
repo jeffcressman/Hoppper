@@ -17,25 +17,32 @@
         justify-content: center;
         gap: 1rem;
         font-family: system-ui, sans-serif;
-        color: #444;
-        background: #fafafa;
+        /* LwlkcIng --text-3 on --bg, inlined: the token CSS isn't loaded yet. */
+        color: oklch(0.605 0.008 42);
+        background: oklch(0.145 0.009 42);
+      }
+      body {
+        margin: 0;
+        background: oklch(0.145 0.009 42);
       }
       .boot-splash h1 {
         margin: 0;
-        font-size: 1.25rem;
-        letter-spacing: 0.02em;
+        font-size: 1rem;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: oklch(0.97 0.006 42);
       }
       .boot-splash .spinner {
         width: 1.5rem;
         height: 1.5rem;
-        border: 3px solid #ddd;
-        border-top-color: #555;
+        border: 3px solid oklch(0.278 0.014 42);
+        border-top-color: oklch(0.74 0.155 42);
         border-radius: 50%;
         animation: boot-spin 0.8s linear infinite;
       }
       .boot-splash .hint {
         font-size: 0.8125rem;
-        color: #888;
+        color: oklch(0.45 0.006 42);
       }
       @keyframes boot-spin {
         to {

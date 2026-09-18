@@ -6,6 +6,13 @@ import {
   type Router,
 } from 'vue-router';
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Only a logged-in user can open it; anyone else lands on Public Jams. */
+    requiresAuth?: boolean;
+  }
+}
+
 export interface CreateAppRouterOptions {
   isAuthenticated: () => boolean;
   routes: RouteRecordRaw[];
@@ -16,18 +23,18 @@ export interface CreateAppRouterOptions {
 export function createAppRouter(opts: CreateAppRouterOptions): Router {
   const history = opts.useWebHistory ? createWebHistory() : createMemoryHistory();
   const routes: RouteRecordRaw[] = [
-    { path: '/', redirect: '/jams' },
+    { path: '/', redirect: '/public' },
+    // Logging in is a dialog now; an old bookmark to /login lands where the
+    // dialog is offered.
+    { path: '/login', redirect: '/public' },
     ...opts.routes,
   ];
   const router = createRouter({ history, routes });
 
+  // The list pages stay reachable logged out and offer the login dialog
+  // themselves. Only pages that need a session to show anything are guarded.
   router.beforeEach((to) => {
-    const authed = opts.isAuthenticated();
-    if (to.path === '/login') {
-      // Authenticated users that hit /login (e.g., bookmark) bounce to /jams.
-      return authed ? '/jams' : true;
-    }
-    if (!authed) return '/login';
+    if (to.meta.requiresAuth && !opts.isAuthenticated()) return '/public';
     return true;
   });
 

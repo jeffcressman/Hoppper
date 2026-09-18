@@ -36,6 +36,12 @@ export function defineJamsStore(client: JamsClient) {
       }
     }
 
-    return { listing, profilesById, refresh, loadProfile };
+    // The listing is the logged-in user's own; jam profiles are the same for
+    // everyone, so they stay cached.
+    function clear(): void {
+      listing.value = null;
+    }
+
+    return { listing, profilesById, refresh, loadProfile, clear };
   });
 }

@@ -23,6 +23,8 @@ export function defineRecorderStore(deps: RecorderDeps) {
     /** The saved sequence being replayed, for the view to mark. */
     const playingId = ref<string | null>(null);
     const saved = shallowRef<HopSequence[]>([]);
+    /** Every jam's takes, newest first — what the Hops page lists. */
+    const allSaved = shallowRef<HopSequence[]>([]);
     const lastError = ref<string | null>(null);
 
     // The player flips back to 'idle' when its scheduled final-stop
@@ -52,7 +54,7 @@ export function defineRecorderStore(deps: RecorderDeps) {
       if (seq.hops.length === 0) return null;
       try {
         await deps.storage.saveSequence(seq);
-        await loadSaved(seq.jamId);
+        await Promise.all([loadSaved(seq.jamId), loadAll()]);
       } catch (err) {
         lastError.value = err instanceof Error ? err.message : String(err);
         throw err;
@@ -62,6 +64,10 @@ export function defineRecorderStore(deps: RecorderDeps) {
 
     async function loadSaved(jamId: JamCouchID): Promise<void> {
       saved.value = await deps.storage.listSequences(jamId);
+    }
+
+    async function loadAll(): Promise<void> {
+      allSaved.value = await deps.storage.listAllSequences();
     }
 
     async function play(seq: HopSequence): Promise<void> {
@@ -89,7 +95,7 @@ export function defineRecorderStore(deps: RecorderDeps) {
 
     async function del(jamId: JamCouchID, id: string): Promise<void> {
       await deps.storage.deleteSequence(jamId, id);
-      await loadSaved(jamId);
+      await Promise.all([loadSaved(jamId), loadAll()]);
     }
 
     return {
@@ -98,10 +104,12 @@ export function defineRecorderStore(deps: RecorderDeps) {
       isPlaying,
       playingId,
       saved,
+      allSaved,
       lastError,
       start,
       stop,
       loadSaved,
+      loadAll,
       play,
       stopPlayback,
       delete: del,
