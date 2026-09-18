@@ -66,15 +66,15 @@ many builds if the checklist gets too long.
 
 ### Issues
 * I can't quite make out what is happening but 'Perform view: phase-locked hops' isn't working as expected, it's not seamless
-  * Diagnosed 2026-07-24/25. Two causes, both fixed, awaiting re-test:
+  * Diagnosed 2026-07-24/25. Two causes, both fixed; re-tested and
+    passing 2026-09-17:
     the outgoing voice was disconnected on the next microtask so no hop
     ever crossfaded; and stems shorter than the rifff's computed loop
     landed at the wrong point in the bar, which sounds like two rifffs
     at once. Re-verify the box above, and watch the log panel for
     `don't fit its … loop` warnings.
 * **Quantise toggle sounded backwards: on the beat when off, not when on.**
-  (Reported 2026-09-17. Fixed, awaiting re-test against "Quantised entry
-  toggle" above.)
+  (Reported 2026-09-17. Fixed; re-tested and passing 2026-09-17.)
   * Off sounding on the beat is correct: phase locking keeps every hop
     on the grid. Quantise only changes *when* the switch happens.
   * On was broken. The engine worked out the held beat but started the
@@ -125,7 +125,7 @@ many builds if the checklist gets too long.
       the first rifff clicked, not from Record.
 - [x] **Stop ends a recording too.** While recording, the header's Stop
       does the same as Stop Recording: audio stops and the take is saved.
-- [ ] **Stop before any rifff saves nothing.** Record, then Stop Recording
+- [x] **Stop before any rifff saves nothing.** Record, then Stop Recording
       without clicking a rifff: no new row appears.
 - [x] **Saved sequences persist.** Restart the app, reopen the same
       jam's Perform view — saved sequences reappear.
@@ -149,8 +149,8 @@ many builds if the checklist gets too long.
       Restart the app — deleted sequence stays gone.
 
 ### Issues
-Everything below, found on 2026-09-17, is fixed and awaiting re-test
-against the boxes above.
+Everything below was found on 2026-09-17, fixed, and re-tested and
+passing the same day against the boxes above.
 * **Stop Recording left the rifff playing, and Stop didn't end a
   recording.** Each button only did half the job. Now both stop the
   audio and any replay, and end and save the recording. Decided
