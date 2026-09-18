@@ -39,17 +39,17 @@ many builds if the checklist gets too long.
 - [x] **Perform view: audio on cold start.** Open a small jam →
       Perform, click a rifff, hear audio within a couple seconds.
       (Regression signal for the ENOENT / stem cache path.)
-- [ ] **Perform view: phase-locked hops.** Hopping between adjacent
+- [x] **Perform view: phase-locked hops.** Hopping between adjacent
       rifffs is gapless and beat-aligned; no clicks, no restart, no
       silence between transitions.
-- [ ] **Hops land on the beat.** With a jam whose rifffs are quantised,
+- [x] **Hops land on the beat.** With a jam whose rifffs are quantised,
       hop repeatedly at arbitrary moments. Every rifff stays on the same
       beat grid — no lurch, no stumble, whatever the gap between clicks.
       (Regression signal for hops being measured from the previous hop
       instead of the grid: the error is a random fraction of a beat, and
       the *first* hop of a run is always correct even when it's broken,
       so click at least three times.)
-- [ ] **Quantised entry toggle.** The checkbox in the Perform header is
+- [x] **Quantised entry toggle.** The checkbox in the Perform header is
       off by default and hops enter immediately. Ticked, each hop waits
       for the next beat before the crossfade starts — audible as a
       deliberate entry, and the log line reads
@@ -72,30 +72,118 @@ many builds if the checklist gets too long.
     landed at the wrong point in the bar, which sounds like two rifffs
     at once. Re-verify the box above, and watch the log panel for
     `don't fit its … loop` warnings.
+* **Quantise toggle sounded backwards: on the beat when off, not when on.**
+  (Reported 2026-09-17. Fixed, awaiting re-test against "Quantised entry
+  toggle" above.)
+  * Off sounding on the beat is correct: phase locking keeps every hop
+    on the grid. Quantise only changes *when* the switch happens.
+  * On was broken. The engine worked out the held beat but started the
+    new rifff and the crossfade at the click, so there was no audible
+    wait and the new rifff played ahead of the grid by the length of
+    the hold. Details in `docs/phases/phase-6-audio-engine.md`.
+  * With quantise on, also check that Stop during the wait silences
+    everything, and that two quick clicks inside one wait go straight
+    to the second rifff without a blip of the first.
 
 ## Phase 7 — Hop recording
 
 - [x] **Record button visible.** Perform view header shows a **●
       Record** button.
-- [ ] **Start recording.** Clicking Record flips the button to **■
-      Stop Recording** (red) and an elapsed-time clock appears next
-      to it, ticking up as `m:ss`.
-- [ ] **Hops captured while recording.** Clicking through rifffs
-      during a recording adds events to the sequence, including any
-      clicks flagged not-ready — the click itself is the artifact.
-- [ ] **Stop recording writes to disk.** Clicking Stop Recording adds
-      the new sequence to the **Saved sequences** section with title,
-      duration (mm:ss, right-aligned in mono), and a 🗑 button.
-- [ ] **Saved sequences persist.** Restart the app, reopen the same
+- [x] **Record waits for the first rifff.** Clicking Record flips the
+      button to **■ Stop Recording** (red) and shows "Waiting for first
+      rifff…". No clock yet. The clock appears at `0:00` when the first
+      rifff you click starts playing (after it loads, if it has to) and
+      ticks up as `m:ss` from there.
+- [x] **Record stops what's playing.** With a rifff playing, click
+      Record: the audio stops and the waiting message shows. The first
+      rifff you click then starts from its beginning. Same with a saved
+      sequence replaying: Record stops the replay.
+- [x] **Loading rifffs pulse.** Click a rifff that isn't loaded yet
+      (one far from any you've played): its whole row pulses yellow,
+      clearly visible, until it starts playing, then stops. Two loading at
+      once both pulse.
+- [x] **Hops captured as heard.** During a recording, click rifffs that
+      have to load. Replay the take: each hop comes in where you heard it
+      come in, not where you clicked. A click on a rifff that never
+      played (a load error, or one you stopped) isn't in the take.
+- [x] **Quantised hops replay on the beat.** Record with "Quantise hops
+      to the beat" ticked, clicking at odd moments. On replay each hop
+      enters on the same beat it entered on live, whatever the checkbox
+      is set to now.
+- [x] **Latest click wins.** Click a rifff that has to load, then
+      another before the first starts: only the second plays, and the
+      first row stops pulsing. It doesn't matter which one finishes
+      loading first.
+- [x] **Stop while a rifff loads.** Click a rifff that has to load, then
+      Stop before it starts: it never starts, and the row stops
+      pulsing. Same with Record: it cancels the load and waits for a new
+      first rifff.
+- [x] **Stop recording writes to disk and silences.** Clicking Stop
+      Recording stops the audio and adds the new sequence to the
+      **Saved sequences** section with title, duration (mm:ss,
+      right-aligned in mono), and a 🗑 button. The duration counts from
+      the first rifff clicked, not from Record.
+- [x] **Stop ends a recording too.** While recording, the header's Stop
+      does the same as Stop Recording: audio stops and the take is saved.
+- [ ] **Stop before any rifff saves nothing.** Record, then Stop Recording
+      without clicking a rifff: no new row appears.
+- [x] **Saved sequences persist.** Restart the app, reopen the same
       jam's Perform view — saved sequences reappear.
-- [ ] **Replay a saved sequence.** Clicking **▶ Play** on a saved row
+- [x] **Replay a saved sequence.** Clicking **▶ Play** on a saved row
       starts audio; hops fire at the same relative times as the
-      original take with the same crossfade durations.
-- [ ] **Replay finishes and Play re-enables.** When a sequence's
+      original take with the same crossfade durations. A take recorded
+      since the first-rifff change starts sounding straight away, with
+      no lead-in silence.
+- [x] **Replaying row and rifff are highlighted.** While a sequence
+      replays, its saved row is light yellow, and the light-yellow rifff
+      row follows each hop as it happens. Same rifff highlight during
+      live play.
+- [x] **Stop during a replay stays stopped.** Click Stop mid-replay:
+      the audio stops and does not come back when the next hop was due.
+      The Play buttons re-enable. Also try Stop straight after ▶ Play,
+      while the replay is still loading: nothing should start.
+- [x] **Replay finishes and Play re-enables.** When a sequence's
       final scheduled stop fires, the Play button re-enables so a
       second sequence can be started immediately.
-- [ ] **Delete a saved sequence.** Clicking 🗑 removes the row.
+- [x] **Delete a saved sequence.** Clicking 🗑 removes the row.
       Restart the app — deleted sequence stays gone.
+
+### Issues
+Everything below, found on 2026-09-17, is fixed and awaiting re-test
+against the boxes above.
+* **Stop Recording left the rifff playing, and Stop didn't end a
+  recording.** Each button only did half the job. Now both stop the
+  audio and any replay, and end and save the recording. Decided
+  2026-09-17: while recording they do the same thing.
+* **Rifff row highlight was invisible, and wouldn't follow a replay.**
+  The `current` class was there, but at `#fafffa`; it's now light yellow
+  (`#fff7c2`). The performance store only heard about changes of engine
+  *state*, and replay hops the engine directly while it stays
+  `playing`. The engine now emits `onRiffChange` on every hop.
+* **Stop during a replay restarted playback a moment later.** Stop only
+  silenced the engine, so the replay's next scheduled hop started it
+  again. Stop now cancels the replay. Also fixed: Stop while a replay
+  was still loading didn't prevent it starting, and left the store
+  saying "playing".
+* **No way to tell which saved sequence was replaying.** Its row is
+  now light yellow too (`recorder.playingId`).
+* **A loading rifff put the take out of step with what was heard (new
+  feature, 2026-09-17).** Clicks were recorded the moment they were
+  clicked, but a rifff that has to load starts playing later. Now a
+  loading rifff's row pulses yellow, and the hop registers when it
+  starts playing, including the take's first hop, which is when the
+  recording starts. With quantise on, the hop registers once loaded,
+  the engine holds it to the beat, and replay holds it again. A click
+  that never plays isn't recorded, and Stop or Record cancel a rifff
+  still loading. Decided 2026-09-17: a newer click cancels an older
+  one still loading, so the latest click wins.
+* **Recording started at Record, not at the first rifff (new
+  feature).** Record now arms the recorder and the take begins at the
+  first hop, `tSec: 0`. Decided 2026-09-17: every take starts at the
+  beginning of a rifff, so Record stops whatever is playing, live or a
+  replay. Assumed: Stop while still armed saves nothing, since there's
+  nothing to replay. Design notes in
+  `docs/phases/phase-7-hop-recording.md`.
 
 ## Cross-tempo stems
 

@@ -123,7 +123,7 @@ Detailed design: [`docs/phases/phase-6-audio-engine.md`](docs/phases/phase-6-aud
 - [x] Stem loader: decode cached bytes → `AudioBuffer` via per-format dispatch (`decoder.ts` + `native-decoder.ts`). Both formats currently use `decodeAudioData`; libflac.js remains a deferred fallback if a webview lacks native FLAC.
 - [x] Playback engine: cold-start path in `AudioEngine.hopTo` schedules every BufferSource with `start(now, 0)`, `loop = true`, `loopEnd = loopDurationSec`.
 - [x] Hop: `computeHop` + engine wiring start the new rifff `crossfadeSec` early so its playhead reaches `offsetInNew` at the phase-anchor moment; old voice fades 1→0 and new voice fades 0→1 over the same window. Snap-to-bar supported, off by default.
-- [x] Pre-cache: `PrefetchRing.setWindow(jamId, [N-2..N+2])` walks each rifff's stems through the StemLoader in series; window moves cancel further decodes.
+- [x] Pre-cache: `PrefetchRing.setWindow(jamId, [N-2..N+2])` walks each rifff's stems through the StemLoader in series; window moves cancel further decodes. *Built and tested, but not yet called from the Perform view. Wiring it up moved to Phase 9.*
 - [x] UI: `PerformView.vue` with Hop button per rifff, current-rifff indicator, Stop button, busy badge on not-ready hops. Route `/jams/:jamId/perform`, linked from the jam detail header.
 
 **Checkpoint**: user can play a jam by clicking through rifffs, transitions are seamless and phase-locked. **Awaiting manual smoke** (TDD step 10 in the design doc) — the unit suite is green at 146 tests but the audible behavior can only be verified by a real listen-through. Run `pnpm dev`, log in, open a small jam → Perform, click a few rifffs.
@@ -160,7 +160,23 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 
 ---
 
-## Phase 9 — Export
+## Phase 9 — Caching, pre-loading & efficiency
+
+**Goal**: a clicked rifff almost never has to wait to load, and we never fetch the same data twice.
+
+Moved out of Phases 6–8 on 2026-09-17 so the timeline editor and UI overhaul come first. Why it matters: a take is what the performer heard (see `docs/phases/phase-7-hop-recording.md` → "Principle"), so any wait for a load puts the take out of step with what the performer meant, and the editor then has to fix it. Pre-loading is what makes that rare.
+
+- [ ] **Live pre-loading.** Start pre-loading once the first rifff is selected. Decide which rifffs (list neighbours of the last click, or something that tracks where the user is looking, since hops go anywhere in the list), how many, and when the window moves. `PrefetchRing` and `performance.prefetchWindow` already exist, tested but never called. Server etiquette caps speculative fetching at N±2.
+- [ ] **Stem-file tier.** The SDK's `prefetchRiffs` (Phase 4) keeps stem files on disk ahead of decoding. It's not used by the app either; decide whether live pre-loading needs it or the decode ring is enough.
+- [ ] **Stop re-fetching immutable data.** Every Hop click asks the server for the rifff's stem documents again (`getStemUrls` → `getStemDocuments`), even for a rifff already played. Replay's `resolveRiff` also re-fetches the rifff document for every hop. Rifff and stem documents never change, so cache them by ID, on disk, which also helps offline use.
+- [ ] **Memory budget for decoded audio.** The in-memory `AudioBufferCache` holds 256 MB (LRU), and one rifff of eight 16-second stems takes about 50 MB decoded, so a five-rifff window could evict what was just played. Size the window and the cap together.
+- [ ] **Measure it.** Log or show load time per click, so we can tell whether pre-loading is working in real use.
+
+**Checkpoint**: in a normal performance, a click on a rifff near the current one plays without a visible load, and a rifff played once is never requested from the server again.
+
+---
+
+## Phase 10 — Export
 
 **Goal**: render a sequence to disk.
 

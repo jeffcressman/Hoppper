@@ -14,7 +14,7 @@ views. **No audio has been played yet.**
 Phase 6 turns the app from a browser into an instrument: a user can pick
 a jam, click rifffs in sequence, and hear phase-locked, gapless
 transitions between them. This is the foundation for Phase 7 (record the
-performance) and Phase 9 (render to disk).
+performance) and Phase 10 (render to disk).
 
 The product concept is "rifff hopping": the next rifff begins at the same
 position-within-the-loop where the previous rifff was, so accents and bar
@@ -239,11 +239,26 @@ Three subtleties:
    (`performance.quantiseEntry`), which selects the store's
    `quantiseGrid`, a beat unless configured otherwise.
 
-   Note the interaction with hop recording: the recorder captures the
-   *click*, per phase 7, not the quantised entry, and replay does not
-   quantise. So a sequence recorded with quantisation on replays at the
-   click times — up to one interval away from what was heard. Fine for
-   now; revisit if replay fidelity starts to matter.
+   Everything the hop schedules is measured back from the held
+   `startWhen`, not forward from the click: the new voice starts, and
+   both fades begin, at `startWhen - crossfadeSec`. Until 2026-09-17 the
+   engine started them at `now`. The crossfade ran straight away and the
+   new rifff played ahead of the grid by the length of the hold. With
+   quantise off, `startWhen - crossfadeSec` *is* `now`, so only quantised
+   hops were affected. The returned `whenSec`/`offsetSec` were right
+   throughout, which is why tests on the result alone missed it. The
+   engine tests now assert the `start()` calls and gain automation.
+
+   A hold means the outgoing voice can still be sounding up to a bar
+   after the click, so the engine tracks outgoing voices and `stop()`
+   disconnects them as well as the current one. A second click inside
+   one hold replaces the held rifff before it has sounded. It is stopped
+   rather than faded, because fading a voice whose own fade-in hasn't
+   begun would play it at full volume.
+
+   Hop recording registers a quantised hop when it was made (once its
+   rifff had loaded) together with its grid, and replay holds it again,
+   so it replays on the beat it entered on live. See phase 7.
 
 ### Divergence from LORE
 
@@ -280,6 +295,16 @@ Two prefetch loops, both anchored to "currently viewed rifff":
 
 The window updates whenever the user navigates the rifff list. We
 **don't** prefetch on play — by the time you hop, it's too late.
+
+**Status 2026-09-17: built but not wired up.** `createPrefetchRing` and
+`performance.prefetchWindow(jamId, riffs, centre, radius = 2)` exist and
+are unit-tested, but nothing calls `prefetchWindow`, so live Perform mode
+pre-loads nothing. A rifff loads when it is clicked (its row
+pulses). Only replay looks ahead: `HopPlayer` loads the next 2 hops of
+the sequence. The user wants pre-loading to begin as soon as the first
+rifff is selected (see the phase 7 principle, "a take is what the
+performer heard"). The window, its trigger and its size are still to be
+decided. Wiring it up is Phase 9 in `PLAN.md` (2026-09-17).
 
 ## TDD order
 
@@ -325,7 +350,7 @@ Pure-first, then I/O, then UI. Each entry is a small commit.
   AudioWorklet timestretch.
 - Latency compensation for the crossfade scheduling vs. perceived
   click moment → revisit in Phase 7 when recording timestamps matter.
-- Export render path (`OfflineAudioContext`) → Phase 9.
+- Export render path (`OfflineAudioContext`) → Phase 10.
 - MIDI clock out → post-v1.
 
 ## Open questions

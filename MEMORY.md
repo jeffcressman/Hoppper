@@ -16,6 +16,12 @@ Newest entries at the top of each section. Date entries absolutely
 
 *2026-07-24, from the "two rifffs playing at once" investigation.*
 
+- **`AudioParam.value` reads the value *now*, not at a future time.** A
+  voice scheduled to start later still reads the GainNode default of 1
+  until its first automation event, so `fadeOut` (which anchors at
+  `gain.value`) on a not-yet-started voice fades it from full volume: an
+  audible blip. The engine stops a held voice that a newer click replaces
+  instead of fading it (2026-09-17, `engine.ts` `startsAt`).
 - **`disconnect()` silences a node instantly — it is not a teardown you can
   schedule early.** A voice that has a fade and a `stop()` scheduled is still
   cut dead the moment its nodes are disconnected. Anything that fades must
@@ -46,6 +52,19 @@ Newest entries at the top of each section. Date entries absolutely
   and the context starts suspended until a user gesture (`unlockAudioContext`
   is called from `resolveStems`, before any hop scheduling).
 
+## Recording principle
+
+- **A take is what the performer heard, not what they clicked** (set by
+  the user 2026-09-17). Every recorded event lines up with the sound at
+  that moment, because the performer's next move is a reaction to what
+  they hear. So a hop registers when its rifff starts playing, a take
+  starts when its first rifff sounds, clicks that never played aren't
+  recorded, and the latest click overtakes one still loading. Where
+  that differs from what they *meant*, the Phase 8 editor fixes it;
+  pre-loading (Phase 9) should make it rare. Full statement:
+  `docs/phases/phase-7-hop-recording.md` → "Principle". Check any new
+  recording or replay behaviour against it.
+
 ## Rifff and stem timing
 
 - **Hops are measured from one continuous grid, never from the previous hop.**
@@ -63,9 +82,9 @@ Newest entries at the top of each section. Date entries absolutely
   on the grid; the Perform view exposes it as a checkbox bound to
   `performance.quantiseEntry`, grid selectable via the store's `quantiseGrid`
   (beat by default — a bar reads as lag). Phase continuity already keeps hops
-  in time, so this is about *feel*, not correctness. Recording captures the
-  click, not the quantised entry, and replay does not quantise — so a sequence
-  recorded with it on replays up to one interval off what was heard.
+  in time, so this is about *feel*, not correctness. A recorded quantised
+  hop stores its grid (`HopEvent.quantise`) and replay holds it again
+  (since 2026-09-17), so it replays on the beat it entered on live.
 - **We deliberately diverge from LORE here.** LORE keeps a continuous cursor
   too (`mix/preview.cpp`, `m_riffPlaybackSample`, reset on idle) but wraps it
   by the *current* rifff's length, so a hop from a 2-bar rifff into a 16-bar
@@ -169,6 +188,17 @@ Newest entries at the top of each section. Date entries absolutely
   User recordings land in `local/issue resources/` (gitignored). Ask for the
   log panel's Copy output alongside the audio — the audio says *that* it is
   wrong, the log says *why*.
+- **Assert what reaches the nodes, not what `hopTo` returns.** Quantised
+  hops were broken from the day they landed while their tests passed:
+  `HopResult.whenSec`/`offsetSec` were right, but the voice was started
+  and faded at the click. The engine tests' mock context records each
+  source's `startedAt`/`stoppedAt` and each gain's automation events;
+  assert on those for any timing change. (Found 2026-09-17.)
+- **PerformView tests serve the recorder stub through `reactive()`.** The
+  store stubs are plain objects, so changing one after mount doesn't
+  reach a `watch` in the view. The mock hands out `reactive(recorderStub)`,
+  and a test that needs a watcher to fire mutates `reactive(recorderStub)`.
+  Do the same for another stub if a view watcher depends on it.
 - **Model audibility, don't just assert calls.** `test/audio/hop-audibility.test.ts`
   has a mock `AudioContext` that tracks, per source: started / scheduled stop /
   still connected / its voice's gain automation — so a test can ask "which
@@ -210,12 +240,13 @@ Newest entries at the top of each section. Date entries absolutely
 
 ## Known gaps / deliberately not done yet
 
-- **Concurrent Hop clicks aren't serialised** (`stores/performance.ts`). The
-  `hopping` guard in `PerformView` only disables the button you clicked, and
-  `hopTo` awaits stem resolution, so of two clicks in flight whichever
-  resolves *last* wins — even if it was clicked first. Needs a supersede check
-  plus a new `HopResult` kind for the UI. Raised with the user 2026-07-24;
-  awaiting a decision.
+- **Live pre-loading is not wired up** (2026-09-17). `PrefetchRing` and
+  `performance.prefetchWindow` exist and are tested, but nothing calls
+  them; the phase 6 checklist ticks "Pre-cache" on the strength of the
+  code alone. Clicked rifffs load on demand, and every click re-fetches
+  the rifff's stem documents. All of this is deliberately deferred to
+  Phase 9 in `PLAN.md` (moved 2026-09-17, so the timeline editor and a
+  UI overhaul come first). Don't start it early.
 - Storage-management UI (eviction policy, per-jam totals, "clear cache") is
   post-v1 — see `CLAUDE.md`.
 
