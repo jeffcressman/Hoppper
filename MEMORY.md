@@ -312,6 +312,11 @@ Newest entries at the top of each section. Date entries absolutely
   My Jams only call `jams.refresh()` while `listing` is null, and Settings →
   Log out clears it. A jam joined elsewhere shows up after the next log-in or
   restart. That's server etiquette, not an oversight.
+- **A splat layer is the stem's waveform wrapped round a circle, never its
+  loudness envelope** (user correction, 2026-09-18). An envelope (abs peaks)
+  smooths pads into circles, which is wrong; the min/max per slice, peaks out
+  and troughs in, keeps every stem jagged. Details:
+  `docs/phases/phase-8-redesign-and-editor.md` → "Splats from audio".
 - **Splats are drawn from stem colours** (user's choice, 2026-09-18), so the
   rifff history asks for its stem documents — one batched request per page,
   only for stems not already held. `primaryColour` is AARRGGBB (alpha first),
