@@ -160,7 +160,10 @@ on the Hops page, the rail's Editor (the last take opened), and Stop on a
 recording, which lands the new take in the editor. `HopEditingView` draws the
 layout from `hop-editor/layout.ts`: one lane, or two around a selected hop
 point with each side running on dashed, or the skipped rifffs laid in after
-the point when expanded. Lanes are drawn phase-true (`phaseRow`): at each
+the point when expanded. Lanes fill the timeline's height — two share it around a selected hop
+point, one takes it all (`laneGeometry`, measured as the window resizes;
+changed at the user's request 2026-09-18, when fixed 16 px tracks left them
+small). Lanes are drawn phase-true (`phaseRow`): at each
 moment, the rifff at the grid's position then. Dragging a hop point shows the
 edit as it moves and makes it on release (a click without a move isn't an
 edit). Snap is Beat / Bar / Off; undo is the buttons or Ctrl/Cmd+Z (redo:

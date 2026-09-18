@@ -85,7 +85,7 @@
     </div>
     <p v-if="editor.lastError" class="error" role="alert">{{ editor.lastError }}</p>
 
-    <div class="tl" data-test="timeline" :data-px-per-sec="PX_PER_SEC" @click="clearSelection">
+    <div ref="timelineEl" class="tl" data-test="timeline" :data-px-per-sec="PX_PER_SEC" @click="clearSelection">
       <div class="tl__inner" :style="{ width: `${width}px`, height: `${height}px` }">
         <span v-for="tick in ticks" :key="tick.label" class="tl__tick lwlkc-readout" :style="{ left: `${tick.x}px` }">
           {{ tick.label }}
@@ -95,7 +95,7 @@
           v-for="b in drawn"
           :key="b.key"
           :class="['blk', `is-${b.kind}`, { 'is-picked': b.picked }]"
-          :style="{ left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${LANE_H}px` }"
+          :style="{ left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${geometry.laneH}px` }"
           data-test="block"
           @click.stop="onPickBlock(b)"
         >
@@ -115,7 +115,7 @@
           v-for="b in drawn"
           :key="`label-${b.key}`"
           :class="['lbl', 'lwlkc-readout', { 'is-ghost': b.kind === 'ghost' }]"
-          :style="{ left: `${b.x + 3}px`, top: `${b.lane === 1 ? LABEL1_Y : LABEL2_Y}px` }"
+          :style="{ left: `${b.x + 3}px`, top: `${b.lane === 1 ? LABEL1_Y : geometry.label2Y}px` }"
         >
           {{ b.label }}
         </span>
@@ -161,7 +161,7 @@ import {
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
 import { moveHop, segmentsOf, type Snap } from '../hop-editor/edits';
-import { timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
+import { laneGeometry, timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
 import { phaseRow, rowPath } from '../ui/peaks';
 import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
 import { stemColour } from '../ui/stem-colour';
@@ -177,16 +177,19 @@ const stemDocs = useStemDocsStore();
 const performance = usePerformanceStore();
 const jamsStore = useJamsStore();
 
-// Timeline geometry, in px.
+// Timeline geometry, in px. Across: a fixed scale. Down: the lanes fill the
+// timeline's height (laneGeometry), measured as the window changes.
 const PX_PER_SEC = 16;
 const PAD = 20;
-const TRACK_H = 16;
-const LANE_H = TRACK_H * 8;
 const LABEL1_Y = 60;
-const LANE1_Y = 82;
-const LANE2_Y = LANE1_Y + LANE_H + 22;
-const LABEL2_Y = LANE2_Y + LANE_H + 6;
 const x = (sec: number) => PAD + sec * PX_PER_SEC;
+
+const timelineEl = ref<HTMLElement | null>(null);
+const timelineHeight = ref(0);
+let resizeObserver: ResizeObserver | null = null;
+function measure(): void {
+  timelineHeight.value = timelineEl.value?.clientHeight ?? 0;
+}
 
 const SNAPS: { value: Snap; label: string }[] = [
   { value: 'beat', label: 'Beat' },
@@ -276,9 +279,12 @@ const layout = computed(() =>
   ),
 );
 
+const geometry = computed(() => laneGeometry(timelineHeight.value, layout.value.split));
 const width = computed(() => x(layout.value.endSec) + PAD + 60);
-const height = computed(() => (layout.value.split ? LABEL2_Y + 30 : LANE1_Y + LANE_H + 30));
-const linesBottom = computed(() => (layout.value.split ? LANE2_Y + LANE_H : LANE1_Y + LANE_H));
+const height = computed(() => geometry.value.height);
+const linesBottom = computed(() =>
+  layout.value.split ? geometry.value.lane2Y + geometry.value.laneH : geometry.value.lane1Y + geometry.value.laneH,
+);
 
 const ticks = computed(() => {
   const out: { label: string; x: number }[] = [];
@@ -321,7 +327,7 @@ const drawn = computed(() => {
     return {
       ...b,
       x: x(b.startSec),
-      y: b.lane === 1 ? LANE1_Y : LANE2_Y,
+      y: b.lane === 1 ? geometry.value.lane1Y : geometry.value.lane2Y,
       w: Math.max(2, (b.endSec - b.startSec) * PX_PER_SEC),
       rows: rowsFor(b),
       label: doc ? `${formatTime(doc.createdAt)} · ${doc.userName}` : b.riffId,
@@ -510,8 +516,14 @@ function onKey(e: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKey);
   frame = requestAnimationFrame(follow);
+  measure();
+  if (typeof ResizeObserver !== 'undefined' && timelineEl.value) {
+    resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(timelineEl.value);
+  }
 });
 onUnmounted(() => {
+  resizeObserver?.disconnect();
   window.removeEventListener('keydown', onKey);
   cancelAnimationFrame(frame);
   dragCleanup?.();

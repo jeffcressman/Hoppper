@@ -68,6 +68,7 @@ vi.mock('vue-router', async (orig) => ({
 
 import * as stores from '../../src/stores';
 import HopEditingView from '../../src/views/HopEditingView.vue';
+import { laneGeometry } from '../../src/hop-editor/layout';
 
 const editor = (stores as unknown as { __editor: typeof editorStub }).__editor;
 const recorder = (stores as unknown as { __recorder: typeof recorderStub }).__recorder;
@@ -221,5 +222,25 @@ describe('HopEditingView', () => {
     editor.lastError = 'Couldn’t save the hop: disk full';
     const wrapper = await mounted();
     expect(wrapper.text()).toContain('disk full');
+  });
+
+  it('fills the timeline’s height with the lanes — both of them, once split', async () => {
+    const tall = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.dataset.test === 'timeline' ? 700 : 0;
+      },
+    });
+    try {
+      const wrapper = await mounted();
+      const blockHeight = () => parseFloat((all(wrapper, 'block')[0]!.element as HTMLElement).style.height);
+      expect(blockHeight()).toBe(laneGeometry(700, false).laneH);
+      await pin(wrapper, 1).trigger('click');
+      expect(blockHeight()).toBe(laneGeometry(700, true).laneH);
+      expect(blockHeight()).toBeGreaterThan(200);
+    } finally {
+      if (tall) Object.defineProperty(HTMLElement.prototype, 'clientHeight', tall);
+    }
   });
 });

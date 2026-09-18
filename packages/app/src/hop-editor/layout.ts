@@ -121,3 +121,40 @@ export function timelineLayout(
   const endSec = Math.max(...blocks.map((b) => b.endSec));
   return { blocks, pins, split: true, endSec };
 }
+
+// ── Vertical geometry ────────────────────────────────────────────────────
+
+/** Where the first lane starts, below the ruler, hop points and labels. */
+export const LANE_TOP = 82;
+/** Eight tracks at 16 px: the smallest a lane gets before the timeline scrolls. */
+export const MIN_LANE_H = 128;
+/** Between the two lanes, room for the hop lines to cross. */
+const LANE_GAP = 22;
+/** The second lane's labels sit below it. */
+const LABEL_H = 24;
+/** Room for the horizontal scrollbar and a little air. */
+const FOOT = 16;
+
+export interface LaneGeometry {
+  laneH: number;
+  lane1Y: number;
+  lane2Y: number;
+  /** Top of the labels under the second lane. */
+  label2Y: number;
+  /** Everything's height: at least what was available, unless lanes hit their minimum. */
+  height: number;
+}
+
+/**
+ * Lanes fill the timeline's height: two share it around a selected hop
+ * point, one takes it all. `availablePx` is the timeline's inner height.
+ */
+export function laneGeometry(availablePx: number, split: boolean): LaneGeometry {
+  const room = availablePx - LANE_TOP - FOOT - (split ? LANE_GAP + LABEL_H : 0);
+  const laneH = Math.max(MIN_LANE_H, Math.floor(split ? room / 2 : room));
+  const lane1Y = LANE_TOP;
+  const lane2Y = lane1Y + laneH + LANE_GAP;
+  const label2Y = lane2Y + laneH + 6;
+  const height = split ? label2Y + LABEL_H - 6 + FOOT : lane1Y + laneH + FOOT;
+  return { laneH, lane1Y, lane2Y, label2Y, height };
+}
