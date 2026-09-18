@@ -263,9 +263,21 @@ Newest entries at the top of each section. Date entries absolutely
   `project resources/Design/Canvas/`, published at
   https://claude.ai/artifact/DG5RrdPN1TJBudUkFHQShU. To change it, edit
   `Main.dc.html` and re-run `/design`'s seed step; never edit the seeded
-  `hoppper-app-redesign.html`. Public Jams, My Jams, Hops and Settings are
-  designed. Hop Recording and Hop Editing are deliberately placeholder pages.
-  All jam and hop data in it is sample data.
+  `hoppper-app-redesign.html`. Every page in the sketches is designed; Account
+  is the only placeholder. All jam, rifff and hop data in it is generated
+  sample data.
+- **Test seam for the canvas:** there is no browser in the container, but the
+  artboard's `<script data-dc-script>` runs in Node with a stub `DCLogic`
+  (`setState` merges, `window` listeners captured). Calling `renderVals()`
+  and its handlers exercises every flow; that's how the 2026-09-18 pass was
+  checked.
+- **Hop editing model in the canvas (open for user review, 2026-09-18):** a hop
+  is a list of `{rifff, bars}` segments with hop points between them. Dragging
+  point k moves bars between segments k-1 and k, snapping to the bar. Delete
+  removes the rifff that point introduced. Expand shows up to 5 rifffs from
+  the jam history between the two rifffs. Add inserts the picked skipped
+  rifff. Duplicate copies a picked segment. These rules are my reading of the
+  sketches, not a confirmed spec.
 - Public Jams and My Jams both need a session: `listJams` calls
   `requireValidSession`, and the joinable list is an authenticated call. So
   the logged-out state is a login prompt, not a browsable grid.
