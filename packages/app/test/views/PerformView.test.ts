@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { reactive } from 'vue';
 
 const jamsStub = vi.hoisted(() => ({
   profilesById: new Map<string, { displayName: string; bio?: string }>(),
@@ -28,7 +29,9 @@ const performanceStub = vi.hoisted(() => ({
 
 const recorderStub = vi.hoisted(() => ({
   isRecording: false,
+  isArmed: false,
   isPlaying: false,
+  playingId: null as string | null,
   saved: [] as Array<{
     id: string;
     title: string;
@@ -47,13 +50,19 @@ const recorderStub = vi.hoisted(() => ({
   delete: vi.fn(async () => {}),
 }));
 
-vi.mock('../../src/stores', () => ({
-  useSessionStore: () => ({}),
-  useJamsStore: () => jamsStub,
-  useCurrentJamStore: () => currentJamStub,
-  usePerformanceStore: () => performanceStub,
-  useRecorderStore: () => recorderStub,
-}));
+// The recorder stub is served reactive, like a real Pinia store, so a test
+// can change its state after mount and watchers see it. reactive() of the same
+// object is always the same proxy.
+vi.mock('../../src/stores', async () => {
+  const { reactive: toReactive } = await import('vue');
+  return {
+    useSessionStore: () => ({}),
+    useJamsStore: () => jamsStub,
+    useCurrentJamStore: () => currentJamStub,
+    usePerformanceStore: () => performanceStub,
+    useRecorderStore: () => toReactive(recorderStub),
+  };
+});
 
 const routeParams = vi.hoisted(() => ({ jamId: 'band1' as string }));
 vi.mock('vue-router', async (orig) => {
@@ -86,7 +95,9 @@ beforeEach(() => {
   performanceStub.stop.mockReset();
 
   recorderStub.isRecording = false;
+  recorderStub.isArmed = false;
   recorderStub.isPlaying = false;
+  recorderStub.playingId = null;
   recorderStub.saved = [];
   recorderStub.start.mockReset();
   recorderStub.stop.mockReset();
@@ -134,6 +145,41 @@ describe('PerformView', () => {
     expect(performanceStub.hopTo).toHaveBeenCalledWith('band1', riff);
   });
 
+  it('pulses the row of each rifff still loading after its click', async () => {
+    // The row, not just its button: a pulsing button alone was too subtle to
+    // notice (2026-09-17).
+    currentJamStub.riffPage = [
+      { riffId: 'r1', bpm: 120, slots: [] },
+      { riffId: 'r2', bpm: 120, slots: [] },
+      { riffId: 'r3', bpm: 120, slots: [] },
+    ];
+    const loads = new Map<string, () => void>();
+    performanceStub.hopTo.mockImplementation(
+      (_jam: string, r: { riffId: string }) =>
+        new Promise((resolve) =>
+          loads.set(r.riffId, () =>
+            resolve({ kind: 'started', riffId: r.riffId, whenSec: 0, atSec: 0 }),
+          ),
+        ),
+    );
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    const hop = () => wrapper.findAll('[data-test="hop"]');
+    const loadingRows = () =>
+      wrapper.findAll('[data-test="riff-row"]').map((r) => r.classes().includes('loading'));
+
+    await hop()[0]!.trigger('click');
+    await hop()[1]!.trigger('click');
+    expect(loadingRows()).toEqual([true, true, false]);
+
+    loads.get('r1')!();
+    await flushPromises();
+    expect(loadingRows()).toEqual([false, true, false]);
+    loads.get('r2')!();
+    await flushPromises();
+    expect(loadingRows()).toEqual([false, false, false]);
+  });
+
   it('shows the busy badge on the riff that returned not-ready', async () => {
     currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
     performanceStub.hopTo.mockResolvedValue({
@@ -166,6 +212,52 @@ describe('PerformView', () => {
     expect(stopBtn.exists()).toBe(true);
     await stopBtn.trigger('click');
     expect(performanceStub.stop).toHaveBeenCalled();
+  });
+
+  it('Stop during a replay cancels the rest of the replay, not just the audio', async () => {
+    // Stopping only the engine left the replay's later hops scheduled, and
+    // the next one started the audio again.
+    performanceStub.state = 'playing';
+    recorderStub.isPlaying = true;
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    await wrapper.find('[data-test="stop"]').trigger('click');
+    await flushPromises();
+    expect(recorderStub.stopPlayback).toHaveBeenCalled();
+    expect(performanceStub.stop).toHaveBeenCalled();
+  });
+
+  it('Stop is offered while a replay is still loading, before any audio', async () => {
+    performanceStub.state = 'idle';
+    recorderStub.isPlaying = true;
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    expect(wrapper.find('[data-test="stop"]').exists()).toBe(true);
+  });
+
+  it('Stop while recording ends the recording too, and saves it', async () => {
+    performanceStub.state = 'playing';
+    recorderStub.isRecording = true;
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    await wrapper.find('[data-test="stop"]').trigger('click');
+    await flushPromises();
+    expect(performanceStub.stop).toHaveBeenCalled();
+    expect(recorderStub.stop).toHaveBeenCalled();
+  });
+
+  it('highlights the row of the rifff that is playing', async () => {
+    performanceStub.state = 'playing';
+    performanceStub.currentRiffId = 'r2';
+    currentJamStub.riffPage = [
+      { riffId: 'r1', bpm: 120, slots: [] },
+      { riffId: 'r2', bpm: 120, slots: [] },
+    ];
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    const rows = wrapper.findAll('[data-test="riff-row"]');
+    expect(rows[0]!.classes()).not.toContain('current');
+    expect(rows[1]!.classes()).toContain('current');
   });
 
   it('Stop button is hidden when state is idle', async () => {
@@ -230,6 +322,65 @@ describe('PerformView', () => {
       expect(recorderStub.start).toHaveBeenCalledWith('band1');
     });
 
+    it('clicking Record stops whatever is playing first', async () => {
+      // Every take starts at the beginning of a rifff, so the first click
+      // after Record has to be a cold start.
+      performanceStub.state = 'playing';
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="record"]').trigger('click');
+      expect(performanceStub.stop).toHaveBeenCalled();
+      expect(recorderStub.start).toHaveBeenCalledWith('band1');
+      expect(performanceStub.stop.mock.invocationCallOrder[0]).toBeLessThan(
+        recorderStub.start.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('clicking Record during a replay stops the replay first', async () => {
+      recorderStub.isPlaying = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="record"]').trigger('click');
+      expect(recorderStub.stopPlayback).toHaveBeenCalled();
+      expect(recorderStub.stopPlayback.mock.invocationCallOrder[0]).toBeLessThan(
+        recorderStub.start.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('while armed, shows that it is waiting for the first rifff, with no clock', async () => {
+      recorderStub.isRecording = true;
+      recorderStub.isArmed = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      expect(wrapper.find('[data-test="recording-waiting"]').text()).toBe(
+        'Waiting for first rifff…',
+      );
+      expect(wrapper.find('[data-test="recording-elapsed"]').exists()).toBe(false);
+    });
+
+    it('starts the elapsed clock at the first rifff, not at Record', async () => {
+      vi.useFakeTimers();
+      try {
+        recorderStub.isRecording = true;
+        recorderStub.isArmed = true;
+        const wrapper = mount(PerformView);
+        await flushPromises();
+        // Time spent waiting for the first click isn't part of the take.
+        vi.advanceTimersByTime(5000);
+
+        // The first rifff is clicked.
+        reactive(recorderStub).isArmed = false;
+        await flushPromises();
+        expect(wrapper.find('[data-test="recording-waiting"]').exists()).toBe(false);
+        expect(wrapper.find('[data-test="recording-elapsed"]').text()).toBe('0:00');
+        vi.advanceTimersByTime(1500);
+        await flushPromises();
+        expect(wrapper.find('[data-test="recording-elapsed"]').text()).toBe('0:01');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('shows a Stop Recording button while recording', async () => {
       recorderStub.isRecording = true;
       const wrapper = mount(PerformView);
@@ -244,6 +395,36 @@ describe('PerformView', () => {
       await wrapper.find('[data-test="stop-recording"]').trigger('click');
       await flushPromises();
       expect(recorderStub.stop).toHaveBeenCalled();
+    });
+
+    it('clicking Stop Recording stops playback too', async () => {
+      performanceStub.state = 'playing';
+      recorderStub.isRecording = true;
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      await wrapper.find('[data-test="stop-recording"]').trigger('click');
+      await flushPromises();
+      expect(performanceStub.stop).toHaveBeenCalled();
+    });
+
+    it('highlights the saved sequence that is replaying', async () => {
+      const take = (id: string) => ({
+        schemaVersion: 1 as const,
+        id,
+        title: `Take ${id}`,
+        jamId: 'band1',
+        recordedAt: '',
+        durationSec: 30,
+        hops: [],
+      });
+      recorderStub.saved = [take('a'), take('b')];
+      recorderStub.isPlaying = true;
+      recorderStub.playingId = 'b';
+      const wrapper = mount(PerformView);
+      await flushPromises();
+      const rows = wrapper.findAll('[data-test="saved-row"]');
+      expect(rows[0]!.classes()).not.toContain('playing');
+      expect(rows[1]!.classes()).toContain('playing');
     });
 
     it('renders a row per saved sequence', async () => {

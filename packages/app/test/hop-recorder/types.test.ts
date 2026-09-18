@@ -77,6 +77,25 @@ describe('parseSequence', () => {
     expect(() => parseSequence(bad)).toThrow(/transitionMs/i);
   });
 
+  it('keeps a hop\'s quantise grid, so replay can hold it as it was held live', () => {
+    const seq = fixture();
+    seq.hops[1] = { ...seq.hops[1]!, quantise: 'beat' };
+    seq.hops[2] = { ...seq.hops[2]!, quantise: 'bar' };
+    const parsed = parseSequence(serializeSequence(seq));
+    expect(parsed.hops.map((h) => h.quantise)).toEqual([undefined, 'beat', 'bar']);
+    // An unquantised hop has no key at all, as in sequences saved before it.
+    expect('quantise' in parsed.hops[0]!).toBe(false);
+    expect(serializeSequence(fixture())).not.toContain('quantise');
+  });
+
+  it('rejects an unknown quantise grid', () => {
+    const bad = JSON.stringify({
+      ...fixture(),
+      hops: [{ tSec: 0, riffId: 'r', jamId: 'j', transitionMs: 0, quantise: 'bars' }],
+    });
+    expect(() => parseSequence(bad)).toThrow(/quantise/i);
+  });
+
   it('rejects non-string ids', () => {
     const bad = JSON.stringify({ ...fixture(), id: 42 });
     expect(() => parseSequence(bad)).toThrow(/id/i);

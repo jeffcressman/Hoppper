@@ -43,6 +43,9 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
 
   let state: PlayerState = 'idle';
   let cancels: (() => void)[] = [];
+  // Bumped by every play() and stop(), so a play() still loading can tell it
+  // has been stopped or replaced.
+  let session = 0;
   let resolved = new Map<
     RiffCouchID,
     { riff: RiffDocument; stems: ResolvedStem[] }
@@ -81,6 +84,7 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
       }
       void engine.hopTo(ev.jamId, entry.riff, entry.stems, {
         crossfadeMs: ev.transitionMs,
+        ...(ev.quantise === undefined ? {} : { quantise: ev.quantise }),
       });
 
       // Schedule the next hop, or the final stop at durationSec.
@@ -121,17 +125,23 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
         throw new Error('Cannot play sequence with no hops');
       }
       setState('playing');
+      const thisSession = ++session;
       resolved = new Map();
 
       // Warm the first riff plus the next `warmAhead` riffs.
       const initialWarm = seq.hops.slice(0, warmAhead + 1);
       await Promise.all(initialWarm.map((ev) => warmHop(seq.jamId, ev)));
 
+      // Stop may have been pressed while the first rifffs were loading. It has
+      // nothing scheduled to cancel yet, so the replay has to notice itself.
+      if (session !== thisSession) return;
+
       const t0 = clock();
       scheduleHop(seq, 0, t0);
     },
 
     stop() {
+      session++;
       clearAll();
       engine.stop();
       setState('idle');

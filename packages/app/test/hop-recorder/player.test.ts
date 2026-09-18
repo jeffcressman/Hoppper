@@ -76,6 +76,7 @@ function mockEngine(): MockEngine {
         kind: 'started',
         riffId: r.riffId,
         whenSec: 0,
+        atSec: 0,
       }),
     ),
     stop: vi.fn(),
@@ -215,6 +216,34 @@ describe('createHopPlayer', () => {
     );
   });
 
+  it('holds a quantised hop to the grid it was held to live', async () => {
+    // The take registers when the hop was made; live, the engine then held it
+    // to the next beat. Replay's grid starts at hop 0 as the live one did, so
+    // holding again lands it on the same beat.
+    const clock = { t: 0 };
+    const sched = fakeScheduler(clock);
+    const player = createHopPlayer({
+      engine,
+      resolveRiff,
+      clock: () => clock.t,
+      scheduler: sched,
+    });
+    const seq = sequence();
+    seq.hops[1] = { ...seq.hops[1]!, quantise: 'beat' };
+    await player.play(seq);
+    await sched.advance(0);
+    await sched.advance(10000);
+    expect(engine.hopTo).toHaveBeenLastCalledWith(JAM, riff('r2'), expect.any(Array), {
+      crossfadeMs: 250,
+      quantise: 'beat',
+    });
+    await sched.advance(10000);
+    // An unquantised hop replays without one.
+    expect(engine.hopTo).toHaveBeenLastCalledWith(JAM, riff('r3'), expect.any(Array), {
+      crossfadeMs: 250,
+    });
+  });
+
   it('stop() cancels all pending hops and calls engine.stop', async () => {
     const clock = { t: 0 };
     const sched = fakeScheduler(clock);
@@ -234,6 +263,33 @@ describe('createHopPlayer', () => {
     // No further hops fire even as time advances.
     await sched.advance(20000);
     expect(engine.hopTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('stop() while the first rifffs are still loading keeps the replay from starting', async () => {
+    const clock = { t: 0 };
+    const sched = fakeScheduler(clock);
+    const warming: (() => void)[] = [];
+    engine.warmRiff.mockImplementation(
+      () => new Promise<void>((resolve) => warming.push(resolve)),
+    );
+    const player = createHopPlayer({
+      engine,
+      resolveRiff,
+      clock: () => clock.t,
+      scheduler: sched,
+    });
+
+    const playing = player.play(sequence());
+    await vi.waitFor(() => expect(warming.length).toBeGreaterThan(0));
+    player.stop();
+    engine.warmRiff.mockImplementation(async () => {});
+    for (const finish of warming) finish();
+    await playing;
+
+    expect(sched.pending).toHaveLength(0);
+    await sched.advance(30000);
+    expect(engine.hopTo).not.toHaveBeenCalled();
+    expect(player.state).toBe('idle');
   });
 
   it('emits state changes through onStateChange', async () => {

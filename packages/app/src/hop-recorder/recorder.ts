@@ -17,11 +17,25 @@ export interface StartOptions {
   title?: string;
 }
 
+/**
+ * `armed` is between Record and the first hop: a session is open and the next
+ * click will be captured, but the take's timeline hasn't begun.
+ */
+export type RecorderState = 'idle' | 'armed' | 'recording';
+
 export interface HopRecorder {
+  readonly state: RecorderState;
+  /** True while armed or recording — i.e. the next hop will be captured. */
   readonly isRecording: boolean;
   start(opts: StartOptions): void;
-  recordHop(event: Omit<HopEvent, 'tSec'>): void;
+  /**
+   * `atSec` is when the hop happened on the recorder's clock — the moment
+   * playback of the rifff began. Defaults to now.
+   */
+  recordHop(event: Omit<HopEvent, 'tSec'>, atSec?: number): void;
+  /** Ends the session. A take stopped while still armed has no hops. */
   stop(): HopSequence;
+  onStateChange(fn: (s: RecorderState) => void): () => void;
 }
 
 interface ActiveSession {
@@ -29,7 +43,8 @@ interface ActiveSession {
   jamId: JamCouchID;
   title: string;
   recordedAt: string;
-  t0: number;
+  /** Clock at the first hop. Null while armed. */
+  t0: number | null;
   hops: HopEvent[];
 }
 
@@ -38,8 +53,22 @@ export function createHopRecorder(opts: HopRecorderOptions): HopRecorder {
   const nowDate = opts.now ?? (() => new Date());
 
   let session: ActiveSession | null = null;
+  const listeners = new Set<(s: RecorderState) => void>();
+
+  function currentState(): RecorderState {
+    if (session === null) return 'idle';
+    return session.t0 === null ? 'armed' : 'recording';
+  }
+
+  function emit(): void {
+    const s = currentState();
+    for (const l of listeners) l(s);
+  }
 
   return {
+    get state() {
+      return currentState();
+    },
     get isRecording() {
       return session !== null;
     },
@@ -54,26 +83,34 @@ export function createHopRecorder(opts: HopRecorderOptions): HopRecorder {
         jamId: startOpts.jamId,
         title: startOpts.title ?? recordedAt,
         recordedAt,
-        t0: clock(),
+        t0: null,
         hops: [],
       };
+      emit();
     },
 
-    recordHop(event) {
+    recordHop(event, atSec) {
       if (session === null) return;
+      // The take begins at its first hop, which is always at 0.
+      const now = atSec ?? clock();
+      const firstHop = session.t0 === null;
+      const t0 = session.t0 ?? now;
+      session.t0 = t0;
       session.hops.push({
-        tSec: clock() - session.t0,
+        tSec: now - t0,
         riffId: event.riffId,
         jamId: event.jamId,
         transitionMs: event.transitionMs,
+        ...(event.quantise === undefined ? {} : { quantise: event.quantise }),
       });
+      if (firstHop) emit();
     },
 
     stop() {
       if (session === null) {
         throw new Error('HopRecorder not recording');
       }
-      const durationSec = clock() - session.t0;
+      const durationSec = session.t0 === null ? 0 : clock() - session.t0;
       const seq: HopSequence = {
         schemaVersion: HOP_SEQUENCE_SCHEMA_VERSION,
         id: session.id,
@@ -84,7 +121,15 @@ export function createHopRecorder(opts: HopRecorderOptions): HopRecorder {
         hops: session.hops,
       };
       session = null;
+      emit();
       return seq;
+    },
+
+    onStateChange(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
     },
   };
 }

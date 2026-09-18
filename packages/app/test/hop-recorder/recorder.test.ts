@@ -3,15 +3,6 @@ import { createHopRecorder } from '../../src/hop-recorder/recorder.js';
 
 const JAM = 'band-test';
 
-function fixedClock(values: number[]): () => number {
-  let i = 0;
-  return () => {
-    const v = values[Math.min(i, values.length - 1)];
-    i += 1;
-    return v;
-  };
-}
-
 function idGen(values: string[]): () => string {
   let i = 0;
   return () => values[Math.min(i++, values.length - 1)];
@@ -29,36 +20,75 @@ describe('createHopRecorder', () => {
     expect(r.isRecording).toBe(true);
   });
 
-  it('records hops with tSec relative to the start clock value', () => {
-    // Clock values consumed: start (=100), hop1 (=105.5), hop2 (=120), stop (=130)
-    const r = createHopRecorder({
-      clock: fixedClock([100, 105.5, 120, 130]),
-      idGen: () => 'seq-1',
-    });
+  it('starts the timeline at the first hop, not at start()', () => {
+    // Record only arms the recorder. Whatever time passes before the first
+    // rifff is clicked is not part of the take, so replay doesn't open on
+    // silence.
+    const clock = { t: 100 };
+    const r = createHopRecorder({ clock: () => clock.t, idGen: () => 'seq-1' });
     r.start({ jamId: JAM });
+    clock.t = 105.5;
     r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    clock.t = 120;
     r.recordHop({ riffId: 'r2', jamId: JAM, transitionMs: 250 });
+    clock.t = 130;
     const seq = r.stop();
 
     expect(seq.hops).toEqual([
-      { tSec: 5.5, riffId: 'r1', jamId: JAM, transitionMs: 0 },
-      { tSec: 20, riffId: 'r2', jamId: JAM, transitionMs: 250 },
+      { tSec: 0, riffId: 'r1', jamId: JAM, transitionMs: 0 },
+      { tSec: 14.5, riffId: 'r2', jamId: JAM, transitionMs: 250 },
     ]);
-    expect(seq.durationSec).toBe(30);
+    expect(seq.durationSec).toBe(24.5);
   });
 
-  it('first hop is tSec=0 when the click coincides with start', () => {
-    // Same clock reading at start() and first recordHop() — user clicked
-    // Record and the first riff in the same tick.
-    const r = createHopRecorder({
-      clock: fixedClock([50, 50, 60]),
-      idGen: () => 'id',
-    });
+  it('registers a hop at the time it is given, not when recordHop runs', () => {
+    // The caller passes the moment playback of the rifff actually began —
+    // after it loaded — so the take lines up with what was heard.
+    const clock = { t: 100 };
+    const r = createHopRecorder({ clock: () => clock.t, idGen: () => 'seq-1' });
     r.start({ jamId: JAM });
-    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    clock.t = 103;
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 }, 102);
+    clock.t = 112;
+    r.recordHop({ riffId: 'r2', jamId: JAM, transitionMs: 250, quantise: 'beat' }, 110.5);
+    clock.t = 120;
     const seq = r.stop();
-    expect(seq.hops[0].tSec).toBe(0);
-    expect(seq.durationSec).toBe(10);
+
+    expect(seq.hops).toEqual([
+      { tSec: 0, riffId: 'r1', jamId: JAM, transitionMs: 0 },
+      { tSec: 8.5, riffId: 'r2', jamId: JAM, transitionMs: 250, quantise: 'beat' },
+    ]);
+    expect(seq.durationSec).toBe(18);
+  });
+
+  it('is armed until the first hop, then recording', () => {
+    const r = createHopRecorder({ clock: () => 0, idGen: () => 'id' });
+    const states: string[] = [];
+    r.onStateChange((s) => states.push(s));
+    expect(r.state).toBe('idle');
+
+    r.start({ jamId: JAM });
+    expect(r.state).toBe('armed');
+    // Armed still counts as recording: the first click must be captured.
+    expect(r.isRecording).toBe(true);
+
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    r.recordHop({ riffId: 'r2', jamId: JAM, transitionMs: 0 });
+    expect(r.state).toBe('recording');
+
+    r.stop();
+    expect(r.state).toBe('idle');
+    expect(states).toEqual(['armed', 'recording', 'idle']);
+  });
+
+  it('stop() while still armed gives an empty take of no length', () => {
+    const clock = { t: 50 };
+    const r = createHopRecorder({ clock: () => clock.t, idGen: () => 'id' });
+    r.start({ jamId: JAM });
+    clock.t = 80;
+    const seq = r.stop();
+    expect(seq.hops).toEqual([]);
+    expect(seq.durationSec).toBe(0);
   });
 
   it('recordHop outside start/stop is a no-op', () => {

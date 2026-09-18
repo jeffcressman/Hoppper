@@ -187,6 +187,28 @@ describe('createAudioEngine', () => {
     }
   });
 
+  it('reports every change of current rifff, not just idle ↔ playing', async () => {
+    // State stays 'playing' across a hop, so onStateChange is silent there —
+    // anything showing which rifff is playing needs this instead.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    const seen: (string | null)[] = [];
+    engine.onRiffChange((id) => seen.push(id));
+
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+    // A not-ready hop changes nothing.
+    await engine.hopTo(JAM, riff('r3'), [stem('missing')]);
+    engine.stop();
+
+    expect(seen).toEqual(['r1', 'r2', null]);
+  });
+
   it('hopTo returns not-ready when any stem buffer is missing', async () => {
     const ctx = createMockContext();
     const loader = mockLoader(new Map()); // empty — peek will miss
@@ -342,6 +364,136 @@ describe('createAudioEngine', () => {
 
     if (result.kind !== 'phase-locked') throw new Error('expected a hop');
     expect(result.whenSec).toBeCloseTo(6, 6);
+  });
+
+  it('stop() silences a rifff that is still fading out, not just the current one', async () => {
+    // A quantised hop keeps the outgoing rifff sounding until the held moment
+    // — up to a bar. Stop pressed in that window must silence it too.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'bar' });
+    engine.stop();
+
+    for (const src of ctx.sources) expect(src.disconnected).toBe(true);
+  });
+
+  it('a hop clicked during a hold replaces the held rifff before it sounds', async () => {
+    // Two clicks inside one hold both land on the same beat. The first
+    // incoming rifff never gets to sound: the outgoing one fades straight
+    // into the second, rather than the first cutting in at full volume.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+      ['c' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'beat' });
+    ctx.currentTime = 4.15;
+    await engine.hopTo(JAM, riff('r3'), [stem('c')], { quantise: 'beat' });
+
+    const [first, held, second] = ctx.sources;
+    // The held rifff is stopped at the click, before its 4.25 start.
+    expect(held!.stoppedAt).toBeCloseTo(4.15, 6);
+    expect(held!.stoppedAt!).toBeLessThan(held!.startedAt!.when);
+    // Its gain is left alone — fading it out would sound it at full volume.
+    expect(ctx.gains[1]!.events.filter((e) => e.kind === 'ramp')).toEqual([
+      { kind: 'ramp', value: 1, time: 4.5 },
+    ]);
+    // The first rifff keeps its fade to the held beat; the new one fades in
+    // over the same window.
+    expect(first!.stoppedAt).toBeCloseTo(4.51, 6);
+    expect(second!.startedAt?.when).toBeCloseTo(4.25, 6);
+    expect(engine.currentRiffId).toBe('r3');
+
+    // And Stop still reaches everything that could sound.
+    engine.stop();
+    expect(first!.disconnected).toBe(true);
+    expect(second!.disconnected).toBe(true);
+  });
+
+  it('reports when it acted on each hop, before any crossfade or hold', async () => {
+    // A recording registers a hop at this moment: it's when playback of the
+    // rifff actually began, however long the rifff took to load.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    ctx.currentTime = 1;
+    const started = await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    const hopped = await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'beat' });
+
+    if (started.kind !== 'started') throw new Error('expected a cold start');
+    if (hopped.kind !== 'phase-locked') throw new Error('expected a hop');
+    expect(started.atSec).toBe(1);
+    expect(hopped.atSec).toBe(4.1);
+  });
+
+  it('schedules a quantised hop at the held moment, not at the click', async () => {
+    // The returned whenSec was right while the audio started at the click:
+    // the crossfade ran immediately and the new rifff played ahead of the grid
+    // by however long the hold was. Assert what reaches the nodes.
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({
+      context: ctx,
+      loader: mockLoader(buffers),
+      defaultCrossfadeMs: 250,
+    });
+
+    // 0.5s beats. Clicked at 4.1: 4.1 + 0.25 crossfade = 4.35, held to 4.5.
+    ctx.currentTime = 0;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 4.1;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'beat' });
+
+    // The crossfade runs 4.25 → 4.5, and the new rifff's playhead reaches the
+    // grid position 4.5 exactly at 4.5.
+    const incoming = ctx.sources[1]!;
+    expect(incoming.startedAt?.when).toBeCloseTo(4.25, 6);
+    expect(incoming.startedAt?.offset).toBeCloseTo(4.25, 6);
+
+    const [outGain, inGain] = ctx.gains;
+    const ramps = (g: MockGain) => g.events.filter((e) => e.kind !== 'cancel');
+    expect(ramps(inGain!)).toEqual([
+      { kind: 'set', value: 0, time: 4.25 },
+      { kind: 'ramp', value: 1, time: 4.5 },
+    ]);
+    expect(ramps(outGain!)).toEqual([
+      { kind: 'set', value: 1, time: 4.25 },
+      { kind: 'ramp', value: 0, time: 4.5 },
+    ]);
   });
 
   it('enters immediately when quantisation is off (the default)', async () => {

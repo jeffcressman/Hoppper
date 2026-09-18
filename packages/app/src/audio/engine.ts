@@ -18,13 +18,17 @@ import type { StemLoader } from './stem-loader.js';
 
 export type AudioEngineState = 'idle' | 'playing';
 
+// `atSec` is the AudioContext time the engine acted on the hop: for a hop,
+// before its crossfade and any quantise hold. It is when the hop happened as
+// far as a recording is concerned — however long the rifff took to load.
 export type HopResult =
-  | { kind: 'started'; riffId: RiffCouchID; whenSec: number }
+  | { kind: 'started'; riffId: RiffCouchID; whenSec: number; atSec: number }
   | {
       kind: 'phase-locked';
       riffId: RiffCouchID;
       whenSec: number;
       offsetSec: number;
+      atSec: number;
     }
   | { kind: 'not-ready'; missingStemIds: StemCouchID[] };
 
@@ -71,6 +75,12 @@ export interface AudioEngine {
   ): Promise<HopResult>;
   stop(): void;
   onStateChange(fn: (s: AudioEngineState) => void): () => void;
+  /**
+   * Fires whenever `currentRiffId` changes: a cold start, every hop, and
+   * `null` on stop. `onStateChange` stays quiet across a hop, since the state
+   * is 'playing' either side of it.
+   */
+  onRiffChange(fn: (riffId: RiffCouchID | null) => void): () => void;
 }
 
 interface ActiveVoice {
@@ -78,6 +88,14 @@ interface ActiveVoice {
   voice: RiffVoice;
   /** The loop this voice plays, kept for the log line's context. */
   loopDurationSec: number;
+  /** When this voice's audio begins — later than the click for a held hop. */
+  startsAt: number;
+}
+
+interface OutgoingVoice {
+  voice: RiffVoice;
+  /** When its scheduled stop takes effect, after which it has torn down. */
+  stopAt: number;
 }
 
 export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
@@ -92,7 +110,12 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   // grid — measuring from the previous hop instead is what put hops off the
   // beat (see docs/phases/phase-6-audio-engine.md).
   let gridOrigin: number | null = null;
+  // Voices hopped away from that may still be sounding: fading out, or held
+  // at full volume until a quantised hop's moment arrives. Stop has to reach
+  // these as well as `current`.
+  let outgoing: OutgoingVoice[] = [];
   const listeners = new Set<(s: AudioEngineState) => void>();
+  const riffListeners = new Set<(riffId: RiffCouchID | null) => void>();
 
   const sec = (n: number): string => `${n.toFixed(2)}s`;
 
@@ -129,6 +152,11 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       `rifff ${riffId} has stems that don't fit its ${sec(loopSec)} loop a whole ` +
         `number of times: ${ragged.join(', ')}`,
     );
+  }
+
+  function emitRiffChange(): void {
+    const riffId = current?.riffId ?? null;
+    for (const l of riffListeners) l(riffId);
   }
 
   function setState(next: AudioEngineState): void {
@@ -274,9 +302,11 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           riffId: riff.riffId,
           voice,
           loopDurationSec: voice.effectiveLoopSec,
+          startsAt: now,
         };
+        emitRiffChange();
         setState('playing');
-        return { kind: 'started', riffId: riff.riffId, whenSec: now };
+        return { kind: 'started', riffId: riff.riffId, whenSec: now, atSec: now };
       }
 
       // Build the new voice first: the loop it actually plays depends on the
@@ -306,18 +336,34 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       });
 
       // We start it `crossfadeSec` early so its playhead reaches
-      // `offsetInNew` at `startWhen`, the phase-anchor moment.
-      const startCallTime = now;
+      // `offsetInNew` at `startWhen`, the phase-anchor moment. Measured back
+      // from `startWhen`, not forward from `now`: a quantised hop is held, and
+      // starting at the click would run the crossfade straight away and put
+      // the new rifff ahead of the grid by the length of the hold.
+      const fadeStart = hop.startWhen - crossfadeSec;
       const callOffset = hop.offsetInNew - crossfadeSec;
-      newVoice.start(startCallTime, callOffset);
-      newVoice.fadeIn(startCallTime, crossfadeSec);
+      newVoice.start(fadeStart, callOffset);
+      newVoice.fadeIn(fadeStart, crossfadeSec);
 
       // Fade the old voice out over the same window and stop it once the fade
       // has landed. The voice disposes itself when the stop takes effect —
       // disposing here would disconnect it mid-fade and cut the hop dead.
+      //
+      // Unless the old voice is itself a held hop that hasn't begun by the
+      // time this fade starts: a second click inside one hold. Fading it would
+      // sound it at full volume (its gain only drops to 0 when its own fade-in
+      // begins), so it is stopped before it starts, and the voice it was
+      // replacing keeps the fade already scheduled for it.
       const old = current;
-      old.voice.fadeOut(now, crossfadeSec);
-      old.voice.stop(hop.startWhen + 0.01);
+      outgoing = outgoing.filter((o) => o.stopAt > now);
+      if (old.startsAt >= fadeStart) {
+        old.voice.stop(now);
+      } else {
+        old.voice.fadeOut(fadeStart, crossfadeSec);
+        const stopAt = hop.startWhen + 0.01;
+        old.voice.stop(stopAt);
+        outgoing.push({ voice: old.voice, stopAt });
+      }
 
       warnOnDeclaredLengthMismatch(riff.riffId, stems, buffers);
       warnOnRaggedStems(riff.riffId, stems, buffers, newVoice.effectiveLoopSec);
@@ -337,17 +383,24 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         riffId: riff.riffId,
         voice: newVoice,
         loopDurationSec: newVoice.effectiveLoopSec,
+        startsAt: fadeStart,
       };
+      emitRiffChange();
       setState('playing');
       return {
         kind: 'phase-locked',
         riffId: riff.riffId,
         whenSec: hop.startWhen,
         offsetSec: hop.offsetInNew,
+        atSec: now,
       };
     },
 
     stop() {
+      // Outgoing voices already have a stop scheduled; disconnecting silences
+      // them now, which is what Stop means.
+      for (const o of outgoing) o.voice.dispose();
+      outgoing = [];
       if (current === null) {
         setState('idle');
         return;
@@ -357,6 +410,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       current.voice.dispose();
       current = null;
       gridOrigin = null;
+      emitRiffChange();
       setState('idle');
     },
 
@@ -364,6 +418,13 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       listeners.add(fn);
       return () => {
         listeners.delete(fn);
+      };
+    },
+
+    onRiffChange(fn) {
+      riffListeners.add(fn);
+      return () => {
+        riffListeners.delete(fn);
       };
     },
   };

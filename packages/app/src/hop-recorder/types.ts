@@ -1,4 +1,5 @@
 import type { JamCouchID, RiffCouchID } from '@hoppper/sdk';
+import type { HopQuantise } from '../audio/engine.js';
 
 export const HOP_SEQUENCE_SCHEMA_VERSION = 1 as const;
 
@@ -7,6 +8,13 @@ export interface HopEvent {
   riffId: RiffCouchID;
   jamId: JamCouchID;
   transitionMs: number;
+  /**
+   * The grid this hop was held to live, if quantised entry was on. `tSec` is
+   * when the hop was made (once its rifff had loaded); replay holds it to the
+   * same grid, so it enters on the beat it entered on live. Absent means
+   * unquantised — and in every sequence saved before this field existed.
+   */
+  quantise?: HopQuantise;
 }
 
 export interface HopSequence {
@@ -39,6 +47,7 @@ export function serializeSequence(seq: HopSequence): string {
       riffId: h.riffId,
       jamId: h.jamId,
       transitionMs: h.transitionMs,
+      ...(h.quantise === undefined ? {} : { quantise: h.quantise }),
     })),
   };
   return JSON.stringify(canonical, null, 2);
@@ -123,10 +132,19 @@ function parseHop(raw: unknown, index: number): HopEvent {
     }
     return v;
   };
-  return {
+  const hop: HopEvent = {
     tSec: want('tSec', 'number') as number,
     riffId: want('riffId', 'string') as RiffCouchID,
     jamId: want('jamId', 'string') as JamCouchID,
     transitionMs: want('transitionMs', 'number') as number,
   };
+  if (h.quantise !== undefined) {
+    if (h.quantise !== 'beat' && h.quantise !== 'bar') {
+      throw new SequenceParseError(
+        `hops[${index}].quantise must be "beat" or "bar", got ${JSON.stringify(h.quantise)}`,
+      );
+    }
+    hop.quantise = h.quantise;
+  }
+  return hop;
 }

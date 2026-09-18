@@ -14,8 +14,14 @@ export interface RecorderDeps {
 
 export function defineRecorderStore(deps: RecorderDeps) {
   return defineStore('recorder', () => {
-    const isRecording = ref(false);
+    // Both follow the HopRecorder: the performance store records hops into it
+    // directly, so the first hop — which ends `armed` — never passes through
+    // this store.
+    const isRecording = ref(deps.recorder.isRecording);
+    const isArmed = ref(deps.recorder.state === 'armed');
     const isPlaying = ref(deps.player.state === 'playing');
+    /** The saved sequence being replayed, for the view to mark. */
+    const playingId = ref<string | null>(null);
     const saved = shallowRef<HopSequence[]>([]);
     const lastError = ref<string | null>(null);
 
@@ -25,6 +31,11 @@ export function defineRecorderStore(deps: RecorderDeps) {
     // throw "already playing".
     deps.player.onStateChange((s) => {
       isPlaying.value = s === 'playing';
+      if (s !== 'playing') playingId.value = null;
+    });
+    deps.recorder.onStateChange((s) => {
+      isRecording.value = s !== 'idle';
+      isArmed.value = s === 'armed';
     });
 
     function start(jamId: JamCouchID, title?: string): void {
@@ -32,13 +43,13 @@ export function defineRecorderStore(deps: RecorderDeps) {
         throw new Error('Cannot start recording while playing');
       }
       deps.recorder.start({ jamId, title });
-      isRecording.value = true;
     }
 
     async function stop(): Promise<HopSequence | null> {
       if (!isRecording.value) return null;
       const seq = deps.recorder.stop();
-      isRecording.value = false;
+      // Stopped before any rifff was clicked: nothing to replay, so no take.
+      if (seq.hops.length === 0) return null;
       try {
         await deps.storage.saveSequence(seq);
         await loadSaved(seq.jamId);
@@ -57,13 +68,23 @@ export function defineRecorderStore(deps: RecorderDeps) {
       if (isRecording.value) {
         throw new Error('Cannot play while recording');
       }
-      await deps.player.play(seq);
-      isPlaying.value = true;
+      const previousId = playingId.value;
+      playingId.value = seq.id;
+      try {
+        await deps.player.play(seq);
+      } catch (err) {
+        playingId.value = previousId;
+        throw err;
+      }
+      // Ask the player rather than assume: Stop may have landed while the
+      // replay was still loading its first rifffs.
+      isPlaying.value = deps.player.state === 'playing';
     }
 
     function stopPlayback(): void {
       deps.player.stop();
       isPlaying.value = false;
+      playingId.value = null;
     }
 
     async function del(jamId: JamCouchID, id: string): Promise<void> {
@@ -73,7 +94,9 @@ export function defineRecorderStore(deps: RecorderDeps) {
 
     return {
       isRecording,
+      isArmed,
       isPlaying,
+      playingId,
       saved,
       lastError,
       start,

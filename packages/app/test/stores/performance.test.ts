@@ -36,10 +36,15 @@ function riff(id: string): RiffDocument {
   };
 }
 
-function mockEngine(): AudioEngine & {
+type MockEngine = AudioEngine & {
   _emit: (s: AudioEngineState) => void;
-} {
+  /** Another caller (the replay player) moved the engine to this rifff. */
+  _emitRiff: (riffId: RiffCouchID | null) => void;
+};
+
+function mockEngine(): MockEngine {
   const listeners = new Set<(s: AudioEngineState) => void>();
+  const riffListeners = new Set<(id: RiffCouchID | null) => void>();
   let state: AudioEngineState = 'idle';
   let currentRiffId: RiffCouchID | null = null;
 
@@ -56,7 +61,7 @@ function mockEngine(): AudioEngine & {
       state = 'playing';
       currentRiffId = r.riffId;
       for (const l of listeners) l(state);
-      return { kind: 'started', riffId: r.riffId, whenSec: 0 };
+      return { kind: 'started', riffId: r.riffId, whenSec: 0, atSec: 0 };
     }),
     stop: vi.fn(() => {
       state = 'idle';
@@ -67,12 +72,20 @@ function mockEngine(): AudioEngine & {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    onRiffChange(fn: (id: RiffCouchID | null) => void) {
+      riffListeners.add(fn);
+      return () => riffListeners.delete(fn);
+    },
     _emit(s: AudioEngineState) {
       state = s;
       for (const l of listeners) l(s);
     },
+    _emitRiff(id: RiffCouchID | null) {
+      currentRiffId = id;
+      for (const l of riffListeners) l(id);
+    },
   };
-  return eng as AudioEngine & { _emit: (s: AudioEngineState) => void };
+  return eng as MockEngine;
 }
 
 function mockPrefetcher(): RiffPrefetcher {
@@ -106,6 +119,27 @@ describe('definePerformanceStore', () => {
 
     engine._emit('playing');
     expect(store.state).toBe('playing');
+  });
+
+  it('follows the engine to each rifff, including hops made by replay', () => {
+    // Replay drives the engine directly, never through store.hopTo, and the
+    // engine stays 'playing' across those hops — so the current rifff has to
+    // come from the engine's per-rifff signal.
+    const engine = mockEngine();
+    const useStore = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(),
+    });
+    const store = useStore();
+
+    engine._emitRiff('r1' as RiffCouchID);
+    engine._emit('playing');
+    expect(store.currentRiffId).toBe('r1');
+    engine._emitRiff('r2' as RiffCouchID);
+    expect(store.currentRiffId).toBe('r2');
+    engine._emitRiff(null);
+    expect(store.currentRiffId).toBeNull();
   });
 
   it('hopTo resolves stems, warms, then hops; on success exposes currentRiffId', async () => {
@@ -212,6 +246,117 @@ describe('definePerformanceStore', () => {
     expect(engine.warmRiff).not.toHaveBeenCalled();
   });
 
+  it('stop() cancels a hop whose rifff is still loading', async () => {
+    // Otherwise the rifff starts playing when it finishes loading, after the
+    // user pressed Stop (or Record, which stops first).
+    const engine = mockEngine();
+    let finishLoading!: () => void;
+    vi.mocked(engine.warmRiff).mockImplementation(
+      () => new Promise<void>((resolve) => (finishLoading = resolve)),
+    );
+    const recorder = {
+      isRecording: true,
+      state: 'armed' as const,
+      start: vi.fn(),
+      recordHop: vi.fn(),
+      stop: vi.fn(),
+      onStateChange: () => () => {},
+    } as unknown as HopRecorder;
+    const useStore = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(async () => [fakeStem('s')]),
+      recorder,
+    });
+    const store = useStore();
+
+    const hop = store.hopTo(JAM, riff('r1'));
+    await vi.waitFor(() => expect(engine.warmRiff).toHaveBeenCalled());
+    store.stop();
+    finishLoading();
+
+    expect(await hop).toEqual({ kind: 'cancelled' });
+    expect(engine.hopTo).not.toHaveBeenCalled();
+    expect(recorder.recordHop).not.toHaveBeenCalled();
+  });
+
+  it('a newer click cancels an older one whose rifff has not started playing', async () => {
+    // Decided 2026-09-17: the latest click wins. Otherwise whichever rifff
+    // finished loading last would play, even if it was clicked first.
+    const engine = mockEngine();
+    const loads = new Map<string, () => void>();
+    vi.mocked(engine.warmRiff).mockImplementation(
+      (_jam, r: RiffDocument) =>
+        new Promise<void>((resolve) => loads.set(r.riffId, resolve)),
+    );
+    const recorder = {
+      isRecording: true,
+      state: 'recording' as const,
+      start: vi.fn(),
+      recordHop: vi.fn(),
+      stop: vi.fn(),
+      onStateChange: () => () => {},
+    } as unknown as HopRecorder;
+    const useStore = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(async () => [fakeStem('s')]),
+      recorder,
+    });
+    const store = useStore();
+
+    const first = store.hopTo(JAM, riff('r1'));
+    await vi.waitFor(() => expect(loads.has('r1')).toBe(true));
+    const second = store.hopTo(JAM, riff('r2'));
+    await vi.waitFor(() => expect(loads.has('r2')).toBe(true));
+
+    // The first click's rifff finishes loading first, and still doesn't play.
+    loads.get('r1')!();
+    expect(await first).toEqual({ kind: 'cancelled' });
+    loads.get('r2')!();
+    expect((await second).kind).toBe('started');
+
+    expect(vi.mocked(engine.hopTo).mock.calls.map((c) => c[1].riffId)).toEqual(['r2']);
+    expect(vi.mocked(recorder.recordHop).mock.calls.map((c) => c[0].riffId)).toEqual(['r2']);
+  });
+
+  it('an overtaken click that then fails to resolve reports nothing', async () => {
+    const engine = mockEngine();
+    let failFirst!: (err: Error) => void;
+    const resolveStems: StemResolver = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<ResolvedStem[]>((_ok, fail) => (failFirst = fail)),
+      )
+      .mockImplementation(async () => [fakeStem('s')]);
+    const useStore = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems,
+    });
+    const store = useStore();
+
+    const first = store.hopTo(JAM, riff('r1'));
+    await store.hopTo(JAM, riff('r2'));
+    failFirst(new Error('offline'));
+
+    expect(await first).toEqual({ kind: 'cancelled' });
+    expect(store.lastError).toBeNull();
+  });
+
+  it('a click after a rifff has started playing hops from it as usual', async () => {
+    const engine = mockEngine();
+    const useStore = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(async () => [fakeStem('s')]),
+    });
+    const store = useStore();
+    expect((await store.hopTo(JAM, riff('r1'))).kind).toBe('started');
+    await store.hopTo(JAM, riff('r2'));
+    expect(vi.mocked(engine.hopTo).mock.calls.map((c) => c[1].riffId)).toEqual(['r1', 'r2']);
+  });
+
   it('stop delegates to engine.stop', () => {
     const engine = mockEngine();
     const useStore = definePerformanceStore({
@@ -262,9 +407,13 @@ describe('definePerformanceStore', () => {
     function mockRecorder(isRecording: boolean): HopRecorder {
       let recording = isRecording;
       return {
+        get state() {
+          return recording ? ('recording' as const) : ('idle' as const);
+        },
         get isRecording() {
           return recording;
         },
+        onStateChange: () => () => {},
         start: vi.fn(() => {
           recording = true;
         }),
@@ -284,25 +433,55 @@ describe('definePerformanceStore', () => {
       };
     }
 
-    it('calls recorder.recordHop when isRecording, before resolving stems', async () => {
+    it('records the hop when its rifff starts playing, at the engine\'s time', async () => {
+      // Not at the click: a rifff that has to load first starts later, and
+      // the take has to line up with what was heard.
       const engine = mockEngine();
+      engine.hopTo = vi.fn(
+        async (_j, r: RiffDocument): Promise<HopResult> => ({
+          kind: 'phase-locked',
+          riffId: r.riffId,
+          whenSec: 7.5,
+          offsetSec: 0,
+          atSec: 7.25,
+        }),
+      );
       const recorder = mockRecorder(true);
-      const resolveStems: StemResolver = vi.fn(async () => [fakeStem('s')]);
       const useStore = definePerformanceStore({
         engine,
         prefetcher: mockPrefetcher(),
-        resolveStems,
+        resolveStems: vi.fn(async () => [fakeStem('s')]),
         recorder,
         defaultCrossfadeMs: 250,
       });
       const store = useStore();
-      const r = riff('r1');
-      await store.hopTo(JAM, r);
-      expect(recorder.recordHop).toHaveBeenCalledWith({
-        riffId: 'r1',
-        jamId: JAM,
-        transitionMs: 250,
+      await store.hopTo(JAM, riff('r1'));
+      expect(recorder.recordHop).toHaveBeenCalledWith(
+        { riffId: 'r1', jamId: JAM, transitionMs: 250 },
+        7.25,
+      );
+      expect(vi.mocked(engine.warmRiff).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(recorder.recordHop).mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('records the quantise grid with the hop when quantised entry is on', async () => {
+      const engine = mockEngine();
+      const recorder = mockRecorder(true);
+      const useStore = definePerformanceStore({
+        engine,
+        prefetcher: mockPrefetcher(),
+        resolveStems: vi.fn(async () => [fakeStem('s')]),
+        recorder,
+        defaultCrossfadeMs: 250,
       });
+      const store = useStore();
+      store.quantiseEntry = true;
+      await store.hopTo(JAM, riff('r1'));
+      expect(recorder.recordHop).toHaveBeenCalledWith(
+        { riffId: 'r1', jamId: JAM, transitionMs: 250, quantise: 'beat' },
+        0,
+      );
     });
 
     it('does NOT call recorder.recordHop when not recording', async () => {
@@ -319,9 +498,9 @@ describe('definePerformanceStore', () => {
       expect(recorder.recordHop).not.toHaveBeenCalled();
     });
 
-    it('records the click even when the engine returns not-ready', async () => {
-      // User's click intent is the artifact — buffering is an audio
-      // outcome, not a performance outcome.
+    it('does not record a click whose rifff never played: not-ready', async () => {
+      // A take holds what was heard. Replaying a hop that never sounded
+      // would play something the performer never heard.
       const engine = mockEngine();
       engine.hopTo = vi.fn(
         async (): Promise<HopResult> => ({
@@ -338,12 +517,10 @@ describe('definePerformanceStore', () => {
       });
       const store = useStore();
       await store.hopTo(JAM, riff('r1'));
-      expect(recorder.recordHop).toHaveBeenCalledTimes(1);
+      expect(recorder.recordHop).not.toHaveBeenCalled();
     });
 
-    it('records the click even when stem resolution throws', async () => {
-      // Same reasoning: the user clicked. The fact that we couldn't
-      // fetch the stem list doesn't change what they did.
+    it('does not record a click whose stems could not be resolved', async () => {
       const engine = mockEngine();
       const recorder = mockRecorder(true);
       const useStore = definePerformanceStore({
@@ -356,7 +533,7 @@ describe('definePerformanceStore', () => {
       });
       const store = useStore();
       await store.hopTo(JAM, riff('r1'));
-      expect(recorder.recordHop).toHaveBeenCalledTimes(1);
+      expect(recorder.recordHop).not.toHaveBeenCalled();
     });
 
     it('works without a recorder injected (recorder is optional)', async () => {

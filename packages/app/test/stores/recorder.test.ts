@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import type { JamCouchID } from '@hoppper/sdk';
 import { defineRecorderStore } from '../../src/stores/recorder';
-import type { HopRecorder } from '../../src/hop-recorder/recorder';
+import type { HopRecorder, RecorderState } from '../../src/hop-recorder/recorder';
 import type { SequenceStorage } from '../../src/hop-recorder/storage';
 import type { HopPlayer } from '../../src/hop-recorder/player';
 import type { HopSequence } from '../../src/hop-recorder/types';
@@ -23,21 +23,36 @@ function fixtureSeq(overrides: Partial<HopSequence> = {}): HopSequence {
 }
 
 function mockRecorder(): HopRecorder {
-  let recording = false;
+  let state: RecorderState = 'idle';
   let lastSeq: HopSequence | null = null;
+  const listeners = new Set<(s: RecorderState) => void>();
+  const emit = (s: RecorderState) => {
+    state = s;
+    for (const l of listeners) l(s);
+  };
   return {
+    get state() {
+      return state;
+    },
     get isRecording() {
-      return recording;
+      return state !== 'idle';
     },
     start: vi.fn((opts) => {
-      recording = true;
-      lastSeq = fixtureSeq({ jamId: opts.jamId, title: opts.title ?? 'Untitled' });
+      lastSeq = fixtureSeq({ jamId: opts.jamId, title: opts.title ?? 'Untitled', hops: [] });
+      emit('armed');
     }),
-    recordHop: vi.fn(),
+    recordHop: vi.fn((event) => {
+      lastSeq!.hops.push({ tSec: lastSeq!.hops.length, ...event });
+      if (state === 'armed') emit('recording');
+    }),
     stop: vi.fn(() => {
-      recording = false;
+      emit('idle');
       return lastSeq!;
     }),
+    onStateChange(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
   };
 }
 
@@ -60,7 +75,11 @@ function mockStorage(): SequenceStorage & {
   };
 }
 
-function mockPlayer(): HopPlayer {
+/**
+ * `loading`, when given, holds play() open after it has gone 'playing' — as
+ * the real player does while it loads the first rifffs.
+ */
+function mockPlayer(loading?: Promise<void>): HopPlayer {
   let state: 'idle' | 'playing' = 'idle';
   const listeners = new Set<(s: 'idle' | 'playing') => void>();
   const emit = (s: 'idle' | 'playing') => {
@@ -73,6 +92,7 @@ function mockPlayer(): HopPlayer {
     },
     play: vi.fn(async () => {
       emit('playing');
+      await loading;
     }),
     stop: vi.fn(() => {
       emit('idle');
@@ -111,11 +131,91 @@ describe('defineRecorderStore', () => {
     });
     const store = useStore();
     store.start(JAM, 'My Title');
+    recorder.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
     await store.stop();
     expect(storage.saveSequence).toHaveBeenCalled();
     expect(store.isRecording).toBe(false);
     // saved list now contains the sequence
     expect(store.saved.length).toBe(1);
+  });
+
+  it('is armed after start() until the first hop is recorded', () => {
+    // The performance store records hops straight into the HopRecorder, so
+    // the store learns about the first one from the recorder, not from a call.
+    const recorder = mockRecorder();
+    const useStore = defineRecorderStore({
+      recorder,
+      storage: mockStorage(),
+      player: mockPlayer(),
+    });
+    const store = useStore();
+    expect(store.isArmed).toBe(false);
+
+    store.start(JAM);
+    expect(store.isArmed).toBe(true);
+    expect(store.isRecording).toBe(true);
+
+    recorder.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    expect(store.isArmed).toBe(false);
+    expect(store.isRecording).toBe(true);
+  });
+
+  it('stop() before any rifff was clicked saves nothing', async () => {
+    const recorder = mockRecorder();
+    const storage = mockStorage();
+    const useStore = defineRecorderStore({
+      recorder,
+      storage,
+      player: mockPlayer(),
+    });
+    const store = useStore();
+    store.start(JAM);
+    const seq = await store.stop();
+    expect(seq).toBeNull();
+    expect(storage.saveSequence).not.toHaveBeenCalled();
+    expect(store.isRecording).toBe(false);
+    expect(store.isArmed).toBe(false);
+  });
+
+  it('tracks which sequence is playing until the replay ends or is stopped', async () => {
+    const player = mockPlayer();
+    const useStore = defineRecorderStore({
+      recorder: mockRecorder(),
+      storage: mockStorage(),
+      player,
+    });
+    const store = useStore();
+    expect(store.playingId).toBeNull();
+
+    await store.play(fixtureSeq({ id: 'take-2' }));
+    expect(store.playingId).toBe('take-2');
+    // The replay reaches its end on its own.
+    player.stop();
+    expect(store.playingId).toBeNull();
+
+    await store.play(fixtureSeq({ id: 'take-3' }));
+    store.stopPlayback();
+    expect(store.playingId).toBeNull();
+  });
+
+  it('stopPlayback() while a replay is still loading leaves nothing marked playing', async () => {
+    let finishLoading!: () => void;
+    const player = mockPlayer(new Promise<void>((resolve) => (finishLoading = resolve)));
+
+    const useStore = defineRecorderStore({
+      recorder: mockRecorder(),
+      storage: mockStorage(),
+      player,
+    });
+    const store = useStore();
+    const playing = store.play(fixtureSeq({ id: 'take-4' }));
+    expect(store.playingId).toBe('take-4');
+    store.stopPlayback();
+    finishLoading();
+    await playing;
+
+    expect(store.isPlaying).toBe(false);
+    expect(store.playingId).toBeNull();
   });
 
   it('start() while playing throws', async () => {

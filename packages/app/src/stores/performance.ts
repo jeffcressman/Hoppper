@@ -38,6 +38,13 @@ export interface PerformanceDeps {
   quantiseGrid?: HopQuantise;
 }
 
+/**
+ * What a click on Hop came to. `cancelled` means the rifff was never played:
+ * while it was still loading, a newer click, Stop, or Record (which stops
+ * first) came in.
+ */
+export type PerformanceHopResult = HopResult | { kind: 'cancelled' };
+
 export function definePerformanceStore(deps: PerformanceDeps) {
   return defineStore('performance', () => {
     const state = ref<AudioEngineState>(deps.engine.state);
@@ -51,44 +58,67 @@ export function definePerformanceStore(deps: PerformanceDeps) {
 
     deps.engine.onStateChange((s) => {
       state.value = s;
-      currentRiffId.value = deps.engine.currentRiffId;
+    });
+    // Every hop, not just idle ↔ playing: replay hops the engine directly,
+    // and the state is 'playing' on both sides of a hop.
+    deps.engine.onRiffChange((riffId) => {
+      currentRiffId.value = riffId;
     });
 
-    async function hopTo(jamId: JamCouchID, riff: RiffDocument): Promise<HopResult> {
+    // Bumped by every click and by stop(). A hop still loading when it moves
+    // on has been overtaken: the latest click wins, so what plays is what the
+    // user last asked for rather than whatever finished loading last.
+    let latestHop = 0;
+
+    async function hopTo(
+      jamId: JamCouchID,
+      riff: RiffDocument,
+    ): Promise<PerformanceHopResult> {
       lastError.value = null;
       missingStems.value = [];
-      // Record the click immediately. The user's intent is the artifact;
-      // buffering or stem-resolution failures are audio outcomes that
-      // don't change what they did. See phase-7-recording-captures-intent.
-      if (deps.recorder?.isRecording) {
-        deps.recorder.recordHop({
-          riffId: riff.riffId,
-          jamId,
-          transitionMs: deps.defaultCrossfadeMs ?? 250,
-        });
-      }
+      const thisHop = ++latestHop;
       let stems: ResolvedStem[];
       try {
         stems = await deps.resolveStems(jamId, riff);
       } catch (err) {
+        if (thisHop !== latestHop) return { kind: 'cancelled' };
         lastError.value = err instanceof Error ? err.message : String(err);
         return { kind: 'not-ready', missingStemIds: [] };
       }
+      if (thisHop !== latestHop) return { kind: 'cancelled' };
       // Warm before hopping — if buffers are absent, the hop returns
       // not-ready and the UI shows a busy badge.
       await deps.engine.warmRiff(jamId, riff, stems);
-      const result = quantiseEntry.value
-        ? await deps.engine.hopTo(jamId, riff, stems, { quantise: quantiseGrid })
+      if (thisHop !== latestHop) return { kind: 'cancelled' };
+      const quantise = quantiseEntry.value ? quantiseGrid : undefined;
+      const result = quantise
+        ? await deps.engine.hopTo(jamId, riff, stems, { quantise })
         : await deps.engine.hopTo(jamId, riff, stems);
       if (result.kind === 'not-ready') {
         missingStems.value = result.missingStemIds;
-      } else {
-        currentRiffId.value = result.riffId;
+        return result;
+      }
+      currentRiffId.value = result.riffId;
+      // A take holds what was heard: the hop registers when its rifff began
+      // playing, after loading, at the engine's own time for it. A click that
+      // never played isn't part of it. Replay re-applies `quantise`, so the
+      // hop is held to the same beat it was held to live.
+      if (deps.recorder?.isRecording) {
+        deps.recorder.recordHop(
+          {
+            riffId: riff.riffId,
+            jamId,
+            transitionMs: deps.defaultCrossfadeMs ?? 250,
+            ...(quantise === undefined ? {} : { quantise }),
+          },
+          result.atSec,
+        );
       }
       return result;
     }
 
     function stop(): void {
+      latestHop++;
       deps.engine.stop();
     }
 

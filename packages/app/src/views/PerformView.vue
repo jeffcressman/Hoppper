@@ -15,7 +15,7 @@
           ▶ {{ performance.currentRiffId }}
         </span>
         <button
-          v-if="performance.state !== 'idle'"
+          v-if="performance.state !== 'idle' || recorder.isPlaying"
           type="button"
           data-test="stop"
           @click="onStop"
@@ -41,7 +41,14 @@
           ■ Stop Recording
         </button>
         <span
-          v-if="recorder.isRecording"
+          v-if="recorder.isArmed"
+          class="rec-waiting"
+          data-test="recording-waiting"
+        >
+          Waiting for first rifff…
+        </span>
+        <span
+          v-else-if="recorder.isRecording"
           class="rec-clock"
           data-test="recording-elapsed"
         >
@@ -67,7 +74,7 @@
         <li
           v-for="seq in recorder.saved"
           :key="seq.id"
-          class="saved-row"
+          :class="['saved-row', { playing: recorder.playingId === seq.id }]"
           data-test="saved-row"
         >
           <button
@@ -105,10 +112,10 @@
           type="button"
           class="hop"
           data-test="hop"
-          :disabled="hopping === riff.riffId"
+          :disabled="loading.has(riff.riffId)"
           @click="onHop(riff)"
         >
-          {{ hopping === riff.riffId ? '…' : 'Hop' }}
+          Hop
         </button>
         <span class="riff-id">{{ riff.riffId }}</span>
         <span class="riff-meta">{{ riff.bpm }} bpm</span>
@@ -145,14 +152,19 @@ const jamId = computed(() => String(route.params.jamId));
 const profile = computed(() => jamsStore.profilesById.get(jamId.value));
 const displayName = computed(() => profile.value?.displayName ?? jamId.value);
 
-const hopping = ref<RiffCouchID | null>(null);
+// Rifffs clicked and still loading. Their hop — and, while recording, the
+// moment it registers — comes when loading finishes, so the row pulses until
+// then. The whole row: a pulsing button alone was too easy to miss.
+const loading = ref(new Set<RiffCouchID>());
 const lastNotReady = ref<RiffCouchID | null>(null);
 const recordingElapsed = ref(0);
 let recordStartedAtMs = 0;
 let recordingTimer: number | null = null;
 
+// The take's timeline begins at the first rifff clicked, not at Record, so
+// the clock waits out the armed state.
 watch(
-  () => recorder.isRecording,
+  () => recorder.isRecording && !recorder.isArmed,
   (isRecording) => {
     if (isRecording) {
       recordStartedAtMs = Date.now();
@@ -183,12 +195,15 @@ onUnmounted(() => {
   currentJam.close();
 });
 
+// Every take starts at the beginning of a rifff: silence what's playing, so
+// the first click after Record is a cold start on a fresh grid.
 function onRecord(): void {
+  stopAudio();
   recorder.start(jamId.value);
 }
 
 async function onStopRecording(): Promise<void> {
-  await recorder.stop();
+  await onStop();
 }
 
 function formatDuration(sec: number): string {
@@ -198,7 +213,7 @@ function formatDuration(sec: number): string {
 }
 
 async function onHop(riff: RiffDocument): Promise<void> {
-  hopping.value = riff.riffId;
+  loading.value.add(riff.riffId);
   lastNotReady.value = null;
   try {
     const result = await performance.hopTo(jamId.value, riff);
@@ -206,18 +221,31 @@ async function onHop(riff: RiffDocument): Promise<void> {
       lastNotReady.value = riff.riffId;
     }
   } finally {
-    hopping.value = null;
+    loading.value.delete(riff.riffId);
   }
 }
 
-function onStop(): void {
+/**
+ * Silence everything. A replay has its remaining hops scheduled, and stopping
+ * only the engine lets the next one start the audio again.
+ */
+function stopAudio(): void {
+  if (recorder.isPlaying) recorder.stopPlayback();
   performance.stop();
+}
+
+// Stop ends whatever is running — playback, a replay or a recording — so it
+// and Stop Recording behave the same while recording.
+async function onStop(): Promise<void> {
+  stopAudio();
+  if (recorder.isRecording) await recorder.stop();
 }
 
 function rowClasses(riff: RiffDocument): Record<string, boolean> {
   return {
     'riff-row': true,
     current: performance.currentRiffId === riff.riffId,
+    loading: loading.value.has(riff.riffId),
   };
 }
 </script>
@@ -278,6 +306,10 @@ header {
 .record.recording {
   color: #b00020;
 }
+.rec-waiting {
+  color: #b00020;
+  font-size: 0.875rem;
+}
 .rec-clock {
   font-family: ui-monospace, monospace;
   color: #b00020;
@@ -336,11 +368,29 @@ header {
   padding: 0.5rem 0;
   border-bottom: 1px solid #eee;
 }
-.riff-row.current {
-  background: #fafffa;
+.riff-row.current,
+.saved-row.playing {
+  background: #fff7c2;
 }
 .hop {
   min-width: 3.5rem;
+}
+.riff-row.loading {
+  animation: riff-loading 0.7s ease-in-out infinite alternate;
+}
+@keyframes riff-loading {
+  from {
+    background: #fff7c2;
+  }
+  to {
+    background: #ffd23f;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .riff-row.loading {
+    animation: none;
+    background: #ffd23f;
+  }
 }
 .riff-id {
   font-family: ui-monospace, monospace;
