@@ -33,9 +33,11 @@ vi.mock('../../src/stores', async () => {
 });
 
 const route = vi.hoisted(() => ({ name: 'hop-recording' as string, params: { jamId: 'band1' } as Record<string, string> }));
+const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('vue-router', async (orig) => ({
   ...(await orig<typeof import('vue-router')>()),
   useRoute: () => route,
+  useRouter: () => ({ push: routerPush }),
 }));
 
 import * as stores from '../../src/stores';
@@ -59,6 +61,7 @@ beforeEach(() => {
   recorderStub.stopPlayback.mockReset();
   route.name = 'hop-recording';
   route.params = { jamId: 'band1' };
+  routerPush.mockReset();
 });
 
 const btn = (w: ReturnType<typeof mount>, t: string) => w.find(`[data-test="${t}"]`);
@@ -193,5 +196,24 @@ describe('TransportBar — quantise and meter', () => {
       wrapper.findAll('[data-test="meter-row"]')[row]!.findAll('.is-lit').length;
     expect(lit(0)).toBe(9);
     expect(lit(1)).toBe(18);
+  });
+});
+
+describe('TransportBar — after a recording', () => {
+  it('stopping a recording opens the new take in the hop editor', async () => {
+    recorder.isRecording = true;
+    recorderStub.stop.mockResolvedValueOnce({ jamId: 'band1', id: 'take-9' } as never);
+    const wrapper = mount(TransportBar);
+    await btn(wrapper, 'stop').trigger('click');
+    await flushPromises();
+    expect(routerPush).toHaveBeenCalledWith({ name: 'hop-editing', params: { jamId: 'band1', id: 'take-9' } });
+  });
+
+  it('stays put when the recording caught nothing', async () => {
+    recorder.isRecording = true;
+    const wrapper = mount(TransportBar);
+    await btn(wrapper, 'record').trigger('click');
+    await flushPromises();
+    expect(routerPush).not.toHaveBeenCalled();
   });
 });

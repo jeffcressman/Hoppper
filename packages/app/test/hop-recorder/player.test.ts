@@ -381,4 +381,15 @@ describe('createHopPlayer', () => {
     const empty: HopSequence = { ...sequence(), hops: [], durationSec: 0 };
     await expect(player.play(empty)).rejects.toThrow(/no hops/i);
   });
+
+  it('says how far into the take a replay is, for the editor’s playhead', async () => {
+    const clock = { t: 100 };
+    const player = createHopPlayer({ engine, resolveRiff, clock: () => clock.t, scheduler: fakeScheduler(clock) });
+    expect(player.positionSec()).toBeNull();
+    await player.play(sequence());
+    clock.t = 107.5;
+    expect(player.positionSec()).toBeCloseTo(7.5, 9);
+    player.stop();
+    expect(player.positionSec()).toBeNull();
+  });
 });

@@ -15,13 +15,16 @@ import MyJamsView from './views/MyJamsView.vue';
 import HopsView from './views/HopsView.vue';
 import SettingsView from './views/SettingsView.vue';
 import PerformView from './views/PerformView.vue';
+import HopEditingView from './views/HopEditingView.vue';
 import './styles/lwlkcing/index.css';
 import './styles/components.css';
 import { initClient } from './client';
 import { createAppRouter } from './router';
 import {
+  initHopEditorStore,
   initPerformanceStore,
   initRecorderStore,
+  useRiffDocsStore,
   useSessionStore,
   useStemDocsStore,
 } from './stores';
@@ -172,9 +175,11 @@ async function bootstrap() {
     fs: tauriFsAdapter(),
     root: sequencesRoot,
   });
+  // Through the rifff-document store: a replay's rifffs are fetched once, not
+  // once per hop, and the editor and the jam pages share them.
+  const riffDocs = useRiffDocsStore();
   const resolveRiff = async (jamId: JamCouchID, riffId: RiffCouchID) => {
-    const riffs = await client.getRiffs(jamId, [riffId]);
-    const riff = riffs[0];
+    const riff = await riffDocs.fetch(jamId, riffId);
     if (!riff) throw new Error(`Rifff not found: ${riffId}`);
     const stems = await resolveStems(jamId, riff);
     return { riff, stems };
@@ -197,6 +202,12 @@ async function bootstrap() {
   });
   log('info', 'boot', 'recorder store initialized');
 
+  initHopEditorStore({
+    storage: sequenceStorage,
+    riffDocs,
+    riffIdsBetween: (jamId, aMs, bMs, limit) => client.getRiffIdsBetween(jamId, aMs, bMs, limit),
+  });
+
   const router = createAppRouter({
     isAuthenticated: () => session.isAuthenticated,
     routes: [
@@ -209,6 +220,13 @@ async function bootstrap() {
         path: '/jams/:jamId',
         name: 'hop-recording',
         component: PerformView,
+        meta: { requiresAuth: true },
+      },
+      // Editing needs a session: a take's rifffs and stems come from Endlesss.
+      {
+        path: '/hops/:jamId/:id',
+        name: 'hop-editing',
+        component: HopEditingView,
         meta: { requiresAuth: true },
       },
     ],

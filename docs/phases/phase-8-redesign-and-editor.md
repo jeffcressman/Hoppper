@@ -153,6 +153,28 @@ lands) and is stored as an exact time with its `quantise` dropped, so replay
 doesn't hold it again; hops moved by a ripple (Delete, Add, Duplicate) keep
 their exact arrival relative to the edit the same way.
 
+**Built** (2026-09-18, steps 2–3). `stores/hop-editor.ts` opens a take,
+applies each operation, saves it at once and keeps the undo history;
+coming back to the take already open keeps that history. The ways in: Edit
+on the Hops page, the rail's Editor (the last take opened), and Stop on a
+recording, which lands the new take in the editor. `HopEditingView` draws the
+layout from `hop-editor/layout.ts`: one lane, or two around a selected hop
+point with each side running on dashed, or the skipped rifffs laid in after
+the point when expanded. Lanes are drawn phase-true (`phaseRow`): at each
+moment, the rifff at the grid's position then. Dragging a hop point shows the
+edit as it moves and makes it on release (a click without a move isn't an
+edit). Snap is Beat / Bar / Off; undo is the buttons or Ctrl/Cmd+Z (redo:
+Shift, or Ctrl+Y); Delete/Backspace deletes the selected point; Escape
+clears. Play replays the take (`HopPlayer`, which now reports its position
+for the playhead).
+
+Expand asks Endlesss for the rifffs committed between the two either side —
+one ranged request on the create-time view
+(`EndlesssClient.getRiffIdsBetween`, CouchDB `startkey`/`endkey`, at most 32
+shown) — then their documents, then their stems. Rifff documents now go
+through `stores/riff-docs.ts`, which keeps them by ID: replay no longer
+fetches each rifff again per hop.
+
 **Drawing.** Stacked tracks for each segment, split into two lanes around a
 selected hop point (outgoing rifff continuing, incoming rifff's run-in, both
 dashed), drawn from cached buffers. Playback is phase-locked to one

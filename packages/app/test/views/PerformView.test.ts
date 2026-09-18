@@ -70,6 +70,7 @@ vi.mock('../../src/stores', async () => {
     usePerformanceStore: () => performanceStub,
     useRecorderStore: () => toReactive(recorderStub),
     useStemDocsStore: () => ({ get: () => undefined, ensure: async () => {} }),
+    useRiffDocsStore: () => ({ remember: () => {} }),
   };
 });
 

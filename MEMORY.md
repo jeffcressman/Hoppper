@@ -308,6 +308,15 @@ Newest entries at the top of each section. Date entries absolutely
   My Jams only call `jams.refresh()` while `listing` is null, and Settings →
   Log out clears it. A jam joined elsewhere shows up after the next log-in or
   restart. That's server etiquette, not an oversight.
+- **`getRiffIdsBetween` (Expand) is the first ranged query on
+  `rifffLoopsByCreateTime`** — CouchDB `startkey`/`endkey` in unix ns. LORE
+  never ranges that view, so as of 2026-09-18 it's unit-tested only; the
+  Slice C smoke test checks it live. If Expand finds nothing where it
+  should, suspect the key's units first (ns keys, ms `createdAt`).
+- **Hop points are placed at *arrival*, not `tSec`** — see
+  `src/hop-editor/edits.ts`. Any new code that positions or moves hops
+  must go through `arrivalSec`/`moveHop`, or quantised and crossfaded hops
+  land in the wrong place.
 - **A splat layer is the stem's waveform wrapped round a circle, never its
   loudness envelope** (user correction, 2026-09-18). An envelope (abs peaks)
   smooths pads into circles, which is wrong; the min/max per slice, peaks out

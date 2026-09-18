@@ -157,4 +157,10 @@ describe('HopsView', () => {
     await wrapper.find('[data-test="browse-public"]').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({ name: 'public-jams' });
   });
+
+  it('Edit opens the take in the hop editor', async () => {
+    const wrapper = mount(HopsView);
+    await rows(wrapper)[0]!.find('[data-test="edit"]').trigger('click');
+    expect(routerPush).toHaveBeenCalledWith({ name: 'hop-editing', params: { jamId: 'band1', id: 'take-1' } });
+  });
 });

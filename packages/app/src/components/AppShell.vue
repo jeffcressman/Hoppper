@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useCurrentJamStore } from '../stores';
+import { useCurrentJamStore, useHopEditorStore } from '../stores';
 import LwIcon from './LwIcon.vue';
 import TransportBar from './TransportBar.vue';
 import type { IconName } from './icons';
@@ -67,6 +67,7 @@ import type { IconName } from './icons';
 const route = useRoute();
 const router = useRouter();
 const currentJam = useCurrentJamStore();
+const editor = useHopEditorStore();
 
 interface RailItem {
   label: string;
@@ -93,8 +94,17 @@ const top = computed<RailItem[]>(() => [
   { label: 'My Jams', icon: 'headphones', active: route.name === 'my-jams', go: () => void router.push({ name: 'my-jams' }) },
   { label: 'Public Jams', icon: 'users', active: route.name === 'public-jams', go: () => void router.push({ name: 'public-jams' }) },
   { label: 'Hops', icon: 'hops', active: route.name === 'hops', go: () => void router.push({ name: 'hops' }) },
-  // The hop editor is Slice C.
-  { label: 'Editor', icon: 'editor', active: false, disabled: true, title: 'Hop editing — coming next', go: () => {} },
+  {
+    label: 'Editor',
+    icon: 'editor',
+    active: route.name === 'hop-editing',
+    disabled: editor.lastOpened === null,
+    title: editor.lastOpened === null ? 'Open a hop to edit first' : undefined,
+    go: () => {
+      const last = editor.lastOpened;
+      if (last) void router.push({ name: 'hop-editing', params: { jamId: last.jamId, id: last.id } });
+    },
+  },
 ]);
 </script>
 

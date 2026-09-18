@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bufferMinMax, bufferPeaks, loopRow, rowPath } from '../../src/ui/peaks';
+import { bufferMinMax, bufferPeaks, loopRow, phaseRow, rowPath } from '../../src/ui/peaks';
 
 function buffer(channels: number[][], sampleRate = 4) {
   return {
@@ -70,5 +70,28 @@ describe('bufferMinMax', () => {
       expect(max[b]!).toBeGreaterThan(0.3);
       expect(min[b]!).toBeLessThan(-0.3);
     }
+  });
+});
+
+describe('phaseRow — a stretch of the take, as heard', () => {
+  // Four slices across a 4 s stem: loud, quiet, quiet, quiet.
+  const peaks = Float32Array.from([1, 0.1, 0.1, 0.1]);
+
+  it('draws what plays at each moment: the grid position wrapped into the loop', () => {
+    // From 4 s to 8 s of a 4 s loop is the whole loop again, from its start.
+    expect(Array.from(phaseRow(peaks, 4, 4, 4, 8, 4))).toEqual([1, expect.closeTo(0.1, 6), expect.closeTo(0.1, 6), expect.closeTo(0.1, 6)]);
+  });
+
+  it('starts mid-loop when a rifff comes in mid-loop — not from its beginning', () => {
+    // Coming in at 3 s of a 4 s loop: the last quarter, then the loud start.
+    expect(Array.from(phaseRow(peaks, 4, 4, 3, 5, 2))).toEqual([expect.closeTo(0.1, 6), 1]);
+  });
+
+  it('repeats a stem shorter than its rifff inside it', () => {
+    const row = Array.from(phaseRow(peaks, 2, 4, 0, 4, 8));
+    // The 2 s stem plays twice across the rifff's 4 s loop: loud at 0 s and 2 s.
+    expect(row[0]).toBe(1);
+    expect(row[4]).toBe(1);
+    expect(row.filter((v) => v === 1)).toHaveLength(2);
   });
 });

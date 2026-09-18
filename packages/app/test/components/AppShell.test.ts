@@ -5,10 +5,12 @@ import { createAppRouter } from '../../src/router';
 
 const currentJamStub = vi.hoisted(() => ({ lastJamId: null as string | null }));
 const sessionStub = vi.hoisted(() => ({ isAuthenticated: true }));
+const editorStub = vi.hoisted(() => ({ lastOpened: null as null | { jamId: string; id: string } }));
 
 vi.mock('../../src/stores', () => ({
   useCurrentJamStore: () => currentJamStub,
   useSessionStore: () => sessionStub,
+  useHopEditorStore: () => editorStub,
 }));
 
 // The transport has tests of its own; here it's only a slot in the bar.
@@ -25,6 +27,7 @@ const routes = [
   { path: '/hops', name: 'hops', component: Page },
   { path: '/settings', name: 'settings', component: Page },
   { path: '/jams/:jamId', name: 'hop-recording', component: Page, meta: { requiresAuth: true } },
+  { path: '/hops/:jamId/:id', name: 'hop-editing', component: Page, meta: { requiresAuth: true } },
 ];
 
 async function mountAt(path: string) {
@@ -43,6 +46,7 @@ const railItem = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label
   rail(wrapper).find((b) => b.text() === label)!;
 
 beforeEach(() => {
+  editorStub.lastOpened = null;
   currentJamStub.lastJamId = null;
   sessionStub.isAuthenticated = true;
 });
@@ -98,10 +102,23 @@ describe('AppShell', () => {
     expect(railItem(wrapper, 'Current Jam').classes()).toContain('is-active');
   });
 
-  it('Editor and Account are not built yet, so they are off', async () => {
+  it('Account isn’t built yet, so it is off', async () => {
+    const { wrapper } = await mountAt('/public');
+    expect(railItem(wrapper, 'Account').attributes('disabled')).toBeDefined();
+  });
+
+  it('Editor is off until a take has been opened in it', async () => {
     const { wrapper } = await mountAt('/public');
     expect(railItem(wrapper, 'Editor').attributes('disabled')).toBeDefined();
-    expect(railItem(wrapper, 'Account').attributes('disabled')).toBeDefined();
+  });
+
+  it('Editor goes back to the last take edited, and is marked while you are there', async () => {
+    editorStub.lastOpened = { jamId: 'band1', id: 'take-1' };
+    const { wrapper, router } = await mountAt('/public');
+    await railItem(wrapper, 'Editor').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/hops/band1/take-1');
+    expect(railItem(wrapper, 'Editor').classes()).toContain('is-active');
   });
 
   it('the gear opens Settings', async () => {

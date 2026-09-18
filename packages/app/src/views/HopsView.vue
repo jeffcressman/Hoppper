@@ -44,8 +44,9 @@
           <button
             type="button"
             class="lw-btn lw-btn--secondary lw-btn--sm"
-            disabled
-            title="Hop editing — coming next"
+            :aria-label="`Edit ${take.seq.title}`"
+            data-test="edit"
+            @click="router.push({ name: 'hop-editing', params: { jamId: take.seq.jamId, id: take.seq.id } })"
           >
             <LwIcon name="edit" />
             Edit

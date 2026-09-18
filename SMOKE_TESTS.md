@@ -261,6 +261,33 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 - [x] **Level meter.** Both bars move with the output — on macOS too (see
       `MEMORY.md` if it stays dark).
 
+## Phase 8 Slice C — hop editor
+
+Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
+
+- [ ] **Ways in.** Stop on a recording lands the new take in the editor;
+      Edit on the Hops page opens a take; afterwards the rail's Editor goes
+      back to it.
+- [ ] **Lanes.** Each rifff shows its eight tracks, drawn where the audio
+      is — a rifff that came in mid-loop starts mid-waveform. Rifffs load
+      without a download if they were played before (log panel).
+- [ ] **Select and drag.** Clicking a hop point splits the lanes, with
+      each side running on dashed. Dragging it moves when the next rifff
+      comes in, snapped to the beat; Bar and Off change the snap. Other hop
+      points don't move. Play afterwards and hear the change on the beat.
+- [ ] **Delete.** Delete (or Backspace) on a selected hop point removes
+      the rifff it brought in and closes the gap.
+- [ ] **Expand and Add.** Expand shows the rifffs the hop skipped, dashed,
+      in commit order. **Check the log:** one `rifffLoopsByCreateTime` GET
+      with `startkey`/`endkey` — the first time that ranged query has run
+      against Endlesss. Pick one and Add puts it in for one loop.
+- [ ] **Duplicate.** Pick a rifff, Duplicate: another copy follows it.
+- [ ] **Undo/redo and saving.** Ctrl/Cmd+Z undoes, Shift+Ctrl/Cmd+Z
+      redoes; edits survive leaving and reopening the take, and the Hops
+      page shows the new length and hop count.
+- [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
+      rifff-document requests the second time.
+
 ---
 
 ## Cross-tempo stems

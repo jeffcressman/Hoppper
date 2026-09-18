@@ -87,6 +87,9 @@ export function defineRecorderStore(deps: RecorderDeps) {
       isPlaying.value = deps.player.state === 'playing';
     }
 
+    /** Seconds into the take being replayed, or null — read every frame by the editor. */
+    const playPosition = () => deps.player.positionSec();
+
     function stopPlayback(): void {
       deps.player.stop();
       isPlaying.value = false;
@@ -111,6 +114,7 @@ export function defineRecorderStore(deps: RecorderDeps) {
       loadSaved,
       loadAll,
       play,
+      playPosition,
       stopPlayback,
       delete: del,
     };

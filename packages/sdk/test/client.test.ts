@@ -500,6 +500,47 @@ describe('EndlesssClient.getRiffIds', () => {
   });
 });
 
+describe('EndlesssClient.getRiffIdsBetween', () => {
+  it('asks for the rifffs committed between two times, in commit order, in one ranged request', async () => {
+    const { fetchImpl, calls } = makeFetch({
+      '/auth/login': () => jsonResponse(validLoginBody),
+      '/rifffLoopsByCreateTime': () =>
+        jsonResponse({
+          total_rows: 9,
+          offset: 3,
+          rows: [
+            { id: 'r-from', key: 1_700_000_000_000_000_000, value: [] },
+            { id: 'r-mid', key: 1_700_000_002_000_000_000, value: [] },
+            { id: 'r-to', key: 1_700_000_005_000_000_000, value: [] },
+          ],
+        }),
+    });
+    const client = new EndlesssClient({ fetch: fetchImpl });
+    await client.login('alice', 'secret');
+
+    const ids = await client.getRiffIdsBetween('band-jam-1', 1_700_000_005_000, 1_700_000_000_000);
+
+    const call = calls.find((c) => c.url.includes('rifffLoopsByCreateTime'))!;
+    // Keys are nanoseconds; the range covers both millisecond times whole.
+    expect(call.url).toContain('startkey=1700000000000000000');
+    expect(call.url).toContain('endkey=1700000005000999999');
+    expect(call.url).toContain('limit=50');
+    expect(call.url).not.toContain('descending=true');
+    expect(ids).toEqual(['r-from', 'r-mid', 'r-to']);
+  });
+
+  it('takes a smaller limit when asked', async () => {
+    const { fetchImpl, calls } = makeFetch({
+      '/auth/login': () => jsonResponse(validLoginBody),
+      '/rifffLoopsByCreateTime': () => jsonResponse({ total_rows: 0, offset: 0, rows: [] }),
+    });
+    const client = new EndlesssClient({ fetch: fetchImpl });
+    await client.login('alice', 'secret');
+    await client.getRiffIdsBetween('band-jam-1', 1, 2, 10);
+    expect(calls.find((c) => c.url.includes('rifffLoopsByCreateTime'))!.url).toContain('limit=10');
+  });
+});
+
 describe('EndlesssClient.getRiffs', () => {
   function rawRiffDoc(id: string, opts?: { active?: number[] }) {
     const slots = Array.from({ length: 8 }, (_, i) => ({

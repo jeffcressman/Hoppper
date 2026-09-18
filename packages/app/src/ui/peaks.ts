@@ -86,3 +86,29 @@ export function bufferMinMax(buffer: PeakSource, bins: number): { min: Float32Ar
   }
   return { min, max };
 }
+
+/**
+ * A stretch of the take, `fromSec`–`toSec` on its grid, as this stem sounds
+ * then, in `bins` slices. Playback is phase-locked to one continuous grid:
+ * at grid time t a rifff plays its loop at t mod its loop length, whenever it
+ * came in — so a rifff entering mid-loop is drawn from mid-loop.
+ */
+export function phaseRow(
+  peaks: Float32Array,
+  stemLoopSec: number,
+  riffLoopSec: number,
+  fromSec: number,
+  toSec: number,
+  bins: number,
+): Float32Array {
+  const out = new Float32Array(Math.max(0, bins));
+  if (!(stemLoopSec > 0) || !(riffLoopSec > 0) || peaks.length === 0 || !(toSec > fromSec)) return out;
+  const span = toSec - fromSec;
+  const wrap = (x: number, n: number) => ((x % n) + n) % n;
+  for (let b = 0; b < bins; b++) {
+    const t = fromSec + ((b + 0.5) / bins) * span;
+    const inStem = wrap(wrap(t, riffLoopSec), stemLoopSec) / stemLoopSec;
+    out[b] = peaks[Math.min(peaks.length - 1, Math.floor(inStem * peaks.length))]!;
+  }
+  return out;
+}

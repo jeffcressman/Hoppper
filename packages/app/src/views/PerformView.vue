@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { RiffCouchID, RiffDocument } from '@hoppper/sdk';
 import {
@@ -52,6 +52,7 @@ import {
   useJamsStore,
   usePerformanceStore,
   useRecorderStore,
+  useRiffDocsStore,
 } from '../stores';
 import RiffJournal from '../components/RiffJournal.vue';
 import MixerPanel from '../components/MixerPanel.vue';
@@ -63,6 +64,13 @@ const jamsStore = useJamsStore();
 const currentJam = useCurrentJamStore();
 const performance = usePerformanceStore();
 const recorder = useRecorderStore();
+const riffDocs = useRiffDocsStore();
+
+// The rifffs this page has fetched serve replay and the editor too.
+watch(
+  () => currentJam.riffPage,
+  (riffs) => riffDocs.remember(riffs),
+);
 
 const jamId = computed(() => String(route.params.jamId));
 const profile = computed(() => jamsStore.profilesById.get(jamId.value));

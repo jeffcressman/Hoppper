@@ -68,12 +68,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { usePerformanceStore, useRecorderStore } from '../stores';
 import LwIcon from './LwIcon.vue';
 import { formatDuration } from '../ui/format';
 
 const route = useRoute();
+const router = useRouter();
 const performance = usePerformanceStore();
 const recorder = useRecorderStore();
 
@@ -95,10 +96,13 @@ function stopAudio(): void {
   performance.stop();
 }
 
-// Stop ends whatever is running — playback, a replay or a recording.
+// Stop ends whatever is running — playback, a replay or a recording. A
+// finished take opens in the hop editor, as the Design Plan has it.
 async function onStop(): Promise<void> {
   stopAudio();
-  if (recorder.isRecording) await recorder.stop();
+  if (!recorder.isRecording) return;
+  const take = await recorder.stop();
+  if (take) await router.push({ name: 'hop-editing', params: { jamId: take.jamId, id: take.id } });
 }
 
 function onPlay(): void {

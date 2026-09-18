@@ -24,6 +24,11 @@ export const ICONS = {
   chevR: [['path', { d: 'm9 6 6 6-6 6' }]],
   edit: [['path', { d: 'M4 20h4L19 9l-4-4L4 16v4z' }], ['path', { d: 'm13.5 6.5 4 4' }]],
   trash: [['path', { d: 'M4 7h16' }], ['path', { d: 'M9 7V4.5h6V7' }], ['path', { d: 'M6.5 7l1 13h9l1-13' }]],
+  expand: [['path', { d: 'M3 12h18' }], ['path', { d: 'm7 8-4 4 4 4' }], ['path', { d: 'm17 8 4 4-4 4' }]],
+  plus: [['path', { d: 'M12 5v14M5 12h14' }]],
+  copy: [['rect', { x: 8, y: 8, width: 12, height: 12, rx: 2 }], ['path', { d: 'M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2' }]],
+  undo: [['path', { d: 'M9 14 4 9l5-5' }], ['path', { d: 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11' }]],
+  redo: [['path', { d: 'm15 14 5-5-5-5' }], ['path', { d: 'M20 9H9.5a5.5 5.5 0 0 0 0 11H13' }]],
   logout: [['path', { d: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3' }], ['path', { d: 'M10 16l-4-4 4-4M6 12h10' }]],
 } satisfies Record<string, El[]>;
 

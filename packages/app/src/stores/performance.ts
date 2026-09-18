@@ -152,6 +152,16 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       deps.engine.stop();
     }
 
+    /**
+     * Load a rifff's stems without playing it — for the hop editor, which
+     * draws rifffs from their audio. Ticks `decodedTick` once they're in.
+     */
+    async function warm(jamId: JamCouchID, riff: RiffDocument): Promise<void> {
+      const stems = await deps.resolveStems(jamId, riff);
+      await deps.engine.warmRiff(jamId, riff, stems);
+      decodedTick.value += 1;
+    }
+
     async function resume(): Promise<PerformanceHopResult | null> {
       const last = lastPlayed.value;
       return last ? hopTo(last.jamId, last.riff) : null;
@@ -194,6 +204,7 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       toggleMute,
       canResume,
       resume,
+      warm,
       hopTo,
       stop,
       prefetchWindow,

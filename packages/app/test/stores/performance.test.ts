@@ -640,3 +640,16 @@ describe('definePerformanceStore — decoded audio', () => {
     expect(s.decodedTick).toBe(before + 1);
   });
 });
+
+describe('definePerformanceStore — loading without playing', () => {
+  it('warm(jamId, riff) loads a rifff’s stems for drawing, and ticks when they are in', async () => {
+    const engine = mockEngine();
+    const resolveStems = vi.fn(async () => [fakeStem('s1')]);
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems })();
+    const before = s.decodedTick;
+    await s.warm(JAM, riff('r1'));
+    expect(engine.warmRiff).toHaveBeenCalledWith(JAM, riff('r1'), [fakeStem('s1')]);
+    expect(engine.hopTo).not.toHaveBeenCalled();
+    expect(s.decodedTick).toBe(before + 1);
+  });
+});

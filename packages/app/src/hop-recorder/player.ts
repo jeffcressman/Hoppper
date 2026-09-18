@@ -33,6 +33,8 @@ export interface HopPlayer {
   readonly state: PlayerState;
   play(sequence: HopSequence): Promise<void>;
   stop(): void;
+  /** Seconds into the take being replayed, or null when not replaying. */
+  positionSec(): number | null;
   /** Subscribe to player state transitions. Returns an unsubscribe fn. */
   onStateChange(fn: (state: PlayerState) => void): () => void;
 }
@@ -42,6 +44,8 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
   const warmAhead = opts.warmAhead ?? 2;
 
   let state: PlayerState = 'idle';
+  // Clock time the replay's first hop was scheduled from: the take's 0.
+  let startedAt: number | null = null;
   let cancels: (() => void)[] = [];
   // Bumped by every play() and stop(), so a play() still loading can tell it
   // has been stopped or replaced.
@@ -107,6 +111,7 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
     const delayMs = Math.max(0, (endAt - clock()) * 1000);
     const cancel = scheduler.schedule(delayMs, () => {
       engine.stop();
+      startedAt = null;
       setState('idle');
     });
     cancels.push(cancel);
@@ -137,11 +142,17 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
       if (session !== thisSession) return;
 
       const t0 = clock();
+      startedAt = t0;
       scheduleHop(seq, 0, t0);
+    },
+
+    positionSec() {
+      return state === 'playing' && startedAt !== null ? clock() - startedAt : null;
     },
 
     stop() {
       session++;
+      startedAt = null;
       clearAll();
       engine.stop();
       setState('idle');

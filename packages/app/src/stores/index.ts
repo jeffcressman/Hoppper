@@ -5,6 +5,8 @@ import { defineCurrentJamStore } from './current-jam';
 import { definePerformanceStore, type PerformanceDeps } from './performance';
 import { defineRecorderStore, type RecorderDeps } from './recorder';
 import { defineStemDocsStore } from './stem-docs';
+import { defineRiffDocsStore } from './riff-docs';
+import { defineHopEditorStore, type HopEditorDeps } from './hop-editor';
 
 // Bind each store factory to the production client lazily, so that store
 // definitions stay tree-shakeable in tests (which never call these) and so
@@ -18,6 +20,8 @@ let _performanceDeps: PerformanceDeps | undefined;
 let _useRecorderStore: ReturnType<typeof defineRecorderStore> | undefined;
 let _recorderDeps: RecorderDeps | undefined;
 let _useStemDocsStore: ReturnType<typeof defineStemDocsStore> | undefined;
+let _useRiffDocsStore: ReturnType<typeof defineRiffDocsStore> | undefined;
+let _useHopEditorStore: ReturnType<typeof defineHopEditorStore> | undefined;
 
 export function useSessionStore() {
   _useSessionStore ??= defineSessionStore(getClient());
@@ -32,6 +36,23 @@ export function useJamsStore() {
 export function useStemDocsStore() {
   _useStemDocsStore ??= defineStemDocsStore(getClient());
   return _useStemDocsStore();
+}
+
+export function useRiffDocsStore() {
+  _useRiffDocsStore ??= defineRiffDocsStore(getClient());
+  return _useRiffDocsStore();
+}
+
+// The editor saves through the Tauri filesystem, only there after bootstrap.
+export function initHopEditorStore(deps: HopEditorDeps): void {
+  _useHopEditorStore = defineHopEditorStore(deps);
+}
+
+export function useHopEditorStore() {
+  if (!_useHopEditorStore) {
+    throw new Error('Hop editor store not initialized — call initHopEditorStore() during bootstrap');
+  }
+  return _useHopEditorStore();
 }
 
 export function useCurrentJamStore() {

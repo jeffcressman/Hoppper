@@ -98,6 +98,7 @@ function mockPlayer(loading?: Promise<void>): HopPlayer {
     stop: vi.fn(() => {
       emit('idle');
     }),
+    positionSec: vi.fn(() => (state === 'playing' ? 3 : null)),
     onStateChange(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -353,5 +354,12 @@ describe('defineRecorderStore', () => {
     await store.loadAll();
     await store.delete('band-B' as JamCouchID, 'b');
     expect(store.allSaved.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('passes on how far into the take a replay is', async () => {
+    const store = defineRecorderStore({ recorder: mockRecorder(), storage: mockStorage(), player: mockPlayer() })();
+    expect(store.playPosition()).toBeNull();
+    await store.play(fixtureSeq());
+    expect(store.playPosition()).toBe(3);
   });
 });
