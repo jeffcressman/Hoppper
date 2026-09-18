@@ -91,8 +91,17 @@ and clock, a stereo level meter from analysers on a new master bus, and the
 Quantise toggle. Hop Recording lost its own controls and saved-takes list;
 the Hops page lists takes.
 
-Still to do: splat spikes drawn from the stems' audio (the peaks exist now),
-and opening a stopped take in Hop Editing (Slice C).
+**Splats from audio** (2026-09-18). Once a stem has been decoded its splat
+layer is its waveform wrapped once around the circle — the stem's peaks tiled
+across the rifff's loop (as short stems repeat), normalised to the stem's
+loudest moment so a quiet stem still shows its shape. A stem not decoded yet
+keeps its seeded spikes. Decoding happens when a rifff is played, so splats
+settle into their real shapes as you play; a stem reused across rifffs shapes
+all of them. The journal redraws on `performance.decodedTick`, which moves
+each time a rifff starts. Peaks are cached per stem (`ui/riff-audio.ts`),
+shared with the waveform.
+
+Still to do: opening a stopped take in Hop Editing (Slice C).
 
 ## Slice C — Hop Editing (the Phase 8 editor)
 

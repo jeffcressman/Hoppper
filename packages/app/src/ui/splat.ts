@@ -3,11 +3,12 @@ import { hash, seededRandom } from './hash';
 import { stemColour } from './stem-colour';
 
 // A rifff drawn the way Endlesss's rifff visualiser draws it, seen from above:
-// one spiky layer per stem, in the stem's own colour
-// (`project resources/Design/Rifff visualiser example.png`). The spikes are
-// seeded by the stem ID for now, so a stem looks the same wherever it's
-// reused; drawing them from the stem's audio can come once waveform peaks
-// exist (Slice B).
+// one layer per stem, in the stem's own colour, its outline the stem's
+// waveform wrapped around the circle
+// (`project resources/Design/Rifff visualiser example.png`). Until a stem's
+// audio has been decoded its outline is spikes seeded by its ID, so a stem
+// looks the same wherever it's reused, and settles into its real shape once
+// played.
 
 export interface SplatLayer {
   /** SVG path in a 100×100 box. */
@@ -25,6 +26,24 @@ export interface Splat {
 const POINTS = 40;
 const MISSING = 'var(--text-4)';
 const WAITING = 'var(--surface-3)';
+
+/**
+ * A layer whose outline is the stem's waveform: loud moments reach out, quiet
+ * ones sit in. Normalised to the stem's own loudest moment, so a quiet stem
+ * still shows its shape; its size comes from its place in the mix. Reaches at
+ * most 1.2× `radius`.
+ */
+function audioLayerPath(shape: Float32Array, radius: number): string {
+  let max = 0;
+  for (const v of shape) max = Math.max(max, v);
+  let d = '';
+  shape.forEach((v, i) => {
+    const a = (i / shape.length) * Math.PI * 2;
+    const rad = radius * (0.5 + 0.7 * (v / max));
+    d += `${i ? 'L' : 'M'}${(50 + rad * Math.cos(a)).toFixed(1)} ${(50 + rad * Math.sin(a)).toFixed(1)}`;
+  });
+  return `${d}Z`;
+}
 
 function layerPath(stemId: string, radius: number): string {
   const r = seededRandom(hash(stemId));
@@ -44,6 +63,11 @@ function layerPath(stemId: string, radius: number): string {
 export function riffSplat(
   riff: RiffDocument,
   docOf: (id: StemCouchID) => StemDocument | null | undefined,
+  /**
+   * The stem's waveform once around the rifff's loop (0..1 per point), if its
+   * audio has been decoded.
+   */
+  shapeOf?: (id: StemCouchID) => Float32Array | undefined,
 ): Splat {
   const playing = riff.slots
     .map((slot, index) => ({ ...slot, index }))
@@ -60,7 +84,10 @@ export function riffSplat(
     if (doc === undefined) pending = true;
     const colour =
       doc === undefined ? WAITING : doc === null ? MISSING : stemColour(doc.primaryColour) ?? MISSING;
-    return { d: layerPath(slot.stemId, base * (1 - rank * 0.1)), colour };
+    const radius = base * (1 - rank * 0.1);
+    const shape = shapeOf?.(slot.stemId);
+    const audible = !!shape && shape.length >= 3 && shape.some((v) => v > 0);
+    return { d: audible ? audioLayerPath(shape, radius) : layerPath(slot.stemId, radius), colour };
   });
   return { layers, pending };
 }

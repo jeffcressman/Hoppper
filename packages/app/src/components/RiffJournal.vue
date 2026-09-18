@@ -36,8 +36,10 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import type { JamCouchID, RiffCouchID, RiffDocument, StemCouchID } from '@hoppper/sdk';
-import { useStemDocsStore } from '../stores';
+import { usePerformanceStore, useStemDocsStore } from '../stores';
 import { riffSplat } from '../ui/splat';
+import { loopRow } from '../ui/peaks';
+import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
 import { userColour } from '../ui/user-colour';
 import { formatDay, formatTime } from '../ui/format';
 import { log } from '../logging/log-store';
@@ -53,6 +55,24 @@ const props = defineProps<{
 const emit = defineEmits<{ hop: [riff: RiffDocument] }>();
 
 const stemDocs = useStemDocsStore();
+const performance = usePerformanceStore();
+
+// Points around a splat drawn from audio.
+const SHAPE_POINTS = 64;
+
+/**
+ * Each decoded stem's waveform once around the rifff's loop, for its splat
+ * layer. A stem reused across rifffs is decoded once and shapes all of them.
+ */
+function shapesFor(riff: RiffDocument): (id: StemCouchID) => Float32Array | undefined {
+  const audio = riffStemAudio(riff, stemDocs.get, performance.bufferFor);
+  const byStem = new Map<StemCouchID, Float32Array>();
+  for (const stem of audio.stems) {
+    if (!stem || byStem.has(stem.stemId)) continue;
+    byStem.set(stem.stemId, loopRow(stemPeaks(stem.stemId, stem.buffer), stem.loopSec, audio.loopSec, SHAPE_POINTS));
+  }
+  return (id) => byStem.get(id);
+}
 
 // One request per page of rifffs for the colours; the store skips every stem
 // it already holds, so a new page asks only for its new stems.
@@ -70,6 +90,8 @@ watch(
 );
 
 const days = computed(() => {
+  // Redrawn after each new rifff starts: its stems have just been decoded.
+  void performance.decodedTick;
   const groups: { label: string; entries: { riff: RiffDocument; time: string; splat: ReturnType<typeof riffSplat> }[] }[] = [];
   for (const riff of props.riffs) {
     const label = formatDay(riff.createdAt);
@@ -78,7 +100,7 @@ const days = computed(() => {
       group = { label, entries: [] };
       groups.push(group);
     }
-    group.entries.push({ riff, time: formatTime(riff.createdAt), splat: riffSplat(riff, stemDocs.get) });
+    group.entries.push({ riff, time: formatTime(riff.createdAt), splat: riffSplat(riff, stemDocs.get, shapesFor(riff)) });
   }
   return groups;
 });

@@ -9,13 +9,30 @@ const stemClient = vi.hoisted(() => ({
   getStemDocuments: vi.fn(),
 }));
 
+// Stems decoded so far, by ID; `decodedTick` moves when one arrives.
+const performanceStub = vi.hoisted(() => ({
+  decoded: new Map<string, unknown>(),
+  decodedTick: 0,
+  bufferFor: (id: string): unknown => performanceStub.decoded.get(id),
+}));
+
 vi.mock('../../src/stores', async () => {
+  const { reactive } = await import('vue');
   const { defineStemDocsStore: define } = await import('../../src/stores/stem-docs');
   const useStemDocsStore = define(stemClient);
-  return { useStemDocsStore };
+  const performance = reactive(performanceStub);
+  return { useStemDocsStore, usePerformanceStore: () => performance, __performance: performance };
 });
 
+import * as stores from '../../src/stores';
 import RiffJournal from '../../src/components/RiffJournal.vue';
+
+const performance = (stores as unknown as { __performance: typeof performanceStub }).__performance;
+
+function decoded() {
+  const data = Float32Array.from({ length: 256 }, (_, i) => (i % 32 < 4 ? 0.9 : 0.05));
+  return { numberOfChannels: 1, length: 256, sampleRate: 16, duration: 16, getChannelData: () => data };
+}
 
 const DAY = (d: number, h: number) => new Date(2026, 8, d, h).getTime();
 
@@ -44,6 +61,8 @@ const riffs = [
 ];
 
 beforeEach(() => {
+  performanceStub.decoded.clear();
+  performance.decodedTick = 0;
   setActivePinia(createPinia());
   stemClient.getStemDocuments.mockReset();
   stemClient.getStemDocuments.mockImplementation(async (_jam: string, ids: string[]) =>
@@ -114,5 +133,25 @@ describe('RiffJournal', () => {
     const wrapper = mountJournal();
     await flushPromises();
     expect(wrapper.findAll('[data-test="hop"]')).toHaveLength(3);
+  });
+
+  describe('splat shapes from the stems’ audio', () => {
+    const points = (d: string) => (d.match(/[ML]/g) ?? []).length;
+
+    it('seeds the shape of a stem not decoded yet', async () => {
+      const wrapper = mountJournal();
+      await flushPromises();
+      expect(points(wrapper.findAll('[data-test="hop"]')[1]!.find('path').attributes('d')!)).toBe(40);
+    });
+
+    it('wraps a decoded stem’s waveform around the splat, once its audio arrives', async () => {
+      const wrapper = mountJournal();
+      await flushPromises();
+      performanceStub.decoded.set('c', decoded());
+      performance.decodedTick += 1;
+      await flushPromises();
+      const d = wrapper.findAll('[data-test="hop"]')[1]!.find('path').attributes('d')!;
+      expect(points(d)).toBe(64);
+    });
   });
 });

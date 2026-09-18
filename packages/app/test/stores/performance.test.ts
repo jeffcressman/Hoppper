@@ -628,3 +628,15 @@ describe('definePerformanceStore — what the page draws from', () => {
     expect(s.bufferFor('s2' as StemCouchID)).toBeUndefined();
   });
 });
+
+describe('definePerformanceStore — decoded audio', () => {
+  it('ticks whenever a rifff starts playing, since its stems are decoded by then — so shapes drawn from audio can refresh', () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    const before = s.decodedTick;
+    engine._emitRiff('r1' as RiffCouchID);
+    expect(s.decodedTick).toBe(before + 1);
+    engine._emitRiff(null);
+    expect(s.decodedTick).toBe(before + 1);
+  });
+});

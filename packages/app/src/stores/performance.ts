@@ -86,8 +86,12 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     });
     // Every hop, not just idle ↔ playing: replay hops the engine directly,
     // and the state is 'playing' on both sides of a hop.
+    // Bumped each time a rifff starts playing: its stems are decoded by then,
+    // so anything drawn from decoded audio (splats) can look again.
+    const decodedTick = ref(0);
     deps.engine.onRiffChange((riffId) => {
       currentRiffId.value = riffId;
+      if (riffId !== null) decodedTick.value += 1;
     });
 
     // Bumped by every click and by stop(). A hop still loading when it moves
@@ -179,6 +183,7 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       playhead,
       levels,
       bufferFor,
+      decodedTick,
       currentRiffId,
       missingStems,
       lastError,

@@ -82,3 +82,47 @@ describe('riffSplat', () => {
     expect(riffSplat(riff([]), docOf)).toEqual({ layers: [], pending: false });
   });
 });
+
+describe('riffSplat — drawn from the stems’ audio', () => {
+  // Distance from the centre of each point of a path, in order.
+  const radii = (d: string) => {
+    const n = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+    const out: number[] = [];
+    for (let i = 0; i < n.length; i += 2) out.push(Math.hypot(n[i]! - 50, n[i + 1]! - 50));
+    return out;
+  };
+
+  it('wraps a decoded stem’s waveform around the circle', () => {
+    const shape = Float32Array.from({ length: 16 }, (_, i) => (i % 2 ? 0 : 0.8));
+    const splat = riffSplat(riff([['bass', 1]]), docOf, (id) => (id === 'bass' ? shape : undefined));
+    const r = radii(splat.layers[0]!.d);
+    expect(r).toHaveLength(16);
+    // Loud points reach out, quiet ones sit in.
+    expect(r[0]!).toBeGreaterThan(r[1]! * 2);
+    expect(Math.abs(r[2]! - r[0]!)).toBeLessThan(0.2); // path coords are rounded to 0.1
+  });
+
+  it('keeps the seeded shape for a stem whose audio isn’t decoded yet', () => {
+    const seeded = riffSplat(riff([['bass', 1]]), docOf);
+    const waiting = riffSplat(riff([['bass', 1]]), docOf, () => undefined);
+    expect(waiting.layers[0]!.d).toBe(seeded.layers[0]!.d);
+  });
+
+  it('keeps the seeded shape for a silent stem, rather than a dot', () => {
+    const seeded = riffSplat(riff([['bass', 1]]), docOf);
+    const silent = riffSplat(riff([['bass', 1]]), docOf, () => new Float32Array(16));
+    expect(silent.layers[0]!.d).toBe(seeded.layers[0]!.d);
+  });
+
+  it('still stays inside its 100×100 box', () => {
+    const loud = Float32Array.from({ length: 64 }, () => 1);
+    const splat = riffSplat(
+      riff(Array.from({ length: 8 }, (_, i) => [`s${i}`, 1] as [string, number])),
+      () => doc('ffffffff'),
+      () => loud,
+    );
+    const coords = splat.layers.flatMap((l) => l.d.match(/-?\d+(\.\d+)?/g)!.map(Number));
+    expect(Math.min(...coords)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...coords)).toBeLessThanOrEqual(100);
+  });
+});

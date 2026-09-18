@@ -31,6 +31,8 @@ const performanceStub = vi.hoisted(() => ({
   hopTo: vi.fn(),
   stop: vi.fn(),
   prefetchWindow: vi.fn(async () => {}),
+  decodedTick: 0,
+  bufferFor: vi.fn(() => undefined),
 }));
 
 const recorderStub = vi.hoisted(() => ({

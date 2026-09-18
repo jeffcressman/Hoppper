@@ -34,7 +34,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { RiffDocument, StemCouchID } from '@hoppper/sdk';
 import { usePerformanceStore, useStemDocsStore } from '../stores';
 import { computeRiffTiming } from '../audio/riff-timing';
-import { bufferPeaks, loopRow, rowPath, type PeakSource } from '../ui/peaks';
+import { loopRow, rowPath } from '../ui/peaks';
+import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
 import { stemColour } from '../ui/stem-colour';
 
 const props = defineProps<{ riff: RiffDocument | null }>();
@@ -43,61 +44,25 @@ const performance = usePerformanceStore();
 const stemDocs = useStemDocsStore();
 
 const BINS = 240;
-const PEAK_BINS = 512;
 
-// A stem's audio never changes, so its peaks are worked out once, ever.
-const peaksCache = new Map<StemCouchID, Float32Array>();
-
-function isPeakSource(b: unknown): b is PeakSource & { duration: number } {
-  return !!b && typeof (b as PeakSource).getChannelData === 'function';
-}
-
-// Each stem in rifff time: a stem from a rifff at another tempo plays at
-// riff.bps / stem.bps (LORE's stemTimeScale), which changes its length.
-const stems = computed(() => {
-  const riff = props.riff;
-  if (!riff) return [];
-  return Array.from({ length: 8 }, (_, slot) => {
-    const s = riff.slots[slot];
-    const stemId = s?.on && s.stemId ? (s.stemId as StemCouchID) : null;
-    const doc = stemId ? stemDocs.get(stemId) : null;
-    const buffer = stemId ? performance.bufferFor(stemId) : undefined;
-    const rate = doc && doc.bps > 0 && riff.bps > 0 ? riff.bps / doc.bps : 1;
-    return {
-      slot,
-      stemId,
-      doc,
-      buffer: isPeakSource(buffer) ? buffer : null,
-      loopSec: isPeakSource(buffer) ? buffer.duration / rate : 0,
-    };
-  });
+// Re-read after each new rifff starts: its stems have just been decoded.
+const audio = computed(() => {
+  void performance.decodedTick;
+  return props.riff ? riffStemAudio(props.riff, stemDocs.get, performance.bufferFor) : null;
 });
-
+const loopSec = computed(() => audio.value?.loopSec ?? 0);
 const timing = computed(() => (props.riff ? computeRiffTiming(props.riff) : null));
-
-// The loop as it plays: the computed length, pushed out to fit its longest
-// stem — as RiffVoice.effectiveLoopSec.
-const loopSec = computed(() =>
-  Math.max(timing.value?.loopDurationSec ?? 0, ...stems.value.map((s) => s.loopSec)),
-);
 
 const rows = computed(() =>
   Array.from({ length: 8 }, (_, slot) => {
-    const s = stems.value[slot];
-    let d = '';
-    if (s?.stemId && s.buffer) {
-      let peaks = peaksCache.get(s.stemId);
-      if (!peaks) {
-        peaks = bufferPeaks(s.buffer, PEAK_BINS);
-        peaksCache.set(s.stemId, peaks);
-      }
-      d = rowPath(loopRow(peaks, s.loopSec, loopSec.value, BINS));
-    }
+    const stem = audio.value?.stems[slot] ?? null;
+    const s = props.riff?.slots[slot];
+    const doc = s?.on && s.stemId ? stemDocs.get(s.stemId as StemCouchID) : null;
     return {
       slot,
-      d,
+      d: stem ? rowPath(loopRow(stemPeaks(stem.stemId, stem.buffer), stem.loopSec, loopSec.value, BINS)) : '',
       muted: performance.slotMuted[slot] ?? false,
-      colour: (s?.doc && stemColour(s.doc.primaryColour)) || 'var(--accent)',
+      colour: (doc && stemColour(doc.primaryColour)) || 'var(--accent)',
     };
   }),
 );

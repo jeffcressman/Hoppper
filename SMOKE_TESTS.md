@@ -232,6 +232,15 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 - [x] **Current rifff ringed.** The playing rifff's splat has the amber
       ring; a rifff still loading pulses.
 
+### Slice B — splats from stem audio
+
+- [ ] **Splats take their real shape once played.** Before a rifff is
+      played its splat has seeded spikes; after you play it, each layer's
+      outline is its stem's waveform (drums spiky on the beats, pads
+      smooth), and other splats that reuse those stems change too.
+- [ ] **No stutter.** Playing a rifff while a long journal is on screen
+      doesn't hitch the audio or the playhead when the splats redraw.
+
 ### Slice B — mixer, waveform, transport
 
 - [x] **Rifffs play at their own mix.** A rifff with a quiet stem sounds
