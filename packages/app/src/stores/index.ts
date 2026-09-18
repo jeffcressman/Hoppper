@@ -4,6 +4,7 @@ import { defineJamsStore } from './jams';
 import { defineCurrentJamStore } from './current-jam';
 import { definePerformanceStore, type PerformanceDeps } from './performance';
 import { defineRecorderStore, type RecorderDeps } from './recorder';
+import { defineStemDocsStore } from './stem-docs';
 
 // Bind each store factory to the production client lazily, so that store
 // definitions stay tree-shakeable in tests (which never call these) and so
@@ -16,6 +17,7 @@ let _usePerformanceStore: ReturnType<typeof definePerformanceStore> | undefined;
 let _performanceDeps: PerformanceDeps | undefined;
 let _useRecorderStore: ReturnType<typeof defineRecorderStore> | undefined;
 let _recorderDeps: RecorderDeps | undefined;
+let _useStemDocsStore: ReturnType<typeof defineStemDocsStore> | undefined;
 
 export function useSessionStore() {
   _useSessionStore ??= defineSessionStore(getClient());
@@ -25,6 +27,11 @@ export function useSessionStore() {
 export function useJamsStore() {
   _useJamsStore ??= defineJamsStore(getClient());
   return _useJamsStore();
+}
+
+export function useStemDocsStore() {
+  _useStemDocsStore ??= defineStemDocsStore(getClient());
+  return _useStemDocsStore();
 }
 
 export function useCurrentJamStore() {

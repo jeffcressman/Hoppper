@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { reactive } from 'vue';
 
+// What the rifff history needs to draw a splat: who committed it, when, and
+// its slots.
+function riffOf(riffId: string, bpm: number) {
+  return { riffId, bpm, userName: 'lwlkc', createdAt: Date.UTC(2026, 8, 14, 12), slots: [] as unknown[] };
+}
+
 const jamsStub = vi.hoisted(() => ({
   profilesById: new Map<string, { displayName: string; bio?: string }>(),
   loadProfile: vi.fn(async () => {}),
@@ -9,7 +15,7 @@ const jamsStub = vi.hoisted(() => ({
 
 const currentJamStub = vi.hoisted(() => ({
   jamId: null as null | string,
-  riffPage: [] as Array<{ riffId: string; bpm: number; slots: unknown[] }>,
+  riffPage: [] as Array<ReturnType<typeof riffOf>>,
   hasMore: false,
   open: vi.fn(async () => {}),
   loadNextPage: vi.fn(async () => {}),
@@ -61,6 +67,7 @@ vi.mock('../../src/stores', async () => {
     useCurrentJamStore: () => currentJamStub,
     usePerformanceStore: () => performanceStub,
     useRecorderStore: () => toReactive(recorderStub),
+    useStemDocsStore: () => ({ get: () => undefined, ensure: async () => {} }),
   };
 });
 
@@ -122,7 +129,7 @@ describe('PerformView', () => {
   });
 
   it('offers older rifffs when the jam has more', async () => {
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     currentJamStub.hasMore = true;
     const wrapper = mount(PerformView);
     await flushPromises();
@@ -131,7 +138,7 @@ describe('PerformView', () => {
   });
 
   it('offers no more rifffs once they are all shown', async () => {
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.find('[data-test="load-more"]').exists()).toBe(false);
@@ -139,8 +146,8 @@ describe('PerformView', () => {
 
   it('renders a Hop button per riff', async () => {
     currentJamStub.riffPage = [
-      { riffId: 'r1', bpm: 120, slots: [] },
-      { riffId: 'r2', bpm: 130, slots: [] },
+      riffOf('r1', 120),
+      riffOf('r2', 130),
     ];
     const wrapper = mount(PerformView);
     await flushPromises();
@@ -149,7 +156,7 @@ describe('PerformView', () => {
   });
 
   it('clicking Hop calls performance.hopTo with the route jamId and the riff', async () => {
-    const riff = { riffId: 'r1', bpm: 120, slots: [] };
+    const riff = riffOf('r1', 120);
     currentJamStub.riffPage = [riff];
     performanceStub.hopTo.mockResolvedValue({
       kind: 'started',
@@ -167,9 +174,9 @@ describe('PerformView', () => {
     // The row, not just its button: a pulsing button alone was too subtle to
     // notice (2026-09-17).
     currentJamStub.riffPage = [
-      { riffId: 'r1', bpm: 120, slots: [] },
-      { riffId: 'r2', bpm: 120, slots: [] },
-      { riffId: 'r3', bpm: 120, slots: [] },
+      riffOf('r1', 120),
+      riffOf('r2', 120),
+      riffOf('r3', 120),
     ];
     const loads = new Map<string, () => void>();
     performanceStub.hopTo.mockImplementation(
@@ -199,7 +206,7 @@ describe('PerformView', () => {
   });
 
   it('shows the busy badge on the riff that returned not-ready', async () => {
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     performanceStub.hopTo.mockResolvedValue({
       kind: 'not-ready',
       missingStemIds: ['s1', 's2'],
@@ -214,7 +221,7 @@ describe('PerformView', () => {
   it('shows current riff id in the header when state is playing', async () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r1';
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.find('[data-test="current-riff"]').text()).toContain('r1');
@@ -223,7 +230,7 @@ describe('PerformView', () => {
   it('Stop button appears when playing and calls performance.stop', async () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r1';
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
     const stopBtn = wrapper.find('[data-test="stop"]');
@@ -268,8 +275,8 @@ describe('PerformView', () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r2';
     currentJamStub.riffPage = [
-      { riffId: 'r1', bpm: 120, slots: [] },
-      { riffId: 'r2', bpm: 120, slots: [] },
+      riffOf('r1', 120),
+      riffOf('r2', 120),
     ];
     const wrapper = mount(PerformView);
     await flushPromises();
@@ -280,7 +287,7 @@ describe('PerformView', () => {
 
   it('Stop button is hidden when state is idle', async () => {
     performanceStub.state = 'idle';
-    currentJamStub.riffPage = [{ riffId: 'r1', bpm: 120, slots: [] }];
+    currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.find('[data-test="stop"]').exists()).toBe(false);

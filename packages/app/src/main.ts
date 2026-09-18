@@ -23,6 +23,7 @@ import {
   initPerformanceStore,
   initRecorderStore,
   useSessionStore,
+  useStemDocsStore,
 } from './stores';
 import { openTokenStore } from './tauri/open-token-store';
 import { tauriFsAdapter } from './tauri/fs-adapter';
@@ -137,6 +138,7 @@ async function bootstrap() {
   const prefetcher = createPrefetchRing({ loader });
   engine.onStateChange((s) => log('info', 'audio', `engine state → ${s}`));
 
+  const stemDocs = useStemDocsStore();
   const resolveStems = async (
     jamId: JamCouchID,
     riff: RiffDocument,
@@ -144,10 +146,12 @@ async function bootstrap() {
     log('debug', 'audio', `resolveStems jam=${jamId} riff=${riff.riffId}`);
     await unlockAudioContext();
     log('debug', 'audio', `AudioContext resumed → ${audioContext.state}`);
-    const resolved = await client.getStemUrls(jamId, riff);
-    const filtered = resolved.filter((r): r is ResolvedStem => r !== null);
-    log('info', 'audio', `resolveStems → ${filtered.length} stems`);
-    return filtered;
+    // Through the stem-document store: the rifff history already fetched
+    // these documents to colour its splats, and they never change, so a hop
+    // on a rifff that's on screen costs no request.
+    const resolved = await stemDocs.resolve(jamId, riff);
+    log('info', 'audio', `resolveStems → ${resolved.length} stems`);
+    return resolved;
   };
 
   const hopRecorder = createHopRecorder({

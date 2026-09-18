@@ -53,14 +53,21 @@ deletes takes from Hops.
 - Top-bar transport, record and quantise wired to the performance and
   recorder stores; a level meter from an `AnalyserNode` on the master bus.
 
-Open question (to settle before building it): **what a splat is drawn
-from.** The design draws one layer per stem in the stem's colour. Colours are
-on the stem documents (`primaryColour`, `isDrum`/`isBass`/…), which the
-history list doesn't otherwise fetch — one batched `_all_docs` request per
-page of rifffs. Real waveform shapes need decoded audio, which we only have
-for rifffs already played. Options: stem documents per page (colour) with a
-seeded shape until the audio is cached, or the rifff document only (layer
-count and gains, no colour, no extra requests).
+**Splats are drawn from stem colours** (decided by the user 2026-09-18). Each
+active stem is a spiky layer in its stem document's `primaryColour` (eight hex
+digits, alpha first — LORE's `ParseHexColour`), louder stems larger and
+underneath; the spikes are seeded by stem ID for now (`ui/splat.ts`). The
+journal asks for its rifffs' stem documents in one batched `_all_docs`
+request per page, through a store that keeps every document by ID and never
+asks twice (`stores/stem-docs.ts`). Hops resolve their stems through the same
+store, so a hop on a rifff that's on screen costs no request — the in-memory
+half of Phase 9's "stop re-fetching immutable data".
+
+Built: the journal (days newest first, splats newest first within a day, the
+committer's initial, the current rifff ringed, Load more at the foot) in the
+Hop Recording layout. Still to come in Slice B: the mixer, the waveform, the
+top-bar transport and meter, and splat spikes drawn from the stems' audio once
+waveform peaks exist.
 
 ## Slice C — Hop Editing (the Phase 8 editor)
 

@@ -10,137 +10,124 @@
       </span>
     </div>
 
-    <div class="lw-view">
-      <div class="controls">
-        <span class="lw-badge" :class="{ 'lw-badge--success': performance.state === 'playing' }" :data-state="performance.state">
-          {{ performance.state }}
-        </span>
+    <div class="rec">
+      <div class="rec__journal">
+        <RiffJournal
+          :jam-id="jamId"
+          :riffs="currentJam.riffPage"
+          :current-riff-id="performance.currentRiffId"
+          :loading-ids="loading"
+          :not-ready-id="lastNotReady"
+          @hop="onHop"
+        />
         <button
-          v-if="performance.state !== 'idle' || recorder.isPlaying"
+          v-if="currentJam.hasMore"
           type="button"
-          class="lw-btn lw-btn--secondary lw-btn--sm"
-          data-test="stop"
-          @click="onStop"
+          class="lw-btn lw-btn--ghost lw-btn--sm"
+          data-test="load-more"
+          :disabled="loadingMore"
+          @click="onLoadMore"
         >
-          <LwIcon name="stop" />
-          Stop
+          {{ loadingMore ? 'Loading…' : 'Load more' }}
         </button>
-        <button
-          v-if="!recorder.isRecording"
-          type="button"
-          class="lw-btn lw-btn--danger lw-btn--sm"
-          data-test="record"
-          @click="onRecord"
-        >
-          <LwIcon name="record" />
-          Record
-        </button>
-        <button
-          v-else
-          type="button"
-          class="lw-btn lw-btn--secondary lw-btn--sm recording"
-          data-test="stop-recording"
-          @click="onStopRecording"
-        >
-          <LwIcon name="stop" />
-          Stop Recording
-        </button>
-        <span v-if="recorder.isArmed" class="lw-badge lw-badge--danger lw-badge--dot" data-test="recording-waiting">
-          Waiting for first rifff…
-        </span>
-        <span
-          v-else-if="recorder.isRecording"
-          class="rec-clock lwlkc-readout"
-          data-test="recording-elapsed"
-        >
-          {{ formatDuration(recordingElapsed) }}
-        </span>
-        <label class="quantise" title="Hold each hop until the next beat">
-          <input
-            v-model="performance.quantiseEntry"
-            type="checkbox"
-            data-test="quantise-entry"
-          />
-          Quantise hops to the beat
-        </label>
       </div>
-      <p v-if="performance.lastError" class="error" data-test="error">
-        {{ performance.lastError }}
-      </p>
 
-      <section v-if="recorder.saved.length > 0" class="saved">
-        <h2 class="lwlkc-eyebrow">Saved sequences</h2>
-        <ul>
-          <li
-            v-for="seq in recorder.saved"
-            :key="seq.id"
-            :class="['saved-row', { playing: recorder.playingId === seq.id }]"
-            data-test="saved-row"
-          >
-            <button
-              type="button"
-              class="lw-iconbtn lw-iconbtn--solid lw-iconbtn--round lw-iconbtn--sm"
-              title="Play"
-              data-test="play-saved"
-              :disabled="recorder.isPlaying"
-              @click="recorder.play(seq)"
-            >
-              <LwIcon name="play" />
-            </button>
-            <span class="saved-title">{{ seq.title }}</span>
-            <span class="saved-duration lwlkc-readout" data-test="saved-duration">
-              {{ formatDuration(seq.durationSec) }}
-            </span>
-            <button
-              type="button"
-              class="lw-iconbtn lw-iconbtn--sm delete"
-              title="Delete"
-              data-test="delete-saved"
-              @click="recorder.delete(seq.jamId, seq.id)"
-            >
-              <LwIcon name="trash" />
-            </button>
-          </li>
-        </ul>
-      </section>
-
-      <ul class="riffs">
-        <li
-          v-for="riff in currentJam.riffPage"
-          :key="riff.riffId"
-          :class="rowClasses(riff)"
-          data-test="riff-row"
-        >
-          <button
-            type="button"
-            class="lw-btn lw-btn--secondary lw-btn--sm hop"
-            data-test="hop"
-            :disabled="loading.has(riff.riffId)"
-            @click="onHop(riff)"
-          >
-            Hop
-          </button>
-          <span class="riff-id lwlkc-readout">{{ riff.riffId }}</span>
-          <span class="riff-meta">{{ riff.bpm }} bpm</span>
-          <span
-            v-if="lastNotReady === riff.riffId"
-            class="lw-badge lw-badge--accent"
-            data-test="busy-badge"
-          >
-            buffering…
+      <!-- The mixer and waveform take this column in Slice B; until then it
+           holds the recording controls and this jam's takes. -->
+      <div class="rec__deck">
+        <div class="controls">
+          <span class="lw-badge" :class="{ 'lw-badge--success': performance.state === 'playing' }" :data-state="performance.state">
+            {{ performance.state }}
           </span>
-        </li>
-      </ul>
-      <button
-        v-if="currentJam.hasMore"
-        type="button"
-        class="lw-btn lw-btn--ghost load-more"
-        data-test="load-more"
-        :disabled="loadingMore"
-        @click="onLoadMore"
-      >
-        {{ loadingMore ? 'Loading…' : 'Load more' }}
-      </button>
+          <button
+            v-if="performance.state !== 'idle' || recorder.isPlaying"
+            type="button"
+            class="lw-btn lw-btn--secondary lw-btn--sm"
+            data-test="stop"
+            @click="onStop"
+          >
+            <LwIcon name="stop" />
+            Stop
+          </button>
+          <button
+            v-if="!recorder.isRecording"
+            type="button"
+            class="lw-btn lw-btn--danger lw-btn--sm"
+            data-test="record"
+            @click="onRecord"
+          >
+            <LwIcon name="record" />
+            Record
+          </button>
+          <button
+            v-else
+            type="button"
+            class="lw-btn lw-btn--secondary lw-btn--sm recording"
+            data-test="stop-recording"
+            @click="onStopRecording"
+          >
+            <LwIcon name="stop" />
+            Stop Recording
+          </button>
+          <span v-if="recorder.isArmed" class="lw-badge lw-badge--danger lw-badge--dot" data-test="recording-waiting">
+            Waiting for first rifff…
+          </span>
+          <span
+            v-else-if="recorder.isRecording"
+            class="rec-clock lwlkc-readout"
+            data-test="recording-elapsed"
+          >
+            {{ formatDuration(recordingElapsed) }}
+          </span>
+          <label class="quantise" title="Hold each hop until the next beat">
+            <input
+              v-model="performance.quantiseEntry"
+              type="checkbox"
+              data-test="quantise-entry"
+            />
+            Quantise hops to the beat
+          </label>
+        </div>
+        <p v-if="performance.lastError" class="error" data-test="error">
+          {{ performance.lastError }}
+        </p>
+
+        <section v-if="recorder.saved.length > 0" class="saved">
+          <h2 class="lwlkc-eyebrow">Saved sequences</h2>
+          <ul>
+            <li
+              v-for="seq in recorder.saved"
+              :key="seq.id"
+              :class="['saved-row', { playing: recorder.playingId === seq.id }]"
+              data-test="saved-row"
+            >
+              <button
+                type="button"
+                class="lw-iconbtn lw-iconbtn--solid lw-iconbtn--round lw-iconbtn--sm"
+                title="Play"
+                data-test="play-saved"
+                :disabled="recorder.isPlaying"
+                @click="recorder.play(seq)"
+              >
+                <LwIcon name="play" />
+              </button>
+              <span class="saved-title">{{ seq.title }}</span>
+              <span class="saved-duration lwlkc-readout" data-test="saved-duration">
+                {{ formatDuration(seq.durationSec) }}
+              </span>
+              <button
+                type="button"
+                class="lw-iconbtn lw-iconbtn--sm delete"
+                title="Delete"
+                data-test="delete-saved"
+                @click="recorder.delete(seq.jamId, seq.id)"
+              >
+                <LwIcon name="trash" />
+              </button>
+            </li>
+          </ul>
+        </section>
+      </div>
     </div>
   </div>
 </template>
@@ -156,6 +143,7 @@ import {
   useRecorderStore,
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
+import RiffJournal from '../components/RiffJournal.vue';
 import { formatDuration } from '../ui/format';
 
 const route = useRoute();
@@ -262,19 +250,19 @@ async function onStop(): Promise<void> {
   if (recorder.isRecording) await recorder.stop();
 }
 
-function rowClasses(riff: RiffDocument): Record<string, boolean> {
-  return {
-    'riff-row': true,
-    current: performance.currentRiffId === riff.riffId,
-    loading: loading.value.has(riff.riffId),
-  };
-}
 </script>
 
 <style scoped>
-/* A holding pattern until Slice B's Hop Recording layout replaces this page
-   (docs/phases/phase-8-redesign-and-editor.md). */
+/* Hop Recording layout (design canvas): the jam's rifff history on the left,
+   the deck on the right. */
+.perform {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .strip {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -297,6 +285,24 @@ function rowClasses(riff: RiffDocument): Record<string, boolean> {
 .strip__meta {
   font-size: var(--text-xs);
   color: var(--text-3);
+}
+.rec {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 372px minmax(0, 1fr);
+}
+.rec__journal {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 24px;
+  background: var(--bg-sunken);
+  border-right: 1px solid var(--line);
+}
+.rec__deck {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
 }
 .controls {
   display: flex;
@@ -325,14 +331,10 @@ function rowClasses(riff: RiffDocument): Record<string, boolean> {
 .rec-clock {
   color: var(--danger);
 }
-.saved {
-  margin-bottom: 20px;
-}
 .saved h2 {
   margin-bottom: 8px;
 }
-.saved ul,
-.riffs {
+.saved ul {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -341,58 +343,29 @@ function rowClasses(riff: RiffDocument): Record<string, boolean> {
   border-radius: var(--r-lg);
   background: var(--surface-1);
 }
-.saved-row,
-.riff-row {
+.saved-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
   border-top: 1px solid var(--line-faint);
 }
-.saved-row:first-child,
-.riff-row:first-child {
+.saved-row:first-child {
   border-top: none;
+}
+.saved-row.playing {
+  background: var(--accent-soft);
 }
 .saved-title {
   flex: 1;
   color: var(--text-1);
 }
-.saved-duration,
-.riff-meta {
+.saved-duration {
   font-size: var(--text-sm);
   color: var(--text-3);
 }
 .saved .delete:hover {
   background: var(--danger-soft);
   color: var(--danger);
-}
-.riff-row.current,
-.saved-row.playing {
-  background: var(--accent-soft);
-}
-.riff-row.loading {
-  animation: riff-loading 0.7s ease-in-out infinite alternate;
-}
-@keyframes riff-loading {
-  from {
-    background: var(--accent-soft);
-  }
-  to {
-    background: var(--accent-line);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .riff-row.loading {
-    animation: none;
-    background: var(--accent-line);
-  }
-}
-.riff-id {
-  flex: 1;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-.load-more {
-  margin-top: 12px;
 }
 </style>

@@ -154,7 +154,7 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 Ships inside a whole-app redesign on the LwlkcIng design system, in three slices (A: shell and lists, B: Hop Recording, C: Hop Editing). Detailed design: [`docs/phases/phase-8-redesign-and-editor.md`](docs/phases/phase-8-redesign-and-editor.md).
 
 - [x] Slice A — app shell, Public Jams, My Jams, Hops, Settings, login dialog. *(Code and tests done 2026-09-18; Checkpoint A — the `SMOKE_TESTS.md` click-through on the host — not yet run.)*
-- [ ] Slice B — Hop Recording: rifff splats, mixer, waveform, top-bar transport.
+- [ ] Slice B — Hop Recording: rifff splats *(done 2026-09-18: journal of splats in stem colours)*, mixer, waveform, top-bar transport.
 - [ ] Timeline component (consider `wavesurfer.js` for waveform display; build hop UI on top).
 - [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from rifff browser.
 - [ ] Live preview: edits play back instantly using the AudioBuffer cache.
@@ -172,7 +172,7 @@ Moved out of Phases 6–8 on 2026-09-17 so the timeline editor and UI overhaul c
 
 - [ ] **Live pre-loading.** Start pre-loading once the first rifff is selected. Decide which rifffs (list neighbours of the last click, or something that tracks where the user is looking, since hops go anywhere in the list), how many, and when the window moves. `PrefetchRing` and `performance.prefetchWindow` already exist, tested but never called. Server etiquette caps speculative fetching at N±2.
 - [ ] **Stem-file tier.** The SDK's `prefetchRiffs` (Phase 4) keeps stem files on disk ahead of decoding. It's not used by the app either; decide whether live pre-loading needs it or the decode ring is enough.
-- [ ] **Stop re-fetching immutable data.** Every Hop click asks the server for the rifff's stem documents again (`getStemUrls` → `getStemDocuments`), even for a rifff already played. Replay's `resolveRiff` also re-fetches the rifff document for every hop. Rifff and stem documents never change, so cache them by ID, on disk, which also helps offline use.
+- [ ] **Stop re-fetching immutable data.** *(Stem documents: done in memory 2026-09-18 — `stores/stem-docs.ts` keeps each by ID and hops resolve through it, so a hop costs no stem-document request. Still to do: keep them on disk, and the rifff documents below.)* Every Hop click used to ask the server for the rifff's stem documents again (`getStemUrls` → `getStemDocuments`), even for a rifff already played. Replay's `resolveRiff` also re-fetches the rifff document for every hop. Rifff and stem documents never change, so cache them by ID, on disk, which also helps offline use.
 - [ ] **Memory budget for decoded audio.** The in-memory `AudioBufferCache` holds 256 MB (LRU), and one rifff of eight 16-second stems takes about 50 MB decoded, so a five-rifff window could evict what was just played. Size the window and the cap together.
 - [ ] **Measure it.** Log or show load time per click, so we can tell whether pre-loading is working in real use.
 

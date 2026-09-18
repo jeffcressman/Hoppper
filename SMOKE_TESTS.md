@@ -196,28 +196,41 @@ passing the same day against the boxes above.
 Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 `project resources/Design/Canvas/` (published canvas linked from there).
 
-- [ ] **Looks like the design.** Dark warm surfaces, Space Grotesk
+- [x] **Looks like the design.** Dark warm surfaces, Space Grotesk
       headings, the rail on the left, the glass top bar — compare
-      against the canvas. Fonts load with the network off (they're
+      gainst the canvas. Fonts load with the network off (they're
       bundled).
-- [ ] **Opens on Public Jams.** A fresh launch lands on Public Jams.
+- [x] **Opens on Public Jams.** A fresh launch lands on Public Jams.
       Logged out, it shows the striped login prompt instead of a grid;
       My Jams does the same.
-- [ ] **Login from the dialog.** Log in from either page: the dialog
+- [x] **Login from the dialog.** Log in from either page: the dialog
       closes itself and the grid appears without a reload.
-- [ ] **My Jams order.** Personal jam first with a Personal badge, then
+- [x] **My Jams order.** Personal jam first with a Personal badge, then
       joined jams newest first, each saying when it was joined.
-- [ ] **No repeat fetch.** Switching between Public Jams and My Jams
+- [x] **No repeat fetch.** Switching between Public Jams and My Jams
       doesn't re-request the jam list (watch the log panel's `http`
       lines).
-- [ ] **Current Jam.** Greyed out until a jam is opened; afterwards it
+- [x] **Current Jam.** Greyed out until a jam is opened; afterwards it
       returns to that jam, and that jam's tile says Current.
 - [ ] **Hops.** Lists takes from every jam with jam name, day, hop
       count and length. Play/pause works; Delete asks first; with no
       takes it shows the empty state.
-- [ ] **Log out from Settings.** Returns to Public Jams logged out,
+- [x] **Log out from Settings.** Returns to Public Jams logged out,
       Current Jam greys out, and logging in as someone else shows
       their jams, not the previous user's.
+
+### Slice B — rifff splats
+
+- [ ] **Splats in stem colours.** Opening a jam shows its rifffs as splats
+      grouped by day, each layer in a stem's colour, the committer's initial
+      on each. Colours can arrive a moment after the shapes.
+- [ ] **One request per page.** The log panel shows one `_all_docs` POST
+      for the splats when the jam opens, and one more per Load more — not
+      one per rifff.
+- [ ] **Hops cost no stem-document request.** Clicking a splat that's on
+      screen plays it without another `_all_docs` POST in the log.
+- [ ] **Current rifff ringed.** The playing rifff's splat has the amber
+      ring; a rifff still loading pulses.
 
 ---
 

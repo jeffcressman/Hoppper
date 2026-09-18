@@ -1,28 +1,10 @@
+import { hash, SPECTRUM } from './hash';
+
 // Endlesss jam profiles carry no cover image, so each jam gets a generated
 // one: two colours from the design system's spectrum, picked by the jam ID so
 // a jam always looks the same.
 
-const SPECTRUM = [
-  'amber',
-  'yellow',
-  'green',
-  'teal',
-  'blue',
-  'indigo',
-  'violet',
-  'pink',
-  'red',
-] as const;
 const ANGLES = [110, 120, 135, 150, 160];
-
-function hash(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
 
 export function jamCover(jamId: string): string {
   const h = hash(jamId);

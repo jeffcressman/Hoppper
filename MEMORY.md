@@ -299,11 +299,11 @@ Newest entries at the top of each section. Date entries absolutely
   My Jams only call `jams.refresh()` while `listing` is null, and Settings →
   Log out clears it. A jam joined elsewhere shows up after the next log-in or
   restart. That's server etiquette, not an oversight.
-- **Waiting on the user (asked 2026-09-18):** what a Hop Recording splat is
-  drawn from. Stem documents per page of rifffs would give colours (one batched
-  request per page); the rifff document alone gives only layer count and
-  gains. Slice B shouldn't start without an answer. See
-  `docs/phases/phase-8-redesign-and-editor.md`.
+- **Splats are drawn from stem colours** (user's choice, 2026-09-18), so the
+  rifff history asks for its stem documents — one batched request per page,
+  only for stems not already held. `primaryColour` is AARRGGBB (alpha first),
+  per LORE's `ParseHexColour`. Hops resolve stems through the same store, so
+  anything drawn on screen plays without a stem-document request.
 
 ## Build and dev loop
 
@@ -325,6 +325,10 @@ Newest entries at the top of each section. Date entries absolutely
 
 ## Environment quirks (dev container)
 
+- **`pnpm --filter @hoppper/sdk test` runs the live tests here.** With
+  `.env.local` populated, the whole SDK suite downloads real stems from
+  Endlesss (it did on 2026-09-18). To check an SDK change, run just its test
+  file: `npx vitest run test/<file>.test.ts` from `packages/sdk`.
 - **`/refs/OUROVEON` is mounted and fine.** On 2026-07-24 I concluded it was
   missing; it wasn't. The real cause: LORE's source tree is now
   `src/r3.endlesss/` (was `r0.endlesss`, which `CLAUDE.md` still documented),
