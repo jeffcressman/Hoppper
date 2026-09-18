@@ -234,12 +234,12 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 
 ### Slice B — splats from stem audio
 
-- [ ] **Splats take their real shape once played.** Before a rifff is
+- [x] **Splats take their real shape once played.** Before a rifff is
       played its splat has seeded spikes; after you play it, each layer's
       outline is its stem's waveform wrapped round the circle — jagged all
       the way round for every stem, pads included, with long spikes where a
       stem hits — and other splats that reuse those stems change too.
-- [ ] **No stutter.** Playing a rifff while a long journal is on screen
+- [x] **No stutter.** Playing a rifff while a long journal is on screen
       doesn't hitch the audio or the playhead when the splats redraw.
 
 ### Slice B — mixer, waveform, transport
