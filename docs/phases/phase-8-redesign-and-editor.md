@@ -111,13 +111,42 @@ Still to do: opening a stopped take in Hop Editing (Slice C).
 
 ## Slice C — Hop Editing (the Phase 8 editor)
 
-- A take becomes a list of segments, one per hop, with hop points between
-  them. Operations are pure functions over that list: move a hop point,
-  delete a hop point (drops the rifff it introduced), expand (the rifffs
-  skipped between two neighbours), add a skipped rifff, duplicate a rifff.
-- Timeline of stacked tracks with split lanes around a selected hop point,
-  drawn from cached buffers; playback through `HopPlayer`; undo/redo; saving
-  back through `SequenceStorage`.
+Signed off by the user 2026-09-18 (the drawn rules come from the sketches in
+`project resources/Design/`; the rest were asked and answered).
 
-The interaction rules above are the design canvas's reading of the sketches
-and still need the user's sign-off before Slice C starts.
+**Model.** A take (`HopSequence`) is read as segments: segment *k* is
+`hops[k].riffId` from `hops[k].tSec` to the next hop's `tSec` (the last runs
+to `durationSec`). Hop point *k* is where segment *k* begins (k ≥ 1). Every
+operation is a pure function over the take, so each is unit-tested on its
+own and undo is a stack of takes.
+
+**Rules.**
+
+- **Drag a hop point** — only the two rifffs either side change: dragging
+  left makes the incoming rifff start earlier and play longer; every later
+  hop point keeps its time. (Drag sketch; user choice.)
+- **Snap** — to beats on the take's grid by default, with a toggle for bars
+  or no snapping. The grid is the one playback uses: continuous from the
+  take's first rifff; a beat is the incoming rifff's beat.
+- **Delete a hop point** — removes the rifff that point brought in; every
+  later hop point moves left by its length, so the one after follows the
+  rifff before. (Delete sketch.)
+- **Expand** at a selected hop point — shows the rifffs committed to the jam
+  between the rifffs either side, in commit order: the ones the hop skipped.
+  Their stems download only now, since they were never played.
+- **Add** a skipped rifff — inserts it at the hop point for one loop of its
+  length; later hop points move right. Drag to adjust from there.
+- **Duplicate** a rifff in the take — inserts a copy right after it for one
+  loop of its length; later hop points move right.
+- **Saving** — edits change the take and are saved as they happen; undo and
+  redo walk back through the session's edits.
+- **Crossfades** stay at each hop's recorded `transitionMs`; editing them is
+  deferred (still listed in `PLAN.md`).
+- **Stopping a recording** opens the new take in the editor.
+
+**Drawing.** Stacked tracks for each segment, split into two lanes around a
+selected hop point (outgoing rifff continuing, incoming rifff's run-in, both
+dashed), drawn from cached buffers. Playback is phase-locked to one
+continuous grid, so what a segment shows at time *t* is its rifff at the
+grid's position then, not from its loop start — the lanes draw what will be
+heard. Playback through `HopPlayer`.

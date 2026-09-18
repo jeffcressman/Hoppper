@@ -288,16 +288,12 @@ Newest entries at the top of each section. Date entries absolutely
   (`setState` merges, `window` listeners captured). Calling `renderVals()`
   and its handlers exercises every flow; that's how the 2026-09-18 pass was
   checked.
-- **Hop editing model in the canvas (open for user review, 2026-09-18):** a hop
-  is a list of `{rifff, bars}` segments with hop points between them. Dragging
-  point k moves bars between segments k-1 and k, snapping to the bar. Delete
-  removes the rifff that point introduced. Expand shows up to 5 rifffs from
-  the jam history between the two rifffs. Add inserts the picked skipped
-  rifff. Duplicate copies a picked segment. These rules are my reading of the
-  sketches, not a confirmed spec.
-- Public Jams and My Jams both need a session: `listJams` calls
-  `requireValidSession`, and the joinable list is an authenticated call. So
-  the logged-out state is a login prompt, not a browsable grid.
+- **Hop editor rules signed off 2026-09-18** — drag moves only the two
+  neighbouring rifffs, snaps to beats (toggle for bars/off), Delete and
+  Add/Duplicate ripple later hop points, edits save in place with undo,
+  crossfade editing deferred. The full spec is in
+  `docs/phases/phase-8-redesign-and-editor.md` → "Slice C"; build to that,
+  not to the canvas mock, which predates it.
 
 - **The app's design tokens are the design system's files, copied unchanged**
   (`packages/app/src/styles/lwlkcing/`, except `fonts.css`), so a later sync

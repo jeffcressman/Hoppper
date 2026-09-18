@@ -155,8 +155,9 @@ Ships inside a whole-app redesign on the LwlkcIng design system, in three slices
 
 - [x] Slice A — app shell, Public Jams, My Jams, Hops, Settings, login dialog. ✓ Checkpoint A passed 2026-09-18 (`SMOKE_TESTS.md`).
 - [x] Slice B — Hop Recording: rifff splats, mixer (with the rifff's own slot gains now applied), waveform, top-bar transport and level meter. ✓ Checkpoint B passed 2026-09-18 (`SMOKE_TESTS.md`).
-- [ ] Timeline component (consider `wavesurfer.js` for waveform display; build hop UI on top).
-- [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from rifff browser.
+- [ ] Slice C — Hop Editing, to the spec signed off 2026-09-18 in the design doc:
+- [ ] Timeline component: stacked tracks per rifff, split lanes around a selected hop point, drawn phase-true from cached buffers (our own SVG, like the Hop Recording waveform, rather than `wavesurfer.js`).
+- [ ] Edit operations: drag a hop point (beat snap), delete a hop point, expand/add skipped rifffs, duplicate a rifff. *(Changing transition duration: deferred by the user 2026-09-18.)*
 - [ ] Live preview: edits play back instantly using the AudioBuffer cache.
 - [ ] Undo/redo.
 
