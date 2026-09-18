@@ -144,6 +144,15 @@ own and undo is a stack of takes.
   deferred (still listed in `PLAN.md`).
 - **Stopping a recording** opens the new take in the editor.
 
+**Built so far** (2026-09-18): the operations, in `src/hop-editor/edits.ts`,
+and undo/redo in `src/hop-editor/history.ts`. Hop points are placed at their
+*arrival* — when the crossfade ends and the new rifff is fully in, which for
+a quantised hop is the beat or bar replay holds it to — because that is what
+is heard. A dragged hop snaps its arrival to the beat (as a quantised hop
+lands) and is stored as an exact time with its `quantise` dropped, so replay
+doesn't hold it again; hops moved by a ripple (Delete, Add, Duplicate) keep
+their exact arrival relative to the edit the same way.
+
 **Drawing.** Stacked tracks for each segment, split into two lanes around a
 selected hop point (outgoing rifff continuing, incoming rifff's run-in, both
 dashed), drawn from cached buffers. Playback is phase-locked to one
