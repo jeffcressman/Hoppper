@@ -44,3 +44,6 @@ local/
 
 # Local reference repos (we use the dev container mount, this is just a safety net)
 reference/
+# Claude Code: personal permission grants. Shared settings go in
+# .claude/settings.json, which is committed.
+.claude/settings.local.json
