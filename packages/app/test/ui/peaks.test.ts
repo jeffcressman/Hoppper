@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bufferPeaks, loopRow, rowPath } from '../../src/ui/peaks';
+import { bufferMinMax, bufferPeaks, loopRow, rowPath } from '../../src/ui/peaks';
 
 function buffer(channels: number[][], sampleRate = 4) {
   return {
@@ -53,5 +53,22 @@ describe('rowPath', () => {
 
   it('is empty for no values', () => {
     expect(rowPath(new Float32Array(0))).toBe('');
+  });
+});
+
+describe('bufferMinMax', () => {
+  it('keeps the highest and lowest sample of each slice, signed — the waveform, not its loudness', () => {
+    const { min, max } = bufferMinMax(buffer([[0.1, -0.5, 0.2, 0.1], [0.3, 0.1, -0.9, 0]]), 2);
+    expect(Array.from(max)).toEqual([expect.closeTo(0.3, 6), expect.closeTo(0.2, 6)]);
+    expect(Array.from(min)).toEqual([-0.5, expect.closeTo(-0.9, 6)]);
+  });
+
+  it('a steady tone still swings above and below zero in every slice', () => {
+    const tone = Array.from({ length: 64 }, (_, i) => 0.5 * Math.sin(i * 1.3));
+    const { min, max } = bufferMinMax(buffer([tone]), 8);
+    for (let b = 0; b < 8; b++) {
+      expect(max[b]!).toBeGreaterThan(0.3);
+      expect(min[b]!).toBeLessThan(-0.3);
+    }
   });
 });

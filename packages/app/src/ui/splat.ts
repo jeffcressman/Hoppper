@@ -28,18 +28,19 @@ const MISSING = 'var(--text-4)';
 const WAITING = 'var(--surface-3)';
 
 /**
- * A layer whose outline is the stem's waveform: loud moments reach out, quiet
- * ones sit in. Normalised to the stem's own loudest moment, so a quiet stem
- * still shows its shape; its size comes from its place in the mix. Reaches at
- * most 1.2× `radius`.
+ * A layer whose outline is the stem's waveform wrapped around the circle: the
+ * highest then lowest sample of each slice in turn, peaks reaching out and
+ * troughs cutting in — jagged all the way round, as a waveform is. Normalised
+ * to the stem's own largest swing, so a quiet stem still shows its shape; its
+ * size comes from its place in the mix. Spans 0.4× to 1.1× `radius`.
  */
-function audioLayerPath(shape: Float32Array, radius: number): string {
-  let max = 0;
-  for (const v of shape) max = Math.max(max, v);
+function audioLayerPath(ring: Float32Array, radius: number): string {
+  let swing = 0;
+  for (const v of ring) swing = Math.max(swing, Math.abs(v));
   let d = '';
-  shape.forEach((v, i) => {
-    const a = (i / shape.length) * Math.PI * 2;
-    const rad = radius * (0.5 + 0.7 * (v / max));
+  ring.forEach((v, i) => {
+    const a = (i / ring.length) * Math.PI * 2;
+    const rad = radius * (0.75 + 0.35 * (v / swing));
     d += `${i ? 'L' : 'M'}${(50 + rad * Math.cos(a)).toFixed(1)} ${(50 + rad * Math.sin(a)).toFixed(1)}`;
   });
   return `${d}Z`;
@@ -64,8 +65,8 @@ export function riffSplat(
   riff: RiffDocument,
   docOf: (id: StemCouchID) => StemDocument | null | undefined,
   /**
-   * The stem's waveform once around the rifff's loop (0..1 per point), if its
-   * audio has been decoded.
+   * The stem's waveform once around the rifff's loop — highest then lowest
+   * sample of each slice, in turn, signed — if its audio has been decoded.
    */
   shapeOf?: (id: StemCouchID) => Float32Array | undefined,
 ): Splat {
@@ -86,7 +87,7 @@ export function riffSplat(
       doc === undefined ? WAITING : doc === null ? MISSING : stemColour(doc.primaryColour) ?? MISSING;
     const radius = base * (1 - rank * 0.1);
     const shape = shapeOf?.(slot.stemId);
-    const audible = !!shape && shape.length >= 3 && shape.some((v) => v > 0);
+    const audible = !!shape && shape.length >= 3 && shape.some((v) => v !== 0);
     return { d: audible ? audioLayerPath(shape, radius) : layerPath(slot.stemId, radius), colour };
   });
   return { layers, pending };

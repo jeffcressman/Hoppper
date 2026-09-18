@@ -24,7 +24,15 @@ vi.mock('../../src/stores', async () => {
   return { useStemDocsStore, usePerformanceStore: () => performance, __performance: performance };
 });
 
+// Counts how often splats are worked out, to check a hop doesn't redraw the
+// whole journal.
+vi.mock('../../src/ui/splat', async (orig) => {
+  const real = await orig<typeof import('../../src/ui/splat')>();
+  return { ...real, riffSplat: vi.fn(real.riffSplat) };
+});
+
 import * as stores from '../../src/stores';
+import * as splatModule from '../../src/ui/splat';
 import RiffJournal from '../../src/components/RiffJournal.vue';
 
 const performance = (stores as unknown as { __performance: typeof performanceStub }).__performance;
@@ -151,7 +159,21 @@ describe('RiffJournal', () => {
       performance.decodedTick += 1;
       await flushPromises();
       const d = wrapper.findAll('[data-test="hop"]')[1]!.find('path').attributes('d')!;
-      expect(points(d)).toBe(64);
+      // 128 slices round the loop, a peak and a trough each.
+      expect(points(d)).toBe(256);
+    });
+
+    it('redraws only the splats whose stems have just been decoded', async () => {
+      const wrapper = mountJournal();
+      await flushPromises();
+      const riffSplat = vi.mocked(splatModule.riffSplat);
+      riffSplat.mockClear();
+      // r2 alone uses stem c.
+      performanceStub.decoded.set('c', decoded());
+      performance.decodedTick += 1;
+      await flushPromises();
+      expect(riffSplat.mock.calls.map((c) => c[0].riffId)).toEqual(['r2']);
+      void wrapper;
     });
   });
 });

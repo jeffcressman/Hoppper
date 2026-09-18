@@ -92,14 +92,43 @@ describe('riffSplat — drawn from the stems’ audio', () => {
     return out;
   };
 
-  it('wraps a decoded stem’s waveform around the circle', () => {
-    const shape = Float32Array.from({ length: 16 }, (_, i) => (i % 2 ? 0 : 0.8));
+  // A ring is the stem's waveform once around the loop: highest then lowest
+  // sample of each slice, in turn.
+  const ring = (pairs: Array<[number, number]>) => Float32Array.from(pairs.flat());
+
+  it('wraps a decoded stem’s waveform around the circle: peaks reach out, troughs cut in', () => {
+    const shape = ring(Array.from({ length: 8 }, () => [0.8, -0.8]));
     const splat = riffSplat(riff([['bass', 1]]), docOf, (id) => (id === 'bass' ? shape : undefined));
     const r = radii(splat.layers[0]!.d);
     expect(r).toHaveLength(16);
-    // Loud points reach out, quiet ones sit in.
     expect(r[0]!).toBeGreaterThan(r[1]! * 2);
     expect(Math.abs(r[2]! - r[0]!)).toBeLessThan(0.2); // path coords are rounded to 0.1
+  });
+
+  it('cuts troughs in towards the centre without ever crossing it', () => {
+    const shape = ring(Array.from({ length: 8 }, () => [1, -1]));
+    const d = riffSplat(riff([['bass', 1]]), docOf, () => shape).layers[0]!.d;
+    const n = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+    for (let i = 0; i < n.length / 2; i++) {
+      const a = (i / (n.length / 2)) * Math.PI * 2;
+      const outward = (n[i * 2]! - 50) * Math.cos(a) + (n[i * 2 + 1]! - 50) * Math.sin(a);
+      expect(outward).toBeGreaterThan(5);
+    }
+  });
+
+  it('draws a steady pad jagged all the way round, not as a smooth circle', () => {
+    const pad = ring(Array.from({ length: 32 }, () => [0.3, -0.3]));
+    const r = radii(riffSplat(riff([['bass', 1]]), docOf, () => pad).layers[0]!.d);
+    const spread = Math.max(...r) - Math.min(...r);
+    expect(spread).toBeGreaterThan(10);
+  });
+
+  it('shows where a stem is loud and where it is quiet', () => {
+    // A hit at the top of the loop, near-silence after it.
+    const hit = ring([[1, -1], ...Array.from({ length: 15 }, (): [number, number] => [0.05, -0.05])]);
+    const r = radii(riffSplat(riff([['bass', 1]]), docOf, () => hit).layers[0]!.d);
+    const reach = (i: number) => Math.abs(r[i * 2]! - r[i * 2 + 1]!);
+    expect(reach(0)).toBeGreaterThan(reach(8) * 5);
   });
 
   it('keeps the seeded shape for a stem whose audio isn’t decoded yet', () => {
@@ -110,12 +139,12 @@ describe('riffSplat — drawn from the stems’ audio', () => {
 
   it('keeps the seeded shape for a silent stem, rather than a dot', () => {
     const seeded = riffSplat(riff([['bass', 1]]), docOf);
-    const silent = riffSplat(riff([['bass', 1]]), docOf, () => new Float32Array(16));
+    const silent = riffSplat(riff([['bass', 1]]), docOf, () => new Float32Array(32));
     expect(silent.layers[0]!.d).toBe(seeded.layers[0]!.d);
   });
 
   it('still stays inside its 100×100 box', () => {
-    const loud = Float32Array.from({ length: 64 }, () => 1);
+    const loud = Float32Array.from({ length: 512 }, (_, i) => (i % 2 ? -1 : 1));
     const splat = riffSplat(
       riff(Array.from({ length: 8 }, (_, i) => [`s${i}`, 1] as [string, number])),
       () => doc('ffffffff'),

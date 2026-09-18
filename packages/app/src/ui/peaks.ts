@@ -58,3 +58,31 @@ export function rowPath(values: Float32Array): string {
   });
   return `${top}L${values.length} 10${bottom}Z`;
 }
+
+/**
+ * The highest and lowest sample in each of `bins` slices, across channels —
+ * what a waveform display draws. Unlike `bufferPeaks` it keeps the swing
+ * either side of zero, so even a steady pad reads as a waveform, not a line.
+ */
+export function bufferMinMax(buffer: PeakSource, bins: number): { min: Float32Array; max: Float32Array } {
+  const min = new Float32Array(bins);
+  const max = new Float32Array(bins);
+  if (buffer.length === 0 || bins <= 0) return { min, max };
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let b = 0; b < bins; b++) {
+      const from = Math.floor((b * data.length) / bins);
+      const to = Math.max(from + 1, Math.floor(((b + 1) * data.length) / bins));
+      let lo = min[b]!;
+      let hi = max[b]!;
+      for (let i = from; i < to && i < data.length; i++) {
+        const v = data[i]!;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+      min[b] = lo;
+      max[b] = hi;
+    }
+  }
+  return { min, max };
+}

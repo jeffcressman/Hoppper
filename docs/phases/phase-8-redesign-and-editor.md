@@ -92,14 +92,20 @@ Quantise toggle. Hop Recording lost its own controls and saved-takes list;
 the Hops page lists takes.
 
 **Splats from audio** (2026-09-18). Once a stem has been decoded its splat
-layer is its waveform wrapped once around the circle — the stem's peaks tiled
-across the rifff's loop (as short stems repeat), normalised to the stem's
-loudest moment so a quiet stem still shows its shape. A stem not decoded yet
-keeps its seeded spikes. Decoding happens when a rifff is played, so splats
-settle into their real shapes as you play; a stem reused across rifffs shapes
-all of them. The journal redraws on `performance.decodedTick`, which moves
-each time a rifff starts. Peaks are cached per stem (`ui/riff-audio.ts`),
-shared with the waveform.
+layer is its waveform wrapped once around the circle: the highest then the
+lowest sample of each of 128 slices of the rifff's loop, peaks reaching out
+and troughs cutting in (`waveRing` in `ui/riff-audio.ts`). That is what a
+waveform display draws, bent round — jagged all the way round for every
+stem, pads included, with long spikes where a stem hits hard. (A first cut
+drew the loudness envelope instead, which smoothed pads into circles; the
+user corrected it the same day.) Each layer is normalised to its stem's own
+largest swing so a quiet stem still shows its waveform, and short stems
+repeat round the loop as they play. A stem not decoded yet keeps its seeded
+spikes; decoding happens when a rifff is played, so splats settle into their
+real shapes as you play, and a stem reused across rifffs reshapes all of
+them. The journal remembers each rifff's splat and redraws it only when one
+of its stems' documents or audio arrives (`performance.decodedTick` moves
+each time a rifff starts).
 
 Still to do: opening a stopped take in Hop Editing (Slice C).
 

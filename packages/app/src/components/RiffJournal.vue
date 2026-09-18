@@ -38,8 +38,7 @@ import { computed, watch } from 'vue';
 import type { JamCouchID, RiffCouchID, RiffDocument, StemCouchID } from '@hoppper/sdk';
 import { usePerformanceStore, useStemDocsStore } from '../stores';
 import { riffSplat } from '../ui/splat';
-import { loopRow } from '../ui/peaks';
-import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
+import { riffStemAudio, waveRing } from '../ui/riff-audio';
 import { userColour } from '../ui/user-colour';
 import { formatDay, formatTime } from '../ui/format';
 import { log } from '../logging/log-store';
@@ -57,19 +56,22 @@ const emit = defineEmits<{ hop: [riff: RiffDocument] }>();
 const stemDocs = useStemDocsStore();
 const performance = usePerformanceStore();
 
-// Points around a splat drawn from audio.
-const SHAPE_POINTS = 64;
+// Slices of the loop around a splat drawn from audio: a peak and a trough
+// each, so 256 points — over one per pixel of a splat's outline, enough for
+// a waveform to read as one without making every hop redraw a heavy page.
+const SHAPE_SLICES = 128;
 
 /**
- * Each decoded stem's waveform once around the rifff's loop, for its splat
- * layer. A stem reused across rifffs is decoded once and shapes all of them.
+ * Each decoded stem's waveform wrapped once around the rifff's loop, for its
+ * splat layer. A stem reused across rifffs is decoded once and shapes all of
+ * them.
  */
 function shapesFor(riff: RiffDocument): (id: StemCouchID) => Float32Array | undefined {
   const audio = riffStemAudio(riff, stemDocs.get, performance.bufferFor);
   const byStem = new Map<StemCouchID, Float32Array>();
   for (const stem of audio.stems) {
     if (!stem || byStem.has(stem.stemId)) continue;
-    byStem.set(stem.stemId, loopRow(stemPeaks(stem.stemId, stem.buffer), stem.loopSec, audio.loopSec, SHAPE_POINTS));
+    byStem.set(stem.stemId, waveRing(stem, audio.loopSec, SHAPE_SLICES));
   }
   return (id) => byStem.get(id);
 }
@@ -89,6 +91,27 @@ watch(
   { immediate: true },
 );
 
+// A splat only changes when one of its stems' documents or audio arrives, so
+// each is worked out once per such change, not on every hop.
+const splatMemo = new Map<RiffCouchID, { key: string; splat: ReturnType<typeof riffSplat> }>();
+
+function splatOf(riff: RiffDocument): ReturnType<typeof riffSplat> {
+  const key = riff.slots
+    .filter((s) => s.on && s.stemId)
+    .map((s) => {
+      const id = s.stemId as StemCouchID;
+      const doc = stemDocs.get(id);
+      const decoded = performance.bufferFor(id) !== undefined;
+      return `${id}:${doc === undefined ? '?' : doc === null ? 'x' : 'd'}${decoded ? '+' : ''}`;
+    })
+    .join('|');
+  const memo = splatMemo.get(riff.riffId);
+  if (memo && memo.key === key) return memo.splat;
+  const splat = riffSplat(riff, stemDocs.get, shapesFor(riff));
+  splatMemo.set(riff.riffId, { key, splat });
+  return splat;
+}
+
 const days = computed(() => {
   // Redrawn after each new rifff starts: its stems have just been decoded.
   void performance.decodedTick;
@@ -100,7 +123,7 @@ const days = computed(() => {
       group = { label, entries: [] };
       groups.push(group);
     }
-    group.entries.push({ riff, time: formatTime(riff.createdAt), splat: riffSplat(riff, stemDocs.get, shapesFor(riff)) });
+    group.entries.push({ riff, time: formatTime(riff.createdAt), splat: splatOf(riff) });
   }
   return groups;
 });

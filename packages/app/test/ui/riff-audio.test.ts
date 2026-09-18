@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { RiffDocument, StemDocument } from '@hoppper/sdk';
-import { riffStemAudio, stemPeaks } from '../../src/ui/riff-audio';
+import { riffStemAudio, stemPeaks, waveRing } from '../../src/ui/riff-audio';
 
 // bps 2, 16-sixteenth bars: 2 s bars, 8 of them — a 16 s computed loop.
 function riff(stems: Array<string | null>): RiffDocument {
@@ -52,6 +52,36 @@ describe('stemPeaks', () => {
     const first = stemPeaks('once', buffer);
     const again = stemPeaks('once', buffer);
     expect(again).toBe(first);
+    expect(buffer.getChannelData).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('waveRing', () => {
+  // Rises from -1 to 1 across the stem, so each slice's highest and lowest
+  // sample give away where in the stem it is.
+  function ramp(duration: number) {
+    const data = Float32Array.from({ length: 64 }, (_, i) => -1 + (2 * i) / 63);
+    return { numberOfChannels: 1, length: 64, sampleRate: 64 / duration, duration, getChannelData: () => data };
+  }
+
+  it('is the stem’s highest then lowest sample for each slice, once around the loop', () => {
+    const ring = waveRing({ stemId: 'ramp-a', buffer: ramp(8), loopSec: 8 }, 8, 4);
+    expect(ring).toHaveLength(8);
+    for (let i = 0; i < 4; i++) expect(ring[i * 2]!).toBeGreaterThan(ring[i * 2 + 1]!);
+    // The ramp climbs round the circle.
+    expect(ring[6]!).toBeGreaterThan(ring[0]!);
+  });
+
+  it('repeats a stem shorter than the loop, as it plays', () => {
+    const ring = waveRing({ stemId: 'ramp-b', buffer: ramp(4), loopSec: 4 }, 8, 4);
+    expect(ring[4]!).toBeCloseTo(ring[0]!, 6);
+    expect(ring[5]!).toBeCloseTo(ring[1]!, 6);
+  });
+
+  it('reads a stem’s audio once, however many rings are drawn from it', () => {
+    const buffer = { ...ramp(8), getChannelData: vi.fn(ramp(8).getChannelData) };
+    waveRing({ stemId: 'ramp-c', buffer, loopSec: 8 }, 8, 4);
+    waveRing({ stemId: 'ramp-c', buffer, loopSec: 8 }, 16, 4);
     expect(buffer.getChannelData).toHaveBeenCalledTimes(1);
   });
 });

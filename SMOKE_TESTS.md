@@ -236,8 +236,9 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 
 - [ ] **Splats take their real shape once played.** Before a rifff is
       played its splat has seeded spikes; after you play it, each layer's
-      outline is its stem's waveform (drums spiky on the beats, pads
-      smooth), and other splats that reuse those stems change too.
+      outline is its stem's waveform wrapped round the circle — jagged all
+      the way round for every stem, pads included, with long spikes where a
+      stem hits — and other splats that reuse those stems change too.
 - [ ] **No stutter.** Playing a rifff while a long journal is on screen
       doesn't hitch the audio or the playhead when the splats redraw.
 
