@@ -52,6 +52,19 @@ Newest entries at the top of each section. Date entries absolutely
   and the context starts suspended until a user gesture (`unlockAudioContext`
   is called from `resolveStems`, before any hop scheduling).
 
+- **Until 2026-09-18 the engine ignored each rifff's slot gains** — every
+  stem played at full volume, not at the rifff's committed mix. LORE mixes
+  each stem at `stemGains[i] × m_layerGainMultiplier[i]`
+  (`r4.toolbox/mix/preview.cpp`); the engine now does the same, with the
+  mixer's per-slot levels as the multiplier. Rifffs will sound different
+  from before, so a "the mix changed" report after that date is expected, not
+  a regression. Stems keep their slot through `audio/slots.ts`
+  (`placeStems`), because the stem resolver hands back only resolved stems.
+- **The level meter's analysers feed a silent gain to the destination**,
+  because some WebKit builds (Tauri on macOS) only process an analyser that
+  feeds something. Not verified on a real Mac yet; if the meter stays dark
+  there, look here first.
+
 ## Recording principle
 
 - **A take is what the performer heard, not what they clicked** (set by

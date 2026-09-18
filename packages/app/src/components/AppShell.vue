@@ -5,8 +5,7 @@
         <LwIcon name="logo" :size="26" />
         <span class="lwlkc-wordmark">Hoppper</span>
       </div>
-      <!-- Transport, level meter and quantise move up here with Slice B
-           (docs/phases/phase-8-redesign-and-editor.md). -->
+      <TransportBar />
       <div class="topbar__right">
         <button
           type="button"
@@ -62,6 +61,7 @@ import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCurrentJamStore } from '../stores';
 import LwIcon from './LwIcon.vue';
+import TransportBar from './TransportBar.vue';
 import type { IconName } from './icons';
 
 const route = useRoute();
@@ -119,6 +119,8 @@ const top = computed<RailItem[]>(() => [
   border-bottom-color: var(--line);
 }
 .topbar__brand {
+  flex: none;
+  width: 200px;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -131,7 +133,6 @@ const top = computed<RailItem[]>(() => [
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
 }
 .shell__body {
   flex: 1;

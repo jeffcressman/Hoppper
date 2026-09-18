@@ -232,6 +232,25 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 - [ ] **Current rifff ringed.** The playing rifff's splat has the amber
       ring; a rifff still loading pulses.
 
+### Slice B — mixer, waveform, transport
+
+- [ ] **Rifffs play at their own mix.** A rifff with a quiet stem sounds
+      as it does in Endlesss — before 2026-09-18 every stem played at full
+      volume. Compare a rifff or two against the Endlesss app.
+- [ ] **Mixer.** Each channel shows the stem's preset name in its colour
+      and who made it. A fader drag or arrow key changes that track's
+      volume smoothly (no click); mute silences it and remembers the fader.
+      Levels and mutes stay put across hops.
+- [ ] **Waveform.** Rows show the playing rifff's stems, short stems
+      repeating across the loop; the playhead sweeps in time with what you
+      hear and stays in phase across hops.
+- [ ] **Transport in the top bar.** Stop, Play (restarts the last rifff),
+      Record (only on a jam page); REC badge and clock while recording,
+      "Waiting for first rifff…" while armed. Quantise toggle works as the
+      old checkbox did.
+- [ ] **Level meter.** Both bars move with the output — on macOS too (see
+      `MEMORY.md` if it stays dark).
+
 ---
 
 ## Cross-tempo stems

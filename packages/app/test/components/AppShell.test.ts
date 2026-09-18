@@ -11,6 +11,11 @@ vi.mock('../../src/stores', () => ({
   useSessionStore: () => sessionStub,
 }));
 
+// The transport has tests of its own; here it's only a slot in the bar.
+vi.mock('../../src/components/TransportBar.vue', () => ({
+  default: { template: '<div data-test="transport" />' },
+}));
+
 import AppShell from '../../src/components/AppShell.vue';
 
 const Page = defineComponent({ render: () => h('div', { 'data-test': 'page' }) });
@@ -43,9 +48,10 @@ beforeEach(() => {
 });
 
 describe('AppShell', () => {
-  it('shows the Hoppper wordmark and the page content', async () => {
+  it('shows the Hoppper wordmark, the transport and the page content', async () => {
     const { wrapper } = await mountAt('/public');
     expect(wrapper.find('.lwlkc-wordmark').text()).toBe('Hoppper');
+    expect(wrapper.find('.topbar [data-test="transport"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="content"]').exists()).toBe(true);
   });
 

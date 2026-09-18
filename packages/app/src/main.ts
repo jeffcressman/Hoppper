@@ -163,6 +163,7 @@ async function bootstrap() {
     prefetcher,
     resolveStems,
     recorder: hopRecorder,
+    peekBuffer: (stemId) => loader.peek(stemId),
   });
   log('info', 'boot', 'performance store initialized');
 

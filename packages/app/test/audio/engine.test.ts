@@ -62,9 +62,11 @@ interface MockSource extends AudioBufferSourceLike {
   startedAt?: { when: number; offset: number };
   stoppedAt?: number;
   disconnected: boolean;
+  target?: object;
 }
 interface MockGain extends GainNodeLike {
   events: { kind: string; value?: number; time: number }[];
+  target?: object;
 }
 interface MockCtx extends AudioContextLike {
   currentTime: number;
@@ -96,7 +98,9 @@ function createMockContext(): MockCtx {
         stop: vi.fn(function (this: MockSource, when = 0) {
           this.stoppedAt = when;
         }),
-        connect: vi.fn(),
+        connect: vi.fn(function (this: MockSource, dest: object) {
+          this.target = dest;
+        }),
         disconnect: vi.fn(function (this: MockSource) {
           this.disconnected = true;
         }),
@@ -121,7 +125,9 @@ function createMockContext(): MockCtx {
       const g: MockGain = {
         events,
         gain: param,
-        connect: vi.fn(),
+        connect: vi.fn(function (this: MockGain, dest: object) {
+          this.target = dest;
+        }),
         disconnect: vi.fn(),
       };
       gains.push(g);
@@ -129,6 +135,15 @@ function createMockContext(): MockCtx {
     },
   };
   return ctx;
+}
+
+/**
+ * Each voice's own gain — the one its fades run on — in the order the voices
+ * were made. A source feeds its stem's gain, which feeds the voice gain.
+ */
+function voiceGains(ctx: MockCtx): MockGain[] {
+  const stemGains = new Set(ctx.sources.map((s) => s.target));
+  return ctx.gains.filter((g) => ctx.gains.some((h) => stemGains.has(h) && h.target === g));
 }
 
 function mockLoader(initialBuffers: Map<StemCouchID, AudioBufferLike>): StemLoader {
@@ -417,7 +432,7 @@ describe('createAudioEngine', () => {
     expect(held!.stoppedAt).toBeCloseTo(4.15, 6);
     expect(held!.stoppedAt!).toBeLessThan(held!.startedAt!.when);
     // Its gain is left alone — fading it out would sound it at full volume.
-    expect(ctx.gains[1]!.events.filter((e) => e.kind === 'ramp')).toEqual([
+    expect(voiceGains(ctx)[1]!.events.filter((e) => e.kind === 'ramp')).toEqual([
       { kind: 'ramp', value: 1, time: 4.5 },
     ]);
     // The first rifff keeps its fade to the held beat; the new one fades in
@@ -484,7 +499,7 @@ describe('createAudioEngine', () => {
     expect(incoming.startedAt?.when).toBeCloseTo(4.25, 6);
     expect(incoming.startedAt?.offset).toBeCloseTo(4.25, 6);
 
-    const [outGain, inGain] = ctx.gains;
+    const [outGain, inGain] = voiceGains(ctx);
     const ramps = (g: MockGain) => g.events.filter((e) => e.kind !== 'cancel');
     expect(ramps(inGain!)).toEqual([
       { kind: 'set', value: 0, time: 4.25 },
@@ -850,5 +865,154 @@ describe('createAudioEngine', () => {
     const engine = createAudioEngine({ context: ctx, loader });
     await engine.warmRiff(JAM, riff('r1'), [stem('s1'), stem('s2'), stem('s3')]);
     expect(loader.load).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('createAudioEngine — the mix', () => {
+  const slots = (...gains: Array<[string, number] | null>) =>
+    Array.from({ length: 8 }, (_, i) => {
+      const g = gains[i];
+      return g
+        ? { on: true, stemId: g[0] as StemCouchID, gain: g[1] }
+        : { on: false, stemId: null, gain: 0 };
+    });
+  const stemGain = (src: MockSource) => (src.target as MockGain).gain;
+  const setup = () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>(
+      ['a', 'b', 'c'].map((id) => [id as StemCouchID, fakeBuffer()]),
+    );
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    return { ctx, engine };
+  };
+
+  it('plays each stem at the gain its rifff gives its slot', async () => {
+    const { ctx, engine } = setup();
+    await engine.hopTo(JAM, riff('r1', { slots: slots(['a', 0.5], null, ['b', 0.8]) }), [stem('a'), stem('b')]);
+    expect(ctx.sources.map((src) => stemGain(src).value)).toEqual([0.5, 0.8]);
+  });
+
+  it('setSlotLevels turns the playing rifff’s slots up or down, on top of its own gains', async () => {
+    const { ctx, engine } = setup();
+    await engine.hopTo(JAM, riff('r1', { slots: slots(['a', 0.5], null, ['b', 0.8]) }), [stem('a'), stem('b')]);
+    ctx.currentTime = 2;
+    engine.setSlotLevels([0.5, 1, 0, 1, 1, 1, 1, 1]);
+    const lastRamp = (src: MockSource) =>
+      (src.target as MockGain).events.filter((e) => e.kind === 'ramp').at(-1)?.value;
+    expect(lastRamp(ctx.sources[0]!)).toBeCloseTo(0.25);
+    expect(lastRamp(ctx.sources[1]!)).toBe(0);
+  });
+
+  it('keeps the mixer’s levels across a hop', async () => {
+    const { ctx, engine } = setup();
+    engine.setSlotLevels([0, 1, 1, 1, 1, 1, 1, 1]);
+    await engine.hopTo(JAM, riff('r1', { slots: slots(['a', 1]) }), [stem('a')]);
+    ctx.currentTime = 3;
+    await engine.hopTo(JAM, riff('r2', { slots: slots(['c', 0.9], ['b', 0.6]) }), [stem('c'), stem('b')]);
+    const incoming = ctx.sources.slice(1);
+    expect(incoming.map((src) => stemGain(src).value)).toEqual([0, 0.6]);
+    expect(engine.slotLevels).toEqual([0, 1, 1, 1, 1, 1, 1, 1]);
+  });
+});
+
+describe('createAudioEngine — playhead', () => {
+  const setup = () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer(16)],
+      ['b' as StemCouchID, fakeBuffer(8)],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    return { ctx, engine };
+  };
+
+  it('is null while nothing plays', () => {
+    expect(setup().engine.playhead()).toBeNull();
+  });
+
+  it('is the position in the playing rifff’s loop, measured on the hop grid', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 1;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 21;
+    expect(engine.playhead()).toEqual({ riffId: 'r1', positionSec: 4, loopSec: 16 });
+  });
+
+  it('after a hop, wraps the same grid into the new rifff’s loop — where it is heard', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 1;
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 11;
+    await engine.hopTo(JAM, riff('r2', { barLength: 8 }), [stem('b')]);
+    ctx.currentTime = 12;
+    const head = engine.playhead()!;
+    expect(head.loopSec).toBe(8);
+    expect(head.positionSec).toBeCloseTo(3, 6);
+  });
+
+  it('is null again after stop', async () => {
+    const { engine } = setup();
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    engine.stop();
+    expect(engine.playhead()).toBeNull();
+  });
+});
+
+describe('createAudioEngine — output level', () => {
+  function analyserContext() {
+    const ctx = createMockContext() as MockCtx & {
+      analysers: { data: number[] }[];
+      createAnalyser(): unknown;
+      createChannelSplitter(n: number): unknown;
+    };
+    ctx.analysers = [];
+    ctx.createAnalyser = () => {
+      const a = {
+        data: [] as number[],
+        fftSize: 0,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        getFloatTimeDomainData(out: Float32Array) {
+          out.set(a.data.slice(0, out.length));
+        },
+      };
+      ctx.analysers.push(a);
+      return a;
+    };
+    ctx.createChannelSplitter = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+    return ctx;
+  }
+
+  it('reads the peak of each channel of everything the engine plays', () => {
+    const ctx = analyserContext();
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(new Map()) });
+    ctx.analysers[0]!.data = [0.1, -0.6, 0.3];
+    ctx.analysers[1]!.data = [0.2, 0.25, -0.1];
+    const [left, right] = engine.levels();
+    expect(left).toBeCloseTo(0.6, 6);
+    expect(right).toBeCloseTo(0.25, 6);
+  });
+
+  it('keeps the meters on a silent path, so they run without doubling the sound', () => {
+    const ctx = analyserContext();
+    createAudioEngine({ context: ctx, loader: mockLoader(new Map()) });
+    const [master, sink] = ctx.gains;
+    expect(master!.connect).toHaveBeenCalledWith(ctx.destination);
+    expect(sink!.connect).toHaveBeenCalledWith(ctx.destination);
+    expect(sink!.gain.value).toBe(0);
+  });
+
+  it('is silent when the context can’t analyse', () => {
+    const engine = createAudioEngine({ context: createMockContext(), loader: mockLoader(new Map()) });
+    expect(engine.levels()).toEqual([0, 0]);
+  });
+
+  it('plays every voice through one master bus to the destination', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([['a' as StemCouchID, fakeBuffer()]]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    const master = ctx.gains.find((g) => g.target === ctx.destination)!;
+    expect(voiceGains(ctx)[0]!.target).toBe(master);
   });
 });

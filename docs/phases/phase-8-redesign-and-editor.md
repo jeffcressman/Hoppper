@@ -65,9 +65,34 @@ half of Phase 9's "stop re-fetching immutable data".
 
 Built: the journal (days newest first, splats newest first within a day, the
 committer's initial, the current rifff ringed, Load more at the foot) in the
-Hop Recording layout. Still to come in Slice B: the mixer, the waveform, the
-top-bar transport and meter, and splat spikes drawn from the stems' audio once
-waveform peaks exist.
+Hop Recording layout.
+
+**The mix** (2026-09-18). Each stem now plays through its own gain at the
+rifff's slot gain, times the mixer's level for that slot — LORE's
+`stemGains[i] × m_layerGainMultiplier[i]` (`r4.toolbox/mix/preview.cpp`).
+Before this the engine ignored the slot gains, so every rifff played every
+stem at full volume rather than as it was committed. The mixer's levels and
+mutes belong to the slots and hold across hops, as LORE's multipliers do.
+`placeStems` (`audio/slots.ts`) puts each resolved stem back in its slot so
+the mixer can reach it.
+
+**Mixer** (`MixerPanel`): eight channels — mute lamp, vertical fader
+(pointer drag or arrow keys), the stem's preset name in its colour, and who
+made it — for the playing rifff.
+
+**Waveform** (`LoopWaveform`): a row per slot drawn from the decoded buffer's
+peaks, tiled across the rifff's loop the way short stems repeat, with bar
+numbers and a playhead read from `engine.playhead()` every frame — the same
+continuous grid hops use, so it sits where the audio is.
+
+**Transport** (`TransportBar`, in the top bar): Stop, Play (starts the last
+rifff again), Record (only on Hop Recording, which has a jam), the REC badge
+and clock, a stereo level meter from analysers on a new master bus, and the
+Quantise toggle. Hop Recording lost its own controls and saved-takes list;
+the Hops page lists takes.
+
+Still to do: splat spikes drawn from the stems' audio (the peaks exist now),
+and opening a stopped take in Hop Editing (Slice C).
 
 ## Slice C — Hop Editing (the Phase 8 editor)
 

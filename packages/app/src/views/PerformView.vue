@@ -6,7 +6,7 @@
         <h1 class="strip__name">{{ displayName }}</h1>
       </div>
       <span v-if="performance.currentRiffId" class="strip__meta lwlkc-readout" data-test="current-riff">
-        ▶ {{ performance.currentRiffId }}
+        {{ riffMeta }}
       </span>
     </div>
 
@@ -32,108 +32,19 @@
         </button>
       </div>
 
-      <!-- The mixer and waveform take this column in Slice B; until then it
-           holds the recording controls and this jam's takes. -->
       <div class="rec__deck">
-        <div class="controls">
-          <span class="lw-badge" :class="{ 'lw-badge--success': performance.state === 'playing' }" :data-state="performance.state">
-            {{ performance.state }}
-          </span>
-          <button
-            v-if="performance.state !== 'idle' || recorder.isPlaying"
-            type="button"
-            class="lw-btn lw-btn--secondary lw-btn--sm"
-            data-test="stop"
-            @click="onStop"
-          >
-            <LwIcon name="stop" />
-            Stop
-          </button>
-          <button
-            v-if="!recorder.isRecording"
-            type="button"
-            class="lw-btn lw-btn--danger lw-btn--sm"
-            data-test="record"
-            @click="onRecord"
-          >
-            <LwIcon name="record" />
-            Record
-          </button>
-          <button
-            v-else
-            type="button"
-            class="lw-btn lw-btn--secondary lw-btn--sm recording"
-            data-test="stop-recording"
-            @click="onStopRecording"
-          >
-            <LwIcon name="stop" />
-            Stop Recording
-          </button>
-          <span v-if="recorder.isArmed" class="lw-badge lw-badge--danger lw-badge--dot" data-test="recording-waiting">
-            Waiting for first rifff…
-          </span>
-          <span
-            v-else-if="recorder.isRecording"
-            class="rec-clock lwlkc-readout"
-            data-test="recording-elapsed"
-          >
-            {{ formatDuration(recordingElapsed) }}
-          </span>
-          <label class="quantise" title="Hold each hop until the next beat">
-            <input
-              v-model="performance.quantiseEntry"
-              type="checkbox"
-              data-test="quantise-entry"
-            />
-            Quantise hops to the beat
-          </label>
-        </div>
         <p v-if="performance.lastError" class="error" data-test="error">
           {{ performance.lastError }}
         </p>
-
-        <section v-if="recorder.saved.length > 0" class="saved">
-          <h2 class="lwlkc-eyebrow">Saved sequences</h2>
-          <ul>
-            <li
-              v-for="seq in recorder.saved"
-              :key="seq.id"
-              :class="['saved-row', { playing: recorder.playingId === seq.id }]"
-              data-test="saved-row"
-            >
-              <button
-                type="button"
-                class="lw-iconbtn lw-iconbtn--solid lw-iconbtn--round lw-iconbtn--sm"
-                title="Play"
-                data-test="play-saved"
-                :disabled="recorder.isPlaying"
-                @click="recorder.play(seq)"
-              >
-                <LwIcon name="play" />
-              </button>
-              <span class="saved-title">{{ seq.title }}</span>
-              <span class="saved-duration lwlkc-readout" data-test="saved-duration">
-                {{ formatDuration(seq.durationSec) }}
-              </span>
-              <button
-                type="button"
-                class="lw-iconbtn lw-iconbtn--sm delete"
-                title="Delete"
-                data-test="delete-saved"
-                @click="recorder.delete(seq.jamId, seq.id)"
-              >
-                <LwIcon name="trash" />
-              </button>
-            </li>
-          </ul>
-        </section>
+        <MixerPanel :riff="currentRiff" />
+        <LoopWaveform :riff="currentRiff" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { RiffCouchID, RiffDocument } from '@hoppper/sdk';
 import {
@@ -142,9 +53,10 @@ import {
   usePerformanceStore,
   useRecorderStore,
 } from '../stores';
-import LwIcon from '../components/LwIcon.vue';
 import RiffJournal from '../components/RiffJournal.vue';
-import { formatDuration } from '../ui/format';
+import MixerPanel from '../components/MixerPanel.vue';
+import LoopWaveform from '../components/LoopWaveform.vue';
+import { formatDay, formatTime } from '../ui/format';
 
 const route = useRoute();
 const jamsStore = useJamsStore();
@@ -156,59 +68,38 @@ const jamId = computed(() => String(route.params.jamId));
 const profile = computed(() => jamsStore.profilesById.get(jamId.value));
 const displayName = computed(() => profile.value?.displayName ?? jamId.value);
 
-// Rifffs clicked and still loading. Their hop — and, while recording, the
-// moment it registers — comes when loading finishes, so the row pulses until
-// then. The whole row: a pulsing button alone was too easy to miss.
-const loading = ref(new Set<RiffCouchID>());
-const lastNotReady = ref<RiffCouchID | null>(null);
-const recordingElapsed = ref(0);
-let recordStartedAtMs = 0;
-let recordingTimer: number | null = null;
-
-// The take's timeline begins at the first rifff clicked, not at Record, so
-// the clock waits out the armed state.
-watch(
-  () => recorder.isRecording && !recorder.isArmed,
-  (isRecording) => {
-    if (isRecording) {
-      recordStartedAtMs = Date.now();
-      recordingElapsed.value = 0;
-      recordingTimer = window.setInterval(() => {
-        recordingElapsed.value = (Date.now() - recordStartedAtMs) / 1000;
-      }, 250);
-    } else if (recordingTimer !== null) {
-      window.clearInterval(recordingTimer);
-      recordingTimer = null;
-    }
-  },
-  { immediate: true },
+// The rifff the mixer and waveform show: the one playing, from this jam's
+// history. A replay can play one older than the pages loaded so far; then
+// they show the slots without names until it's in view.
+const currentRiff = computed<RiffDocument | null>(
+  () => currentJam.riffPage.find((r) => r.riffId === performance.currentRiffId) ?? null,
 );
 
-onMounted(async () => {
-  await Promise.all([
-    jamsStore.loadProfile(jamId.value),
-    currentJam.open(jamId.value),
-    recorder.loadSaved(jamId.value),
-  ]);
+// "14 Sep 2026 21:40 · lwlkc · 120 BPM" — or the ID, for a rifff a replay is
+// playing from beyond the pages loaded.
+const riffMeta = computed(() => {
+  const r = currentRiff.value;
+  if (!r) return performance.currentRiffId ?? '';
+  return `${formatDay(r.createdAt)} ${formatTime(r.createdAt)} · ${r.userName} · ${r.bpm} BPM`;
 });
 
+// Rifffs clicked and still loading. Their hop — and, while recording, the
+// moment it registers — comes when loading finishes, so the splat pulses
+// until then.
+const loading = ref(new Set<RiffCouchID>());
+const lastNotReady = ref<RiffCouchID | null>(null);
+
+onMounted(async () => {
+  await Promise.all([jamsStore.loadProfile(jamId.value), currentJam.open(jamId.value)]);
+});
+
+// Leaving the jam silences it; the transport stays in the top bar for a
+// replay started from Hops.
 onUnmounted(() => {
   performance.stop();
   if (recorder.isPlaying) recorder.stopPlayback();
-  if (recordingTimer !== null) window.clearInterval(recordingTimer);
   currentJam.close();
 });
-
-// Every take starts at the beginning of a rifff: silence what's playing, so
-// the first click after Record is a cold start on a fresh grid.
-function onRecord(): void {
-  stopAudio();
-  recorder.start(jamId.value);
-}
-
-async function onStopRecording(): Promise<void> {
-  await onStop();
-}
 
 const loadingMore = ref(false);
 
@@ -233,23 +124,6 @@ async function onHop(riff: RiffDocument): Promise<void> {
     loading.value.delete(riff.riffId);
   }
 }
-
-/**
- * Silence everything. A replay has its remaining hops scheduled, and stopping
- * only the engine lets the next one start the audio again.
- */
-function stopAudio(): void {
-  if (recorder.isPlaying) recorder.stopPlayback();
-  performance.stop();
-}
-
-// Stop ends whatever is running — playback, a replay or a recording — so it
-// and Stop Recording behave the same while recording.
-async function onStop(): Promise<void> {
-  stopAudio();
-  if (recorder.isRecording) await recorder.stop();
-}
-
 </script>
 
 <style scoped>
@@ -303,69 +177,12 @@ async function onStop(): Promise<void> {
   min-height: 0;
   overflow: auto;
   padding: 20px 24px;
-}
-.controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.quantise {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-  user-select: none;
-  cursor: pointer;
-}
-.quantise input {
-  accent-color: var(--accent);
+  flex-direction: column;
+  gap: 16px;
 }
 .error {
-  margin-bottom: 16px;
   color: var(--danger);
   font-size: var(--text-sm);
-}
-.rec-clock {
-  color: var(--danger);
-}
-.saved h2 {
-  margin-bottom: 8px;
-}
-.saved ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface-1);
-}
-.saved-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--line-faint);
-}
-.saved-row:first-child {
-  border-top: none;
-}
-.saved-row.playing {
-  background: var(--accent-soft);
-}
-.saved-title {
-  flex: 1;
-  color: var(--text-1);
-}
-.saved-duration {
-  font-size: var(--text-sm);
-  color: var(--text-3);
-}
-.saved .delete:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 </style>

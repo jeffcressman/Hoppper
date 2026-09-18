@@ -80,6 +80,15 @@ vi.mock('vue-router', async (orig) => {
   };
 });
 
+// The mixer and waveform have tests of their own; here they only need to be
+// handed the right rifff.
+vi.mock('../../src/components/MixerPanel.vue', () => ({
+  default: { name: 'MixerPanel', props: ['riff'], template: '<div />' },
+}));
+vi.mock('../../src/components/LoopWaveform.vue', () => ({
+  default: { name: 'LoopWaveform', props: ['riff'], template: '<div />' },
+}));
+
 import PerformView from '../../src/views/PerformView.vue';
 
 beforeEach(() => {
@@ -218,57 +227,34 @@ describe('PerformView', () => {
     expect(wrapper.find('[data-test="busy-badge"]').exists()).toBe(true);
   });
 
-  it('shows current riff id in the header when state is playing', async () => {
+  it('says in the header which rifff is playing: when, who, and its tempo', async () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r1';
     currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
-    expect(wrapper.find('[data-test="current-riff"]').text()).toContain('r1');
+    const meta = wrapper.find('[data-test="current-riff"]').text();
+    expect(meta).toContain('14 Sep 2026');
+    expect(meta).toContain('lwlkc');
+    expect(meta).toContain('120 BPM');
   });
 
-  it('Stop button appears when playing and calls performance.stop', async () => {
-    performanceStub.state = 'playing';
-    performanceStub.currentRiffId = 'r1';
-    currentJamStub.riffPage = [riffOf('r1', 120)];
+  it('shows the playing rifff in the mixer and the waveform', async () => {
+    performanceStub.currentRiffId = 'r2';
+    currentJamStub.riffPage = [riffOf('r1', 120), riffOf('r2', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
-    const stopBtn = wrapper.find('[data-test="stop"]');
-    expect(stopBtn.exists()).toBe(true);
-    await stopBtn.trigger('click');
-    expect(performanceStub.stop).toHaveBeenCalled();
+    expect(wrapper.findComponent({ name: 'MixerPanel' }).props('riff')).toMatchObject({ riffId: 'r2' });
+    expect(wrapper.findComponent({ name: 'LoopWaveform' }).props('riff')).toMatchObject({ riffId: 'r2' });
   });
 
-  it('Stop during a replay cancels the rest of the replay, not just the audio', async () => {
-    // Stopping only the engine left the replay's later hops scheduled, and
-    // the next one started the audio again.
-    performanceStub.state = 'playing';
+  it('leaving the jam silences it', async () => {
     recorderStub.isPlaying = true;
     const wrapper = mount(PerformView);
     await flushPromises();
-    await wrapper.find('[data-test="stop"]').trigger('click');
-    await flushPromises();
+    wrapper.unmount();
+    expect(performanceStub.stop).toHaveBeenCalled();
     expect(recorderStub.stopPlayback).toHaveBeenCalled();
-    expect(performanceStub.stop).toHaveBeenCalled();
-  });
-
-  it('Stop is offered while a replay is still loading, before any audio', async () => {
-    performanceStub.state = 'idle';
-    recorderStub.isPlaying = true;
-    const wrapper = mount(PerformView);
-    await flushPromises();
-    expect(wrapper.find('[data-test="stop"]').exists()).toBe(true);
-  });
-
-  it('Stop while recording ends the recording too, and saves it', async () => {
-    performanceStub.state = 'playing';
-    recorderStub.isRecording = true;
-    const wrapper = mount(PerformView);
-    await flushPromises();
-    await wrapper.find('[data-test="stop"]').trigger('click');
-    await flushPromises();
-    expect(performanceStub.stop).toHaveBeenCalled();
-    expect(recorderStub.stop).toHaveBeenCalled();
   });
 
   it('highlights the row of the rifff that is playing', async () => {
@@ -285,41 +271,6 @@ describe('PerformView', () => {
     expect(rows[1]!.classes()).toContain('current');
   });
 
-  it('Stop button is hidden when state is idle', async () => {
-    performanceStub.state = 'idle';
-    currentJamStub.riffPage = [riffOf('r1', 120)];
-    const wrapper = mount(PerformView);
-    await flushPromises();
-    expect(wrapper.find('[data-test="stop"]').exists()).toBe(false);
-  });
-
-  describe('quantised entry toggle', () => {
-    it('renders unchecked, since quantised entry is off by default', async () => {
-      performanceStub.quantiseEntry = false;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      const box = wrapper.find('[data-test="quantise-entry"]');
-      expect(box.exists()).toBe(true);
-      expect((box.element as HTMLInputElement).checked).toBe(false);
-    });
-
-    it('switches the store flag when ticked', async () => {
-      performanceStub.quantiseEntry = false;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="quantise-entry"]').setValue(true);
-      expect(performanceStub.quantiseEntry).toBe(true);
-    });
-
-    it('reflects the flag being on', async () => {
-      performanceStub.quantiseEntry = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      const box = wrapper.find('[data-test="quantise-entry"]');
-      expect((box.element as HTMLInputElement).checked).toBe(true);
-    });
-  });
-
   it('shows error text when performance.lastError is set', async () => {
     performanceStub.lastError = 'no stems';
     const wrapper = mount(PerformView);
@@ -327,234 +278,4 @@ describe('PerformView', () => {
     expect(wrapper.find('[data-test="error"]').text()).toContain('no stems');
   });
 
-  describe('recording', () => {
-    it('loads saved sequences on mount', async () => {
-      mount(PerformView);
-      await flushPromises();
-      expect(recorderStub.loadSaved).toHaveBeenCalledWith('band1');
-    });
-
-    it('Record button is visible when idle', async () => {
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.find('[data-test="record"]').exists()).toBe(true);
-    });
-
-    it('clicking Record calls recorder.start with the route jamId', async () => {
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="record"]').trigger('click');
-      expect(recorderStub.start).toHaveBeenCalledWith('band1');
-    });
-
-    it('clicking Record stops whatever is playing first', async () => {
-      // Every take starts at the beginning of a rifff, so the first click
-      // after Record has to be a cold start.
-      performanceStub.state = 'playing';
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="record"]').trigger('click');
-      expect(performanceStub.stop).toHaveBeenCalled();
-      expect(recorderStub.start).toHaveBeenCalledWith('band1');
-      expect(performanceStub.stop.mock.invocationCallOrder[0]).toBeLessThan(
-        recorderStub.start.mock.invocationCallOrder[0]!,
-      );
-    });
-
-    it('clicking Record during a replay stops the replay first', async () => {
-      recorderStub.isPlaying = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="record"]').trigger('click');
-      expect(recorderStub.stopPlayback).toHaveBeenCalled();
-      expect(recorderStub.stopPlayback.mock.invocationCallOrder[0]).toBeLessThan(
-        recorderStub.start.mock.invocationCallOrder[0]!,
-      );
-    });
-
-    it('while armed, shows that it is waiting for the first rifff, with no clock', async () => {
-      recorderStub.isRecording = true;
-      recorderStub.isArmed = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.find('[data-test="recording-waiting"]').text()).toBe(
-        'Waiting for first rifff…',
-      );
-      expect(wrapper.find('[data-test="recording-elapsed"]').exists()).toBe(false);
-    });
-
-    it('starts the elapsed clock at the first rifff, not at Record', async () => {
-      vi.useFakeTimers();
-      try {
-        recorderStub.isRecording = true;
-        recorderStub.isArmed = true;
-        const wrapper = mount(PerformView);
-        await flushPromises();
-        // Time spent waiting for the first click isn't part of the take.
-        vi.advanceTimersByTime(5000);
-
-        // The first rifff is clicked.
-        reactive(recorderStub).isArmed = false;
-        await flushPromises();
-        expect(wrapper.find('[data-test="recording-waiting"]').exists()).toBe(false);
-        expect(wrapper.find('[data-test="recording-elapsed"]').text()).toBe('0:00');
-        vi.advanceTimersByTime(1500);
-        await flushPromises();
-        expect(wrapper.find('[data-test="recording-elapsed"]').text()).toBe('0:01');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('shows a Stop Recording button while recording', async () => {
-      recorderStub.isRecording = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.find('[data-test="stop-recording"]').exists()).toBe(true);
-    });
-
-    it('clicking Stop Recording calls recorder.stop', async () => {
-      recorderStub.isRecording = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="stop-recording"]').trigger('click');
-      await flushPromises();
-      expect(recorderStub.stop).toHaveBeenCalled();
-    });
-
-    it('clicking Stop Recording stops playback too', async () => {
-      performanceStub.state = 'playing';
-      recorderStub.isRecording = true;
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="stop-recording"]').trigger('click');
-      await flushPromises();
-      expect(performanceStub.stop).toHaveBeenCalled();
-    });
-
-    it('highlights the saved sequence that is replaying', async () => {
-      const take = (id: string) => ({
-        schemaVersion: 1 as const,
-        id,
-        title: `Take ${id}`,
-        jamId: 'band1',
-        recordedAt: '',
-        durationSec: 30,
-        hops: [],
-      });
-      recorderStub.saved = [take('a'), take('b')];
-      recorderStub.isPlaying = true;
-      recorderStub.playingId = 'b';
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      const rows = wrapper.findAll('[data-test="saved-row"]');
-      expect(rows[0]!.classes()).not.toContain('playing');
-      expect(rows[1]!.classes()).toContain('playing');
-    });
-
-    it('renders a row per saved sequence', async () => {
-      recorderStub.saved = [
-        {
-          schemaVersion: 1,
-          id: 'a',
-          title: 'Take A',
-          jamId: 'band1',
-          recordedAt: '2026-05-14T00:00:00.000Z',
-          durationSec: 30,
-          hops: [],
-        },
-        {
-          schemaVersion: 1,
-          id: 'b',
-          title: 'Take B',
-          jamId: 'band1',
-          recordedAt: '2026-05-14T01:00:00.000Z',
-          durationSec: 60,
-          hops: [],
-        },
-      ];
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.findAll('[data-test="saved-row"]')).toHaveLength(2);
-    });
-
-    it('clicking Play on a saved row calls recorder.play with that sequence', async () => {
-      const seq = {
-        schemaVersion: 1 as const,
-        id: 'a',
-        title: 'Take A',
-        jamId: 'band1',
-        recordedAt: '',
-        durationSec: 30,
-        hops: [],
-      };
-      recorderStub.saved = [seq];
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="play-saved"]').trigger('click');
-      expect(recorderStub.play).toHaveBeenCalledWith(seq);
-    });
-
-    it('clicking Delete on a saved row calls recorder.delete', async () => {
-      recorderStub.saved = [
-        {
-          schemaVersion: 1,
-          id: 'a',
-          title: 'Take A',
-          jamId: 'band1',
-          recordedAt: '',
-          durationSec: 30,
-          hops: [],
-        },
-      ];
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      await wrapper.find('[data-test="delete-saved"]').trigger('click');
-      expect(recorderStub.delete).toHaveBeenCalledWith('band1', 'a');
-    });
-
-    it('renders the saved sequence duration in mm:ss format', async () => {
-      recorderStub.saved = [
-        {
-          schemaVersion: 1,
-          id: 'a',
-          title: 'Take A',
-          jamId: 'band1',
-          recordedAt: '',
-          durationSec: 75, // 1:15
-          hops: [],
-        },
-      ];
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.find('[data-test="saved-duration"]').text()).toBe('1:15');
-    });
-
-    it('does not show an elapsed clock when not recording', async () => {
-      const wrapper = mount(PerformView);
-      await flushPromises();
-      expect(wrapper.find('[data-test="recording-elapsed"]').exists()).toBe(false);
-    });
-
-    it('shows a live elapsed clock when mounted while recording', async () => {
-      vi.useFakeTimers();
-      try {
-        recorderStub.isRecording = true;
-        const wrapper = mount(PerformView);
-        await flushPromises();
-        const clock = wrapper.find('[data-test="recording-elapsed"]');
-        expect(clock.exists()).toBe(true);
-        expect(clock.text()).toBe('0:00');
-
-        // Advance fake clock and tick the interval to update elapsed.
-        vi.advanceTimersByTime(2500);
-        await flushPromises();
-        expect(
-          wrapper.find('[data-test="recording-elapsed"]').text(),
-        ).toBe('0:02');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
 });

@@ -10,11 +10,13 @@ import { computeRiffTiming } from './riff-timing.js';
 import type { AudioBufferLike } from './audio-buffer-cache.js';
 import {
   createRiffVoice,
+  type AnalyserNodeLike,
   type AudioContextLike,
   type RiffVoice,
   type VoiceStem,
 } from './riff-voice.js';
 import type { StemLoader } from './stem-loader.js';
+import { placeStems, SLOT_COUNT } from './slots.js';
 
 export type AudioEngineState = 'idle' | 'playing';
 
@@ -74,6 +76,21 @@ export interface AudioEngine {
     opts?: HopOptions,
   ): Promise<HopResult>;
   stop(): void;
+  /**
+   * The mixer: a level per slot (0..1), multiplied onto each stem's own rifff
+   * gain — LORE's `m_layerGainMultiplier`. It belongs to the slot, not the
+   * rifff, so it holds across hops. All 1 until set.
+   */
+  readonly slotLevels: ReadonlyArray<number>;
+  setSlotLevels(levels: ReadonlyArray<number>): void;
+  /**
+   * Where playback is in the playing rifff's loop, on the same continuous
+   * grid hops are measured against — so it is where the audio is. Null while
+   * nothing plays.
+   */
+  playhead(): { riffId: RiffCouchID; positionSec: number; loopSec: number } | null;
+  /** Peak output level of the left and right channels just now, 0..1. */
+  levels(): [number, number];
   onStateChange(fn: (s: AudioEngineState) => void): () => void;
   /**
    * Fires whenever `currentRiffId` changes: a cold start, every hop, and
@@ -114,6 +131,29 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   // at full volume until a quantised hop's moment arrives. Stop has to reach
   // these as well as `current`.
   let outgoing: OutgoingVoice[] = [];
+  let slotLevels: number[] = Array(SLOT_COUNT).fill(1);
+
+  // Every voice plays into one master bus, which the level meter taps.
+  const master = context.createGain();
+  master.connect(context.destination);
+  const meters: { node: AnalyserNodeLike; frame: Float32Array }[] = [];
+  if (context.createAnalyser && context.createChannelSplitter) {
+    const splitter = context.createChannelSplitter(2);
+    master.connect(splitter);
+    // Some WebKit builds only run an analyser that feeds something audible;
+    // a silent path to the destination keeps the meters fed without playing
+    // everything twice.
+    const sink = context.createGain();
+    sink.gain.value = 0;
+    sink.connect(context.destination);
+    for (const channel of [0, 1]) {
+      const node = context.createAnalyser();
+      node.fftSize = 1024;
+      splitter.connect(node, channel);
+      node.connect(sink);
+      meters.push({ node, frame: new Float32Array(1024) });
+    }
+  }
   const listeners = new Set<(s: AudioEngineState) => void>();
   const riffListeners = new Set<(riffId: RiffCouchID | null) => void>();
 
@@ -206,15 +246,25 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
     return ` scaled=${scaled.length}/${present.length} (${rates})`;
   }
 
+  /**
+   * The voice's eight slots: each stem back in the slot the rifff has it in,
+   * at the gain the rifff gives that slot, so the mixer can reach it by slot
+   * and the rifff plays at its own mix (LORE's `m_stemGains`).
+   */
   function toVoiceStems(
     riff: RiffDocument,
     stems: ResolvedStem[],
     buffers: ReadonlyArray<AudioBufferLike | null>,
   ): (VoiceStem | null)[] {
-    return buffers.map((buffer, i) => {
-      const stem = stems[i];
-      if (!buffer || !stem) return null;
-      return { buffer, playbackRate: playbackRateFor(riff, stem) };
+    const bufferOf = new Map<StemCouchID, AudioBufferLike>();
+    stems.forEach((s, i) => {
+      const b = buffers[i];
+      if (b) bufferOf.set(s.stemId, b);
+    });
+    return placeStems(riff, stems).map((placed) => {
+      const buffer = placed && bufferOf.get(placed.stem.stemId);
+      if (!placed || !buffer) return null;
+      return { buffer, playbackRate: playbackRateFor(riff, placed.stem), gain: placed.gain };
     });
   }
 
@@ -287,6 +337,8 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           context,
           stems: voiceStems,
           loopDurationSec: timing.loopDurationSec,
+          levels: slotLevels,
+          destination: master,
         });
         gridOrigin = now;
         voice.start(now, 0);
@@ -316,6 +368,8 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         context,
         stems: voiceStems,
         loopDurationSec: timing.loopDurationSec,
+        levels: slotLevels,
+        destination: master,
       });
 
       // A beat is a quarter note — the unit `bps` counts.
@@ -412,6 +466,42 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       gridOrigin = null;
       emitRiffChange();
       setState('idle');
+    },
+
+    get slotLevels() {
+      return slotLevels;
+    },
+
+    playhead() {
+      if (current === null || gridOrigin === null) return null;
+      const loopSec = current.loopDurationSec;
+      if (!(loopSec > 0)) return null;
+      const since = context.currentTime - gridOrigin;
+      return { riffId: current.riffId, positionSec: ((since % loopSec) + loopSec) % loopSec, loopSec };
+    },
+
+    levels() {
+      if (meters.length < 2) return [0, 0];
+      const peak = ({ node, frame }: (typeof meters)[number]) => {
+        node.getFloatTimeDomainData(frame);
+        let max = 0;
+        for (const v of frame) max = Math.max(max, Math.abs(v));
+        return Math.min(1, max);
+      };
+      return [peak(meters[0]!), peak(meters[1]!)];
+    },
+
+    setSlotLevels(levels) {
+      slotLevels = Array.from({ length: SLOT_COUNT }, (_, i) => {
+        const l = levels[i];
+        return l !== undefined && Number.isFinite(l) ? Math.max(0, l) : 1;
+      });
+      // The rifff playing and any still fading out follow the fader at once.
+      const now = context.currentTime;
+      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) {
+        if (!v) continue;
+        slotLevels.forEach((level, slot) => v.setSlotLevel(slot, level, now));
+      }
     },
 
     onStateChange(fn) {
