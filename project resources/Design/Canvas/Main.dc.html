@@ -1,0 +1,729 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap">
+  <style>
+    /* LwlkcIng tokens (tokens/colors.css, typography.css, spacing.css, effects.css) */
+    :root {
+      --brand-hue: 42; --brand-chroma: 0.155; --ui-brightness: 0;
+      --bg:         oklch(calc(0.145 + var(--ui-brightness)) 0.009 var(--brand-hue));
+      --bg-sunken:  oklch(calc(0.115 + var(--ui-brightness)) 0.008 var(--brand-hue));
+      --surface-1:  oklch(calc(0.185 + var(--ui-brightness)) 0.011 var(--brand-hue));
+      --surface-2:  oklch(calc(0.227 + var(--ui-brightness)) 0.013 var(--brand-hue));
+      --surface-3:  oklch(calc(0.278 + var(--ui-brightness)) 0.014 var(--brand-hue));
+      --surface-inset: oklch(calc(0.095 + var(--ui-brightness)) 0.007 var(--brand-hue));
+      --line: oklch(1 0 0 / 0.09); --line-strong: oklch(1 0 0 / 0.16); --line-faint: oklch(1 0 0 / 0.05);
+      --text-1: oklch(0.97 0.006 var(--brand-hue)); --text-2: oklch(0.78 0.008 var(--brand-hue));
+      --text-3: oklch(0.605 0.008 var(--brand-hue)); --text-4: oklch(0.45 0.006 var(--brand-hue));
+      --accent:       oklch(0.74 var(--brand-chroma) var(--brand-hue));
+      --accent-hover: oklch(0.79 var(--brand-chroma) var(--brand-hue));
+      --accent-press: oklch(0.67 var(--brand-chroma) var(--brand-hue));
+      --accent-soft:  oklch(0.74 var(--brand-chroma) var(--brand-hue) / 0.16);
+      --accent-line:  oklch(0.74 var(--brand-chroma) var(--brand-hue) / 0.45);
+      --on-accent:    oklch(0.16 0.012 var(--brand-hue));
+      --spectrum-amber: oklch(0.76 0.16 58); --spectrum-yellow: oklch(0.86 0.15 96);
+      --spectrum-green: oklch(0.80 0.16 150); --spectrum-teal: oklch(0.82 0.115 188);
+      --spectrum-blue: oklch(0.69 0.145 248); --spectrum-indigo: oklch(0.60 0.165 285);
+      --spectrum-violet: oklch(0.64 0.19 312); --spectrum-pink: oklch(0.69 0.205 352);
+      --spectrum-red: oklch(0.645 0.21 26);
+      --danger: var(--spectrum-red); --danger-soft: oklch(0.645 0.21 26 / 0.16);
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
+      --font-mono: 'Space Mono', ui-monospace, 'SF Mono', monospace;
+      --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+      --control-h-sm: 30px; --control-h-md: 38px; --control-h-lg: 46px; --rail-w: 92px;
+      --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30); --shadow-md: 0 4px 14px oklch(0 0 0 / 0.38);
+      --shadow-lg: 0 14px 40px oklch(0 0 0 / 0.46); --shadow-xl: 0 28px 70px oklch(0 0 0 / 0.55);
+      --glow-accent: 0 0 0 1px var(--accent-line), 0 0 18px -2px var(--accent);
+      --glow-focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+      --focus-ring: 0 0 0 2px var(--accent-line);
+      --glass-bg: oklch(0.185 0.011 var(--brand-hue) / 0.66);
+      --glass-blur: saturate(1.5) blur(22px); --glass-line: oklch(1 0 0 / 0.10);
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1); --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --dur-fast: 110ms; --dur-mid: 190ms;
+      --transition-control: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+        color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text-2); font-family: var(--font-sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3 { margin: 0; color: var(--text-1); font-family: var(--font-display); font-weight: 700; line-height: 1.14; letter-spacing: -0.02em; }
+    p { margin: 0; }
+    a { color: var(--accent); text-decoration: none; } a:hover { color: var(--accent-hover); }
+    button { font: inherit; }
+    * { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+
+    .wordmark { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.24em; color: var(--text-1); }
+    .eyebrow { font-family: var(--font-sans); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--text-3); }
+    .readout { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .glass { background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-line); }
+
+    /* Button (components/core/Button) */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--control-h-md); padding: 0 18px; border: 1px solid transparent; border-radius: var(--r-pill); font-family: var(--font-sans); font-weight: 600; font-size: 15px; line-height: 1; letter-spacing: -0.005em; cursor: pointer; white-space: nowrap; transition: var(--transition-control); }
+    .btn:active { transform: translateY(0.5px) scale(0.985); }
+    .btn:focus-visible { outline: none; box-shadow: var(--glow-focus-ring); }
+    .btn svg { width: 1.1em; height: 1.1em; flex: none; }
+    .btn--sm { height: var(--control-h-sm); padding: 0 13px; font-size: 13px; gap: 6px; }
+    .btn--lg { height: var(--control-h-lg); padding: 0 24px; font-size: 17px; }
+    .btn--primary { background: var(--accent); color: var(--on-accent); } .btn--primary:hover { background: var(--accent-hover); }
+    .btn--secondary { background: var(--surface-2); color: var(--text-1); border-color: var(--line); } .btn--secondary:hover { background: var(--surface-3); border-color: var(--line-strong); }
+    .btn--ghost { background: transparent; color: var(--text-2); } .btn--ghost:hover { background: var(--surface-2); color: var(--text-1); }
+    .btn--danger { background: var(--danger); color: var(--on-accent); } .btn--danger:hover { filter: brightness(1.08); }
+
+    /* IconButton (components/core/IconButton) */
+    .ibtn { display: inline-flex; align-items: center; justify-content: center; width: var(--control-h-md); height: var(--control-h-md); flex: none; padding: 0; border-radius: var(--r-md); border: 1px solid transparent; background: transparent; color: var(--text-2); cursor: pointer; transition: var(--transition-control); }
+    .ibtn svg { width: 50%; height: 50%; }
+    .ibtn:hover { background: var(--surface-2); color: var(--text-1); }
+    .ibtn:active { transform: scale(0.93); }
+    .ibtn:disabled { opacity: 0.4; pointer-events: none; }
+    .ibtn--sm { width: var(--control-h-sm); height: var(--control-h-sm); border-radius: var(--r-sm); }
+    .ibtn--round { border-radius: 50%; }
+    .ibtn--solid { background: var(--surface-2); border-color: var(--line); } .ibtn--solid:hover { background: var(--surface-3); }
+    .ibtn.is-active { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+    .ibtn.is-rec { background: var(--danger); color: var(--on-accent); border-color: transparent; box-shadow: 0 0 18px -3px var(--danger); }
+    .ibtn--rec { color: var(--danger); }
+    .ibtn--del:hover { background: var(--danger-soft); color: var(--danger); }
+
+    /* Badge (components/core/Badge) */
+    .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: var(--r-pill); font-family: var(--font-sans); font-weight: 600; font-size: 11px; letter-spacing: 0.02em; line-height: 1; white-space: nowrap; background: var(--surface-3); color: var(--text-2); }
+    .badge--solid { background: var(--accent); color: var(--on-accent); }
+    .badge--dark { background: oklch(0.145 0.009 42 / 0.78); color: var(--text-1); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+    .badge--rec { background: var(--danger-soft); color: var(--danger); }
+    .badge--dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+    /* Shell (ui_kits/studio/kit.css) */
+    .app { position: relative; width: 1280px; height: 800px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+    .topbar { position: relative; display: flex; align-items: center; gap: 20px; height: 60px; padding: 0 16px; border-width: 0 0 1px 0; border-bottom-color: var(--line); z-index: 20; flex: none; }
+    .topbar__brand { display: flex; align-items: center; gap: 11px; width: 200px; color: var(--accent); }
+    .topbar__transport { display: flex; align-items: center; gap: 8px; }
+    .topbar__right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .master { width: 150px; height: 26px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px; background: var(--surface-inset); border-radius: var(--r-sm); border: 1px solid var(--line); }
+    .meter { display: flex; gap: 2px; height: 6px; }
+    .meter__seg { flex: 1; border-radius: 2px; }
+    .body { flex: 1; display: flex; min-height: 0; }
+    .main { flex: 1; min-width: 0; overflow: auto; }
+
+    /* NavRail (components/layout/NavRail) */
+    .rail { display: flex; flex-direction: column; align-items: center; gap: 8px; width: var(--rail-w); flex: none; padding: 16px 8px; background: var(--bg-sunken); border-right: 1px solid var(--line); }
+    .rail__item { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 11px 4px; border-radius: var(--r-md); border: 1.5px solid transparent; color: var(--text-3); cursor: pointer; transition: var(--transition-control); background: none; font-family: var(--font-sans); }
+    .rail__item:hover { color: var(--text-1); background: var(--surface-1); }
+    .rail__item svg { width: 24px; height: 24px; }
+    .rail__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2; text-align: center; }
+    .rail__item.is-active { color: var(--text-1); border-color: var(--line-strong); background: var(--surface-1); }
+    .rail__item:disabled { opacity: 0.4; pointer-events: none; }
+    .rail__spacer { flex: 1; }
+
+    /* Views */
+    .view { padding: 28px 32px 40px; }
+    .view__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+    .view__sub { color: var(--text-3); margin-top: 4px; }
+    .jam-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 26px 22px; }
+
+    /* Jam tile — Card flush (components/layout/Card) */
+    .tile { display: flex; flex-direction: column; cursor: pointer; text-align: left; background: none; border: none; padding: 0; color: inherit; transition: var(--transition-control); }
+    .tile:hover { transform: translateY(-2px); }
+    .tile__media { position: relative; width: 100%; aspect-ratio: 1; border-radius: var(--r-md); overflow: hidden; background: var(--surface-3); transition: var(--transition-control); }
+    .tile:hover .tile__media { box-shadow: var(--shadow-lg); }
+    .tile__media.is-current { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent), 0 0 26px -4px var(--accent); }
+    .tile__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile__badges { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; }
+    .tile__body { padding: 10px 2px 0; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .tile__title { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--text-1); letter-spacing: -0.01em; line-height: 1.2; }
+    .tile__meta { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Login gate — splash idiom */
+    .gate { position: relative; height: 440px; border-radius: var(--r-xl); overflow: hidden; border: 1px solid var(--line); display: grid; place-items: center; }
+    .gate__stripes { position: absolute; inset: -30%; background: repeating-linear-gradient(48deg, var(--spectrum-red) 0 34px, var(--spectrum-amber) 34px 68px, var(--spectrum-yellow) 68px 102px, var(--spectrum-green) 102px 136px, var(--spectrum-teal) 136px 170px, var(--spectrum-blue) 170px 204px, var(--spectrum-violet) 204px 238px, var(--spectrum-pink) 238px 272px); opacity: 0.22; }
+    .gate__veil { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, transparent, var(--bg) 70%); }
+    .gate__inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
+
+    /* Hops list */
+    .hops { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-1); overflow: hidden; }
+    .hops__row { display: grid; grid-template-columns: 38px minmax(0, 1fr) 150px 90px 90px 150px; align-items: center; gap: 16px; padding: 12px 16px; border-top: 1px solid var(--line-faint); transition: var(--transition-control); }
+    .hops__row:hover { background: var(--surface-2); }
+    .hops__row.is-playing { background: var(--accent-soft); }
+    .hops__head { padding-top: 10px; padding-bottom: 10px; border-top: none; background: var(--bg-sunken); }
+    .hops__head:hover { background: var(--bg-sunken); }
+    .hops__title { font-weight: 700; color: var(--text-1); font-size: 15px; line-height: 1.3; }
+    .hops__jam { font-size: 13px; color: var(--text-3); }
+    .hops__num { font-size: 13px; color: var(--text-2); }
+    .hops__actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+
+    /* Placeholder pages (not designed yet) */
+    .stub { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 420px; padding: 40px; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); background: var(--surface-inset); text-align: center; }
+
+    /* Settings */
+    .panel { max-width: 640px; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-1); display: flex; flex-direction: column; gap: 16px; }
+    .avatar { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-3); color: var(--text-1); font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+
+    /* Dialog (components/feedback/Dialog) + Input (components/forms/Input) */
+    .scrim { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: oklch(0 0 0 / 0.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: fade var(--dur-mid) var(--ease-out); }
+    .dialog { width: 100%; max-width: 420px; display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--line-strong); border-radius: var(--r-xl); box-shadow: var(--shadow-xl); overflow: hidden; animation: pop var(--dur-mid) var(--ease-spring); }
+    .dialog__head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .dialog__title { flex: 1; font-family: var(--font-display); font-weight: 700; font-size: 21px; color: var(--text-1); letter-spacing: -0.01em; }
+    .dialog__body { padding: 20px; color: var(--text-2); display: flex; flex-direction: column; gap: 14px; }
+    .dialog__foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line); }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field__label { font-weight: 600; font-size: 13px; color: var(--text-2); }
+    .input { width: 100%; height: var(--control-h-md); padding: 0 13px; background: var(--surface-inset); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--text-1); font-family: var(--font-sans); font-size: 15px; outline: none; transition: var(--transition-control); }
+    .input::placeholder { color: var(--text-4); }
+    .input:hover { border-color: var(--line-strong); }
+    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    @keyframes fade { from { opacity: 0; } }
+    @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+    @keyframes pulse { 50% { opacity: 0.35; } }
+    .pulse { animation: pulse 1.2s var(--ease-out) infinite; }
+    @media (prefers-reduced-motion: reduce) { .pulse, .scrim, .dialog { animation: none; } }
+  </style>
+</helmet>
+
+<div class="app">
+
+  <!-- ── Top bar ─────────────────────────────────────────── -->
+  <header class="topbar glass">
+    <div class="topbar__brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8.5 7.5v9M15.5 7.5v9M8.5 12h7"></path></svg>
+      <span class="wordmark" style="font-size: 15px">Hoppper</span>
+    </div>
+    <div class="topbar__transport">
+      <button class="ibtn ibtn--solid" title="Stop" disabled="{{ transport.disabled }}" onClick="{{ transport.stop }}">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"></rect></svg>
+      </button>
+      <button class="ibtn ibtn--solid ibtn--round {{ transport.playCls }}" title="Play" disabled="{{ transport.disabled }}" onClick="{{ transport.togglePlay }}">
+        <sc-if value="{{ transport.playing }}" hint-placeholder-val="{{ false }}">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+        </sc-if>
+        <sc-if value="{{ transport.paused }}" hint-placeholder-val="{{ true }}">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5 19 12 7 19.5V4.5z"></path></svg>
+        </sc-if>
+      </button>
+      <button class="ibtn ibtn--solid ibtn--round ibtn--rec {{ transport.recCls }}" title="Record a hop" disabled="{{ transport.disabled }}" onClick="{{ transport.record }}">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"></circle></svg>
+      </button>
+      <div style="display: flex; align-items: center; gap: 8px; margin-left: 8px">
+        <sc-if value="{{ transport.recording }}" hint-placeholder-val="{{ false }}">
+          <span class="badge badge--rec badge--dot pulse">REC</span>
+        </sc-if>
+        <span class="readout" style="font-size: 12px; color: var(--text-3)">{{ transport.readout }}</span>
+      </div>
+    </div>
+    <div class="topbar__right">
+      <div class="master" title="Output level">
+        <div class="meter">
+          <sc-for list="{{ meterL }}" as="seg" hint-placeholder-count="18"><span class="meter__seg" style="background: {{ seg.bg }}; opacity: {{ seg.op }}"></span></sc-for>
+        </div>
+        <div class="meter">
+          <sc-for list="{{ meterR }}" as="seg" hint-placeholder-count="18"><span class="meter__seg" style="background: {{ seg.bg }}; opacity: {{ seg.op }}"></span></sc-for>
+        </div>
+      </div>
+      <button class="ibtn {{ transport.quantCls }}" title="Quantise hops to the bar" onClick="{{ transport.toggleQuant }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16M12 4v16M19 4v16"></path><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"></circle></svg>
+      </button>
+      <button class="ibtn {{ settingsCls }}" title="Settings" onClick="{{ goSettings }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5l1 2.6a7.5 7.5 0 0 1 1.8.7l2.6-1 1.8 3.1-2 1.8a7.6 7.6 0 0 1 0 1.9l2 1.8-1.8 3.1-2.6-1a7.5 7.5 0 0 1-1.8.8l-1 2.5h-2l-1-2.5a7.5 7.5 0 0 1-1.8-.8l-2.6 1-1.8-3.1 2-1.8a7.6 7.6 0 0 1 0-1.9l-2-1.8 1.8-3.1 2.6 1a7.5 7.5 0 0 1 1.8-.7l1-2.6z"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- ── Nav rail ──────────────────────────────────────── -->
+    <nav class="rail">
+      <button class="rail__item {{ rail.current.cls }}" disabled="{{ rail.current.disabled }}" onClick="{{ rail.current.go }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="18" r="2.5"></circle><circle cx="18" cy="16" r="2.5"></circle><path d="M9.5 18V6l11-2v12"></path></svg>
+        <span class="rail__label">Current Jam</span>
+      </button>
+      <button class="rail__item {{ rail.mine.cls }}" onClick="{{ rail.mine.go }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1v-7h3v5zM3 19a2 2 0 0 0 2 2h1v-7H3v5z"></path></svg>
+        <span class="rail__label">My Jams</span>
+      </button>
+      <button class="rail__item {{ rail.public.cls }}" onClick="{{ rail.public.go }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3.2"></circle><path d="M2.5 20.5v-1a6 6 0 0 1 12 0v1"></path><path d="M16.5 4.2a3.2 3.2 0 0 1 0 6.1"></path><path d="M21.5 20.5v-1a6 6 0 0 0-3.6-5.5"></path></svg>
+        <span class="rail__label">Public Jams</span>
+      </button>
+      <button class="rail__item {{ rail.hops.cls }}" onClick="{{ rail.hops.go }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 19c1.3-6 4.7-6 6 0"></path><path d="M8.5 19c1.7-10 5.8-10 7.5 0"></path><path d="M16 19c1-4 3.5-4 4.5 0"></path></svg>
+        <span class="rail__label">Hops</span>
+      </button>
+      <button class="rail__item {{ rail.editor.cls }}" disabled="{{ rail.editor.disabled }}" onClick="{{ rail.editor.go }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12h2l1.5-4 2.5 9 2-5"></path><path d="M16 12h1l1.2-3 1.6 6 1-3h.7"></path><path d="M13 3.5v17"></path><circle cx="13" cy="3.5" r="1.4" fill="currentColor" stroke="none"></circle></svg>
+        <span class="rail__label">Editor</span>
+      </button>
+      <span class="rail__spacer"></span>
+      <button class="rail__item" disabled="{{ true }}" title="Account — coming later">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"></circle><path d="M4.5 20.5v-.5a7.5 7.5 0 0 1 15 0v.5"></path></svg>
+        <span class="rail__label">Account</span>
+      </button>
+    </nav>
+
+    <main class="main">
+
+      <!-- ── Public Jams ─────────────────────────────────── -->
+      <sc-if value="{{ show.public }}" hint-placeholder-val="{{ true }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <h1 style="font-size: 38px">Public Jams</h1>
+              <p class="view__sub">{{ publicSub }}</p>
+            </div>
+            <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn--primary" onClick="{{ openLogin }}">Log in</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+            <div class="gate">
+              <div class="gate__stripes"></div>
+              <div class="gate__veil"></div>
+              <div class="gate__inner">
+                <h2 style="font-size: 28px">Log in to see public jams</h2>
+                <p style="color: var(--text-3); max-width: 360px">Hoppper uses your Endlesss account. Once you're in, pick any jam to start hopping.</p>
+                <button class="btn btn--primary btn--lg" onClick="{{ openLogin }}">
+                  Log in
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg>
+                </button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ true }}">
+            <div class="jam-grid">
+              <sc-for list="{{ publicJams }}" as="jam" hint-placeholder-count="10">
+                <button class="tile" onClick="{{ jam.open }}">
+                  <div class="{{ jam.mediaCls }}" style="background: {{ jam.cover }}">
+                    <div class="tile__badges">
+                      <sc-if value="{{ jam.isCurrent }}" hint-placeholder-val="{{ false }}"><span class="badge badge--solid">Current</span></sc-if>
+                    </div>
+                  </div>
+                  <div class="tile__body">
+                    <div class="tile__title">{{ jam.title }}</div>
+                    <div class="tile__meta">{{ jam.meta }}</div>
+                  </div>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ── My Jams ─────────────────────────────────────── -->
+      <sc-if value="{{ show.mine }}" hint-placeholder-val="{{ false }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <h1 style="font-size: 38px">My Jams</h1>
+              <p class="view__sub">{{ mineSub }}</p>
+            </div>
+          </div>
+          <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+            <div class="gate">
+              <div class="gate__stripes"></div>
+              <div class="gate__veil"></div>
+              <div class="gate__inner">
+                <h2 style="font-size: 28px">Log in to see your jams</h2>
+                <p style="color: var(--text-3); max-width: 360px">Your personal jam and every jam you've joined on Endlesss show up here.</p>
+                <button class="btn btn--primary btn--lg" onClick="{{ openLogin }}">
+                  Log in
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg>
+                </button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ true }}">
+            <div class="jam-grid">
+              <sc-for list="{{ myJams }}" as="jam" hint-placeholder-count="6">
+                <button class="tile" onClick="{{ jam.open }}">
+                  <div class="{{ jam.mediaCls }}" style="background: {{ jam.cover }}">
+                    <sc-if value="{{ jam.hasImage }}" hint-placeholder-val="{{ false }}">
+                      <img src="hoppper-cover.jpg" alt="">
+                    </sc-if>
+                    <div class="tile__badges">
+                      <sc-if value="{{ jam.isPersonal }}" hint-placeholder-val="{{ false }}"><span class="badge badge--dark">Personal</span></sc-if>
+                      <sc-if value="{{ jam.isCurrent }}" hint-placeholder-val="{{ false }}"><span class="badge badge--solid">Current</span></sc-if>
+                    </div>
+                  </div>
+                  <div class="tile__body">
+                    <div class="tile__title">{{ jam.title }}</div>
+                    <div class="tile__meta">{{ jam.meta }}</div>
+                  </div>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ── Hops ────────────────────────────────────────── -->
+      <sc-if value="{{ show.hops }}" hint-placeholder-val="{{ false }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <h1 style="font-size: 38px">Hops</h1>
+              <p class="view__sub">{{ hopsSub }}</p>
+            </div>
+          </div>
+          <sc-if value="{{ hasHops }}" hint-placeholder-val="{{ true }}">
+            <div class="hops">
+              <div class="hops__row hops__head">
+                <span></span>
+                <span class="eyebrow">Hop</span>
+                <span class="eyebrow">Recorded</span>
+                <span class="eyebrow">Hops</span>
+                <span class="eyebrow">Length</span>
+                <span></span>
+              </div>
+              <sc-for list="{{ hopRows }}" as="hop" hint-placeholder-count="4">
+                <div class="{{ hop.rowCls }}">
+                  <button class="{{ hop.playCls }}" title="{{ hop.playLabel }}" onClick="{{ hop.togglePlay }}">
+                    <sc-if value="{{ hop.isPlaying }}" hint-placeholder-val="{{ false }}">
+                      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+                    </sc-if>
+                    <sc-if value="{{ hop.isPaused }}" hint-placeholder-val="{{ true }}">
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5 19 12 7 19.5V4.5z"></path></svg>
+                    </sc-if>
+                  </button>
+                  <div style="min-width: 0">
+                    <div class="hops__title">{{ hop.title }}</div>
+                    <div class="hops__jam">{{ hop.jam }}</div>
+                  </div>
+                  <span class="hops__num">{{ hop.date }}</span>
+                  <span class="hops__num readout">{{ hop.count }}</span>
+                  <span class="hops__num readout">{{ hop.dur }}</span>
+                  <div class="hops__actions">
+                    <button class="btn btn--secondary btn--sm" onClick="{{ hop.edit }}">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="m13.5 6.5 4 4"></path></svg>
+                      Edit
+                    </button>
+                    <button class="ibtn ibtn--sm ibtn--del" title="Delete hop" onClick="{{ hop.askDelete }}">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4.5h6V7"></path><path d="M6.5 7l1 13h9l1-13"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ noHops }}" hint-placeholder-val="{{ false }}">
+            <div class="stub" style="min-height: 320px">
+              <h2 style="font-size: 21px">No hops yet</h2>
+              <p style="color: var(--text-3); max-width: 380px">Pick a jam and hit record. Every hop you record lands here.</p>
+              <button class="btn btn--secondary" onClick="{{ rail.public.go }}">Browse Public Jams</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ── Settings ────────────────────────────────────── -->
+      <sc-if value="{{ show.settings }}" hint-placeholder-val="{{ false }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <h1 style="font-size: 38px">Settings</h1>
+            </div>
+          </div>
+          <div class="panel">
+            <span class="eyebrow">Endlesss account</span>
+            <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; gap: 14px">
+                <span class="avatar">L</span>
+                <div style="flex: 1; min-width: 0">
+                  <div style="color: var(--text-1); font-weight: 700">lwlkc</div>
+                  <div style="color: var(--text-3); font-size: 13px">Logged in</div>
+                </div>
+                <button class="btn btn--secondary" onClick="{{ logout }}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"></path><path d="M10 16l-4-4 4-4M6 12h10"></path></svg>
+                  Log out
+                </button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 14px">
+                <div style="flex: 1; color: var(--text-3)">You're not logged in.</div>
+                <button class="btn btn--primary" onClick="{{ openLogin }}">Log in</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ── Hop Recording (placeholder — next design pass) ─ -->
+      <sc-if value="{{ show.recording }}" hint-placeholder-val="{{ false }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <span class="eyebrow">Jam</span>
+              <h1 style="font-size: 38px">{{ currentTitle }}</h1>
+            </div>
+          </div>
+          <div class="stub">
+            <span class="eyebrow">Hop Recording · not designed yet</span>
+            <p style="color: var(--text-3); max-width: 420px">Rifff splats, the track mixer and the waveform land here in the next pass.</p>
+            <sc-if value="{{ transport.notRecording }}" hint-placeholder-val="{{ true }}">
+              <button class="btn btn--danger btn--lg" onClick="{{ transport.record }}">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"></circle></svg>
+                Record a hop
+              </button>
+            </sc-if>
+            <sc-if value="{{ transport.recording }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn--secondary btn--lg" onClick="{{ transport.stop }}">
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"></rect></svg>
+                Stop recording
+              </button>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ── Hop Editing (placeholder — later pass) ────────── -->
+      <sc-if value="{{ show.editing }}" hint-placeholder-val="{{ false }}">
+        <div class="view">
+          <div class="view__head">
+            <div>
+              <span class="eyebrow">Hop</span>
+              <h1 style="font-size: 38px">{{ editing.title }}</h1>
+              <p class="view__sub">{{ editing.meta }}</p>
+            </div>
+          </div>
+          <div class="stub">
+            <span class="eyebrow">Hop Editing · not designed yet</span>
+            <p style="color: var(--text-3); max-width: 420px">Hop points, stacked tracks, expand, add and duplicate land here in a later pass.</p>
+            <button class="btn btn--secondary" onClick="{{ rail.hops.go }}">Back to Hops</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <!-- ── Log in dialog ───────────────────────────────────── -->
+  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-modal="true">
+        <div class="dialog__head">
+          <div class="dialog__title">Log in to Endlesss</div>
+        </div>
+        <div class="dialog__body">
+          <label class="field">
+            <span class="field__label">Username</span>
+            <input class="input" type="text" autocomplete="username">
+          </label>
+          <label class="field">
+            <span class="field__label">Password</span>
+            <input class="input" type="password" autocomplete="current-password">
+          </label>
+        </div>
+        <div class="dialog__foot">
+          <button class="btn btn--ghost" onClick="{{ closeLogin }}">Cancel</button>
+          <button class="btn btn--primary" onClick="{{ doLogin }}">Log in</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ── Delete hop dialog ───────────────────────────────── -->
+  <sc-if value="{{ confirm.open }}" hint-placeholder-val="{{ false }}">
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-modal="true">
+        <div class="dialog__head">
+          <div class="dialog__title">Delete this hop?</div>
+        </div>
+        <div class="dialog__body">
+          <p>{{ confirm.body }}</p>
+        </div>
+        <div class="dialog__foot">
+          <button class="btn btn--ghost" onClick="{{ confirm.cancel }}">Cancel</button>
+          <button class="btn btn--danger" onClick="{{ confirm.ok }}">Delete</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1280,"height":800},"startView":{"editor":"enum","options":["public","mine","hops","settings"],"default":"public"},"signedIn":{"editor":"boolean","default":true}}'>
+const grad = (a, b, deg) => 'linear-gradient(' + (deg || 135) + 'deg, var(--spectrum-' + a + '), var(--spectrum-' + b + '))';
+
+// Sample data. Real covers, names and bios come from the Endlesss jam profiles.
+const MY_JAMS = [
+  { id: 'personal', title: 'lwlkc', meta: 'Your personal jam', cover: grad('amber', 'pink', 120), personal: true },
+  { id: 'hoppper', title: 'Hoppper', meta: 'Joined 26 Apr 2026', cover: 'var(--surface-3)', image: true },
+  { id: 'dub', title: 'Slow Motion Dub', meta: 'Joined 8 Jan 2026', cover: grad('teal', 'blue') },
+  { id: 'night', title: 'Night Shift', meta: 'Joined 2 Dec 2025', cover: grad('indigo', 'violet', 160) },
+  { id: 'floor', title: 'Four on the Floor', meta: 'Joined 14 Oct 2025', cover: grad('red', 'amber', 110) },
+  { id: 'tape', title: 'Tape Loops', meta: 'Joined 3 Sep 2025', cover: grad('green', 'teal') },
+];
+
+const PUBLIC_JAMS = [
+  { id: 'p1', title: 'Ambient Sunday', meta: 'Slow, spacious, no drums required', cover: grad('blue', 'teal', 150) },
+  { id: 'p2', title: 'Minimal Techno Lab', meta: 'Four bars at a time', cover: grad('amber', 'red') },
+  { id: 'p3', title: 'Breakbeat Club', meta: 'Chop it, flip it, commit it', cover: grad('pink', 'amber', 120) },
+  { id: 'p4', title: 'Lo-Fi Kitchen', meta: 'Dusty keys and tape hiss', cover: grad('yellow', 'green') },
+  { id: 'p5', title: 'Modular Mornings', meta: 'Patch cables before coffee', cover: grad('violet', 'blue', 160) },
+  { id: 'p6', title: 'Jazz Standards', meta: 'Changes welcome', cover: grad('red', 'violet') },
+  { id: 'p7', title: 'Drone Choir', meta: 'Hold one note forever', cover: grad('indigo', 'teal', 110) },
+  { id: 'p8', title: 'Dub Sirens', meta: 'Delay throws on everything', cover: grad('green', 'blue') },
+  { id: 'p9', title: '140 Club', meta: 'Half-time, full weight', cover: grad('amber', 'violet', 150) },
+  { id: 'p10', title: 'Beginners Welcome', meta: 'First jam? Start here', cover: grad('teal', 'green', 120) },
+  { id: 'p11', title: 'Synthwave Garage', meta: 'Neon, chorus, big snares', cover: grad('pink', 'indigo') },
+  { id: 'p12', title: 'House Party', meta: 'Keep it on the one', cover: grad('yellow', 'amber', 110) },
+];
+
+const SAMPLE_HOPS = [
+  { id: 'h1', title: 'Sunday drift', jamId: 'hoppper', date: '14 Sep 2026', count: 9, dur: '4:12' },
+  { id: 'h2', title: 'Dub run, take 2', jamId: 'dub', date: '11 Sep 2026', count: 14, dur: '6:48' },
+  { id: 'h3', title: 'Dub run', jamId: 'dub', date: '11 Sep 2026', count: 12, dur: '5:30' },
+  { id: 'h4', title: 'Warm-up', jamId: 'personal', date: '2 Sep 2026', count: 5, dur: '1:56' },
+];
+
+const ALL_JAMS = MY_JAMS.concat(PUBLIC_JAMS);
+const jamTitle = (id) => { const j = ALL_JAMS.find((x) => x.id === id); return j ? j.title : 'Unknown jam'; };
+
+function meter(level) {
+  const n = 18, lit = Math.round(level * n), out = [];
+  for (let i = 0; i < n; i++) {
+    const frac = (i + 1) / n;
+    const color = frac > 0.9 ? 'var(--spectrum-red)' : frac > 0.72 ? 'var(--spectrum-amber)' : 'var(--spectrum-green)';
+    out.push(i < lit ? { bg: color, op: 1 } : { bg: 'var(--surface-3)', op: 0.5 });
+  }
+  return out;
+}
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (prev.startView !== this.props.startView || prev.signedIn !== this.props.signedIn) {
+      this.setState({ view: undefined, loggedIn: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const view = s.view || this.props.startView || 'public';
+    const loggedIn = s.loggedIn !== undefined ? s.loggedIn : (this.props.signedIn !== undefined ? this.props.signedIn : true);
+    const hops = s.hops || SAMPLE_HOPS;
+    const current = loggedIn ? (ALL_JAMS.find((j) => j.id === s.currentJamId) || null) : null;
+    const editingHop = hops.find((h) => h.id === s.editingHopId) || null;
+    const playing = !!(current && s.playing);
+    const recording = !!(current && s.recording);
+    const quantise = s.quantise !== undefined ? s.quantise : true;
+    const go = (v) => () => this.setState({ view: v });
+
+    const openJam = (j) => () => this.setState({ currentJamId: j.id, view: 'recording', playing: true, playingHopId: null });
+    const tile = (j) => ({
+      ...j,
+      hasImage: !!j.image,
+      isPersonal: !!j.personal,
+      isCurrent: !!current && current.id === j.id,
+      mediaCls: 'tile__media' + (current && current.id === j.id ? ' is-current' : ''),
+      open: openJam(j),
+    });
+
+    const finishRecording = () => {
+      const hop = { id: 'h' + Date.now(), title: 'Untitled hop', jamId: current.id, date: '18 Sep 2026', count: 3, dur: '0:48' };
+      this.setState({ recording: false, hops: [hop].concat(hops), editingHopId: hop.id, view: 'editing' });
+    };
+
+    const transport = {
+      disabled: !current,
+      playing,
+      paused: !playing,
+      recording,
+      notRecording: !recording,
+      playCls: playing ? 'is-active' : '',
+      recCls: recording ? 'is-rec pulse' : '',
+      quantCls: quantise ? 'is-active' : '',
+      readout: current ? current.title : 'No jam selected',
+      togglePlay: () => this.setState({ playing: !playing, playingHopId: null }),
+      stop: () => { if (recording) finishRecording(); else this.setState({ playing: false }); },
+      record: () => {
+        if (!current) return;
+        if (recording) finishRecording();
+        else this.setState({ recording: true, playing: true, view: 'recording', playingHopId: null });
+      },
+      toggleQuant: () => this.setState({ quantise: !quantise }),
+    };
+
+    const hopRows = hops.map((h) => {
+      const isPlaying = s.playingHopId === h.id;
+      return {
+        ...h,
+        jam: jamTitle(h.jamId),
+        isPlaying,
+        isPaused: !isPlaying,
+        playLabel: isPlaying ? 'Pause' : 'Play',
+        rowCls: 'hops__row' + (isPlaying ? ' is-playing' : ''),
+        playCls: 'ibtn ibtn--solid ibtn--round' + (isPlaying ? ' is-active' : ''),
+        togglePlay: () => this.setState({ playingHopId: isPlaying ? null : h.id, playing: false }),
+        edit: () => this.setState({ editingHopId: h.id, view: 'editing', playingHopId: null }),
+        askDelete: () => this.setState({ confirmHopId: h.id }),
+      };
+    });
+
+    const confirmHop = hops.find((h) => h.id === s.confirmHopId) || null;
+    const level = playing || s.playingHopId ? 0.68 : 0;
+
+    return {
+      show: {
+        public: view === 'public',
+        mine: view === 'mine',
+        hops: view === 'hops',
+        settings: view === 'settings',
+        recording: view === 'recording' && !!current,
+        editing: view === 'editing' && !!editingHop,
+      },
+      loggedIn,
+      loggedOut: !loggedIn,
+      rail: {
+        current: { cls: view === 'recording' ? 'is-active' : '', disabled: !current, go: go('recording') },
+        mine: { cls: view === 'mine' ? 'is-active' : '', go: go('mine') },
+        public: { cls: view === 'public' ? 'is-active' : '', go: go('public') },
+        hops: { cls: view === 'hops' ? 'is-active' : '', go: go('hops') },
+        editor: { cls: view === 'editing' ? 'is-active' : '', disabled: !editingHop, go: go('editing') },
+      },
+      settingsCls: view === 'settings' ? 'is-active' : '',
+      goSettings: go('settings'),
+      transport,
+      meterL: meter(level),
+      meterR: meter(level ? level - 0.08 : 0),
+
+      publicSub: loggedIn ? PUBLIC_JAMS.length + ' jams open to join' : 'Every jam on Endlesss that anyone can join',
+      mineSub: loggedIn ? 'Your personal jam and the ' + (MY_JAMS.length - 1) + ' jams you’ve joined' : 'Your personal jam and the jams you’ve joined',
+      publicJams: PUBLIC_JAMS.map(tile),
+      myJams: MY_JAMS.map(tile),
+
+      hopsSub: hops.length === 1 ? '1 recorded hop' : hops.length + ' recorded hops',
+      hasHops: hops.length > 0,
+      noHops: hops.length === 0,
+      hopRows,
+
+      currentTitle: current ? current.title : '',
+      editing: editingHop
+        ? { title: editingHop.title, meta: jamTitle(editingHop.jamId) + ' · ' + editingHop.count + ' hops · ' + editingHop.dur }
+        : { title: '', meta: '' },
+
+      showLogin: !!s.loginOpen,
+      openLogin: () => this.setState({ loginOpen: true }),
+      closeLogin: () => this.setState({ loginOpen: false }),
+      doLogin: () => this.setState({ loginOpen: false, loggedIn: true }),
+      logout: () => this.setState({ loggedIn: false, view: 'public', currentJamId: null, playing: false, recording: false }),
+
+      confirm: {
+        open: !!confirmHop,
+        body: confirmHop ? '“' + confirmHop.title + '” will be removed from this computer. This can’t be undone.' : '',
+        cancel: () => this.setState({ confirmHopId: null }),
+        ok: () => this.setState({
+          hops: hops.filter((h) => h.id !== s.confirmHopId),
+          confirmHopId: null,
+          playingHopId: s.playingHopId === s.confirmHopId ? null : s.playingHopId,
+          editingHopId: s.editingHopId === s.confirmHopId ? null : s.editingHopId,
+        }),
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -250,6 +250,26 @@ Newest entries at the top of each section. Date entries absolutely
 - Storage-management UI (eviction policy, per-jam totals, "clear cache") is
   post-v1 — see `CLAUDE.md`.
 
+## UI redesign (LwlkcIng design system)
+
+- **The design system lives only on claude.ai/design**, not in any repo: the
+  project "LwlkcIng Design System" (`2d637a94-a2ad-4f87-ab03-88274a54988f`;
+  note the capital I). Read it with `DesignSync` `get_file` after the user
+  runs `/design-login`. `/design-sync` *uploads* a local DS repo; it cannot
+  pull one down, so don't suggest it for fetching (I did on 2026-09-18, and it
+  was wrong). The files that matter: `tokens/*.css`, `ui_kits/studio/*`
+  (shell, `JamsGrid`, icons), `components/**/*.jsx`.
+- **Redesign canvas** (2026-09-18): working files are in
+  `project resources/Design/Canvas/`, published at
+  https://claude.ai/artifact/DG5RrdPN1TJBudUkFHQShU. To change it, edit
+  `Main.dc.html` and re-run `/design`'s seed step; never edit the seeded
+  `hoppper-app-redesign.html`. Public Jams, My Jams, Hops and Settings are
+  designed. Hop Recording and Hop Editing are deliberately placeholder pages.
+  All jam and hop data in it is sample data.
+- Public Jams and My Jams both need a session: `listJams` calls
+  `requireValidSession`, and the joinable list is an authenticated call. So
+  the logged-out state is a login prompt, not a browsable grid.
+
 ## Build and dev loop
 
 - **The app consumes the SDK's `dist/`, not its source.** `@hoppper/sdk`'s
