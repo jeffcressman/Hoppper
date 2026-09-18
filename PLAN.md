@@ -153,8 +153,8 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 
 Ships inside a whole-app redesign on the LwlkcIng design system, in three slices (A: shell and lists, B: Hop Recording, C: Hop Editing). Detailed design: [`docs/phases/phase-8-redesign-and-editor.md`](docs/phases/phase-8-redesign-and-editor.md).
 
-- [x] Slice A — app shell, Public Jams, My Jams, Hops, Settings, login dialog. *(Code and tests done 2026-09-18; Checkpoint A — the `SMOKE_TESTS.md` click-through on the host — not yet run.)*
-- [x] Slice B — Hop Recording: rifff splats, mixer (with the rifff's own slot gains now applied), waveform, top-bar transport and level meter. *(Code and tests done 2026-09-18; Checkpoint B — the listening/click-through in `SMOKE_TESTS.md` — not yet run.)*
+- [x] Slice A — app shell, Public Jams, My Jams, Hops, Settings, login dialog. ✓ Checkpoint A passed 2026-09-18 (`SMOKE_TESTS.md`).
+- [x] Slice B — Hop Recording: rifff splats, mixer (with the rifff's own slot gains now applied), waveform, top-bar transport and level meter. ✓ Checkpoint B passed 2026-09-18 (`SMOKE_TESTS.md`).
 - [ ] Timeline component (consider `wavesurfer.js` for waveform display; build hop UI on top).
 - [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from rifff browser.
 - [ ] Live preview: edits play back instantly using the AudioBuffer cache.

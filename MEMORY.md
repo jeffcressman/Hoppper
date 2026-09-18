@@ -62,8 +62,8 @@ Newest entries at the top of each section. Date entries absolutely
   (`placeStems`), because the stem resolver hands back only resolved stems.
 - **The level meter's analysers feed a silent gain to the destination**,
   because some WebKit builds (Tauri on macOS) only process an analyser that
-  feeds something. Not verified on a real Mac yet; if the meter stays dark
-  there, look here first.
+  feeds something. The meter was confirmed working on macOS in the
+  2026-09-18 smoke tests; keep the silent path if you touch the bus.
 
 ## Recording principle
 

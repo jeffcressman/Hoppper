@@ -212,7 +212,7 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
       lines).
 - [x] **Current Jam.** Greyed out until a jam is opened; afterwards it
       returns to that jam, and that jam's tile says Current.
-- [ ] **Hops.** Lists takes from every jam with jam name, day, hop
+- [x] **Hops.** Lists takes from every jam with jam name, day, hop
       count and length. Play/pause works; Delete asks first; with no
       takes it shows the empty state.
 - [x] **Log out from Settings.** Returns to Public Jams logged out,
@@ -221,34 +221,34 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 
 ### Slice B — rifff splats
 
-- [ ] **Splats in stem colours.** Opening a jam shows its rifffs as splats
+- [x] **Splats in stem colours.** Opening a jam shows its rifffs as splats
       grouped by day, each layer in a stem's colour, the committer's initial
       on each. Colours can arrive a moment after the shapes.
-- [ ] **One request per page.** The log panel shows one `_all_docs` POST
+- [x] **One request per page.** The log panel shows one `_all_docs` POST
       for the splats when the jam opens, and one more per Load more — not
       one per rifff.
-- [ ] **Hops cost no stem-document request.** Clicking a splat that's on
+- [x] **Hops cost no stem-document request.** Clicking a splat that's on
       screen plays it without another `_all_docs` POST in the log.
-- [ ] **Current rifff ringed.** The playing rifff's splat has the amber
+- [x] **Current rifff ringed.** The playing rifff's splat has the amber
       ring; a rifff still loading pulses.
 
 ### Slice B — mixer, waveform, transport
 
-- [ ] **Rifffs play at their own mix.** A rifff with a quiet stem sounds
+- [x] **Rifffs play at their own mix.** A rifff with a quiet stem sounds
       as it does in Endlesss — before 2026-09-18 every stem played at full
       volume. Compare a rifff or two against the Endlesss app.
-- [ ] **Mixer.** Each channel shows the stem's preset name in its colour
+- [x] **Mixer.** Each channel shows the stem's preset name in its colour
       and who made it. A fader drag or arrow key changes that track's
       volume smoothly (no click); mute silences it and remembers the fader.
       Levels and mutes stay put across hops.
-- [ ] **Waveform.** Rows show the playing rifff's stems, short stems
+- [x] **Waveform.** Rows show the playing rifff's stems, short stems
       repeating across the loop; the playhead sweeps in time with what you
       hear and stays in phase across hops.
-- [ ] **Transport in the top bar.** Stop, Play (restarts the last rifff),
+- [x] **Transport in the top bar.** Stop, Play (restarts the last rifff),
       Record (only on a jam page); REC badge and clock while recording,
       "Waiting for first rifff…" while armed. Quantise toggle works as the
       old checkbox did.
-- [ ] **Level meter.** Both bars move with the output — on macOS too (see
+- [x] **Level meter.** Both bars move with the output — on macOS too (see
       `MEMORY.md` if it stays dark).
 
 ---
