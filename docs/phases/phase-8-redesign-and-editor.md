@@ -80,6 +80,13 @@ the mixer can reach it.
 (pointer drag or arrow keys), the stem's preset name in its colour, and who
 made it — for the playing rifff.
 
+**Solo** (asked for 2026-09-18): an S switch per channel. While any track is
+soloed only soloed tracks play; each further solo adds its track; each solo
+switches off on its own; **Un-solo** above the channels clears them all.
+Mute still wins — a muted track stays silent when soloed. Solo belongs to
+the recording page's mix like mute, so the editor still hears the rifffs'
+own mix. Tracks solo has silenced dim in the mixer and the waveform.
+
 **Waveform** (`LoopWaveform`): a row per slot drawn from the decoded buffer's
 peaks, tiled across the rifff's loop the way short stems repeat, with bar
 numbers and a playhead read from `engine.playhead()` every frame — the same

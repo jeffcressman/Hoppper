@@ -63,6 +63,13 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     // committed; mute keeps the fader's level for when it comes back.
     const slotLevels = ref<number[]>([...deps.engine.slotLevels]);
     const slotMuted = ref<boolean[]>(slotLevels.value.map(() => false));
+    // Solo: while any track is soloed, only soloed tracks play. Each solo is
+    // its own switch; clearSolos turns them all off. Mute still wins.
+    const slotSoloed = ref<boolean[]>(slotLevels.value.map(() => false));
+    const anySoloed = computed(() => slotSoloed.value.some(Boolean));
+    const slotAudible = computed(() =>
+      slotMuted.value.map((muted, i) => !muted && (!anySoloed.value || !!slotSoloed.value[i])),
+    );
     // Each page has its own mix and the engine plays whichever page is in
     // use. The editor has no mixer, so it always hears the rifffs' own mix —
     // a mute on the recording page mustn't follow a take into the editor.
@@ -71,7 +78,7 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       deps.engine.setSlotLevels(
         activeMix.value === 'editor'
           ? slotLevels.value.map(() => 1)
-          : slotLevels.value.map((l, i) => (slotMuted.value[i] ? 0 : l)),
+          : slotLevels.value.map((l, i) => (slotAudible.value[i] ? l : 0)),
       );
     }
     function useMix(page: 'recording' | 'editor'): void {
@@ -81,6 +88,16 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     function setSlotLevel(slot: number, level: number): void {
       if (!(slot in slotLevels.value) || !Number.isFinite(level)) return;
       slotLevels.value[slot] = Math.min(1, Math.max(0, level));
+      if (activeMix.value === 'recording') applyMix();
+    }
+    function toggleSolo(slot: number): void {
+      if (!(slot in slotSoloed.value)) return;
+      slotSoloed.value[slot] = !slotSoloed.value[slot];
+      if (activeMix.value === 'recording') applyMix();
+    }
+    function clearSolos(): void {
+      if (!anySoloed.value) return;
+      slotSoloed.value = slotSoloed.value.map(() => false);
       if (activeMix.value === 'recording') applyMix();
     }
     function toggleMute(slot: number): void {
@@ -216,6 +233,11 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       slotMuted,
       setSlotLevel,
       toggleMute,
+      slotSoloed,
+      anySoloed,
+      slotAudible,
+      toggleSolo,
+      clearSolos,
       useMix,
       lastPlayed,
       canResume,

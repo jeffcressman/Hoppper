@@ -700,3 +700,78 @@ describe('definePerformanceStore — the recording page’s last rifff', () => {
     expect(s.lastPlayed).toEqual({ jamId: JAM, riff: riff('r1') });
   });
 });
+
+describe('definePerformanceStore — solo', () => {
+  const store = () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    return { engine, s };
+  };
+
+  it('starts with nothing soloed', () => {
+    expect(store().s.slotSoloed).toEqual([false, false, false, false, false, false, false, false]);
+  });
+
+  it('soloing a track plays only that track', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(2, 0.6);
+    s.toggleSolo(2);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0.6, 0, 0, 0, 0, 0]);
+  });
+
+  it('each further solo adds its track to what plays', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 1, 0, 0, 1, 0, 0]);
+  });
+
+  it('turning one solo off leaves the others soloed', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    s.toggleSolo(2);
+    expect(s.slotSoloed[5]).toBe(true);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0, 0, 0, 1, 0, 0]);
+  });
+
+  it('with the last solo off, every track plays again', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(2);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it('un-solo clears every solo at once, leaving mutes as they were', () => {
+    const { engine, s } = store();
+    s.toggleMute(1);
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    expect(s.anySoloed).toBe(true);
+    s.clearSolos();
+    expect(s.anySoloed).toBe(false);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 0, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it('a muted track stays silent even when soloed', () => {
+    const { engine, s } = store();
+    s.toggleMute(2);
+    s.toggleSolo(2);
+    s.toggleSolo(3);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0, 1, 0, 0, 0, 0]);
+  });
+
+  it('says which tracks are being heard, for the mixer and waveform', () => {
+    const { s } = store();
+    s.toggleMute(0);
+    s.toggleSolo(3);
+    expect(s.slotAudible).toEqual([false, false, false, true, false, false, false, false]);
+  });
+
+  it('is the recording page’s: the editor still hears the rifffs’ own mix', () => {
+    const { engine, s } = store();
+    s.toggleSolo(3);
+    s.useMix('editor');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+});

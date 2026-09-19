@@ -288,6 +288,17 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
       rifff-document requests the second time.
 
+### Solo
+
+- [ ] **Solo one, then more.** S on a track plays only that track; S on a
+      second adds it. The others dim in the mixer and the waveform.
+- [ ] **Each solo on its own.** Turning one S off leaves the other solos
+      playing; turning the last off brings every track back.
+- [ ] **Un-solo.** Clears every solo at once and leaves mutes as they
+      were. It's greyed out while nothing is soloed.
+- [ ] **Mute wins, and solo stays on this page.** A muted track stays
+      silent when soloed; a take played in the editor ignores solos.
+
 ### Take start and end handles
 
 - [ ] **Grow the start.** Drag the start handle left: the first rifff

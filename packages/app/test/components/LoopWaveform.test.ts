@@ -7,6 +7,7 @@ enableAutoUnmount(afterEach);
 type Head = { riffId: string; positionSec: number; loopSec: number } | null;
 const performanceStub = vi.hoisted(() => ({
   slotMuted: [false, false, false, false, false, false, false, false],
+  slotAudible: [true, true, true, true, true, true, true, true],
   slotLevels: [1, 1, 1, 1, 1, 1, 1, 1],
   head: null as Head,
   playhead: vi.fn(),
@@ -43,6 +44,7 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 
 beforeEach(() => {
   performanceStub.slotMuted = [false, false, false, false, false, false, false, false];
+  performanceStub.slotAudible = [true, true, true, true, true, true, true, true];
   performanceStub.head = null;
   performanceStub.playhead.mockImplementation(() => performanceStub.head);
   performanceStub.bufferFor.mockReset();
@@ -69,8 +71,8 @@ describe('LoopWaveform', () => {
     expect(wrapper.findAll('[data-test="bar-tick"]').map((t) => t.text())).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
   });
 
-  it('dims a muted slot’s row', () => {
-    performanceStub.slotMuted[0] = true;
+  it('dims the row of a track not being heard — muted, or silenced by a solo', () => {
+    performanceStub.slotAudible[0] = false;
     const wrapper = mount(LoopWaveform, { props: { riff: riff('r1', ['a']) } });
     expect(rows(wrapper)[0]!.classes()).toContain('is-muted');
   });
