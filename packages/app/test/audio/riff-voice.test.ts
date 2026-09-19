@@ -173,6 +173,19 @@ describe('createRiffVoice', () => {
     expect(ctx.sources.map((s) => stemGainOf(s).gain.value)).toEqual([0.25, 0]);
   });
 
+  it('feeds each stem, after its level, to its slot’s meter tap', () => {
+    const ctx = createMockContext();
+    const taps = Array.from({ length: 8 }, (_, i) => ({ tap: i }));
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, { buffer: buf() }, null, null, null, null, null],
+      loopDurationSec: 4,
+      slotTaps: taps,
+    });
+    expect(stemGainOf(ctx.sources[0]!).connections).toContain(taps[0]);
+    expect(stemGainOf(ctx.sources[1]!).connections).toContain(taps[2]);
+  });
+
   it('setSlotLevel glides one slot to its new level, leaving the others alone', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({

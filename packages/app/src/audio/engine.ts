@@ -96,6 +96,11 @@ export interface AudioEngine {
   playhead(): { riffId: RiffCouchID; positionSec: number; loopSec: number } | null;
   /** Peak output level of the left and right channels just now, 0..1. */
   levels(): [number, number];
+  /**
+   * Each track's peak level just now, 0..1, after its fader, mute and solo —
+   * stereo read as one (an analyser mixes down to mono).
+   */
+  trackMeters(): number[];
   onStateChange(fn: (s: AudioEngineState) => void): () => void;
   /**
    * Fires whenever `currentRiffId` changes: a cold start, every hop, and
@@ -142,6 +147,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   const master = context.createGain();
   master.connect(context.destination);
   const meters: { node: AnalyserNodeLike; frame: Float32Array }[] = [];
+  const slotMeters: { node: AnalyserNodeLike; frame: Float32Array }[] = [];
   if (context.createAnalyser && context.createChannelSplitter) {
     const splitter = context.createChannelSplitter(2);
     master.connect(splitter);
@@ -158,6 +164,20 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       node.connect(sink);
       meters.push({ node, frame: new Float32Array(1024) });
     }
+    for (let slot = 0; slot < SLOT_COUNT; slot++) {
+      const node = context.createAnalyser();
+      node.fftSize = 1024;
+      node.connect(sink);
+      slotMeters.push({ node, frame: new Float32Array(1024) });
+    }
+  }
+  const slotTaps = slotMeters.map((m) => m.node);
+
+  function peakOf({ node, frame }: { node: AnalyserNodeLike; frame: Float32Array }): number {
+    node.getFloatTimeDomainData(frame);
+    let max = 0;
+    for (const v of frame) max = Math.max(max, Math.abs(v));
+    return Math.min(1, max);
   }
   const listeners = new Set<(s: AudioEngineState) => void>();
   const riffListeners = new Set<(riffId: RiffCouchID | null) => void>();
@@ -344,6 +364,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           loopDurationSec: timing.loopDurationSec,
           levels: slotLevels,
           destination: master,
+          slotTaps,
         });
         gridOrigin = now;
         voice.start(now, 0);
@@ -375,6 +396,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         loopDurationSec: timing.loopDurationSec,
         levels: slotLevels,
         destination: master,
+        slotTaps,
       });
 
       // A beat is a quarter note — the unit `bps` counts.
@@ -487,13 +509,12 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
 
     levels() {
       if (meters.length < 2) return [0, 0];
-      const peak = ({ node, frame }: (typeof meters)[number]) => {
-        node.getFloatTimeDomainData(frame);
-        let max = 0;
-        for (const v of frame) max = Math.max(max, Math.abs(v));
-        return Math.min(1, max);
-      };
-      return [peak(meters[0]!), peak(meters[1]!)];
+      return [peakOf(meters[0]!), peakOf(meters[1]!)];
+    },
+
+    trackMeters() {
+      if (slotMeters.length === 0) return Array(SLOT_COUNT).fill(0);
+      return slotMeters.map(peakOf);
     },
 
     setSlotLevels(levels) {

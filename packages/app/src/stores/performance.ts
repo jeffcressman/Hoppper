@@ -217,12 +217,14 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     // reactive state.
     const playhead = () => deps.engine.playhead();
     const levels = () => deps.engine.levels();
+    const trackMeters = () => deps.engine.trackMeters();
     const bufferFor = (stemId: StemCouchID) => deps.peekBuffer?.(stemId);
 
     return {
       state,
       playhead,
       levels,
+      trackMeters,
       bufferFor,
       decodedTick,
       currentRiffId,

@@ -84,6 +84,11 @@ export interface RiffVoiceOptions {
    * stem's own gain — LORE's `m_layerGainMultiplier`. Defaults to 1 each.
    */
   levels?: ReadonlyArray<number>;
+  /**
+   * Where each slot's stem is also sent, after its level — the mixer's
+   * per-track meters. Index = slot; missing or empty means no meter.
+   */
+  slotTaps?: ReadonlyArray<AudioNodeLike | undefined>;
 }
 
 export interface RiffVoice {
@@ -181,6 +186,8 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
     level.gain.value = riffGain * levelOf(slot);
     node.connect(level);
     level.connect(gain);
+    const tap = opts.slotTaps?.[slot];
+    if (tap) level.connect(tap);
     const source = { node, level, riffGain, rate, bufferLoopSec, loopSec: bufferLoopSec / rate };
     sources.push(source);
     bySlot.set(slot, source);

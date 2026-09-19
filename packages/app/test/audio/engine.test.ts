@@ -1002,6 +1002,20 @@ describe('createAudioEngine — output level', () => {
     expect(sink!.gain.value).toBe(0);
   });
 
+  it('reads each track’s level on its own, for the mixer’s meters', async () => {
+    const ctx = analyserContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([['a' as StemCouchID, fakeBuffer()]]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    // Analysers 0 and 1 are the master meter's; 2..9 are the tracks'.
+    ctx.analysers[2 + 3]!.data = [0.2, -0.7];
+    expect(engine.trackMeters()).toEqual([0, 0, 0, expect.closeTo(0.7, 6), 0, 0, 0, 0]);
+  });
+
+  it('has quiet track meters when the context can’t analyse', () => {
+    const engine = createAudioEngine({ context: createMockContext(), loader: mockLoader(new Map()) });
+    expect(engine.trackMeters()).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
   it('is silent when the context can’t analyse', () => {
     const engine = createAudioEngine({ context: createMockContext(), loader: mockLoader(new Map()) });
     expect(engine.levels()).toEqual([0, 0]);

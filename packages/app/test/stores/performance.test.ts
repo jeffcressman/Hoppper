@@ -72,6 +72,7 @@ function mockEngine(): MockEngine {
     setSlotLevels: vi.fn(),
     playhead: vi.fn(() => null),
     levels: vi.fn((): [number, number] => [0, 0]),
+    trackMeters: vi.fn(() => [0, 0, 0, 0, 0, 0, 0, 0]),
     onStateChange(fn: (s: AudioEngineState) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -611,9 +612,11 @@ describe('definePerformanceStore — what the page draws from', () => {
     const head = { riffId: 'r1' as RiffCouchID, positionSec: 3, loopSec: 16 };
     vi.mocked(engine.playhead).mockReturnValue(head);
     vi.mocked(engine.levels).mockReturnValue([0.5, 0.4]);
+    vi.mocked(engine.trackMeters).mockReturnValue([0, 0.3, 0, 0, 0, 0, 0, 0]);
     const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
     expect(s.playhead()).toEqual(head);
     expect(s.levels()).toEqual([0.5, 0.4]);
+    expect(s.trackMeters()).toEqual([0, 0.3, 0, 0, 0, 0, 0, 0]);
   });
 
   it('hands out a stem’s decoded audio when it has been loaded, for the waveform', () => {

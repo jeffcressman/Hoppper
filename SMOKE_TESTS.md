@@ -303,6 +303,14 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Mute wins, and solo stays on this page.** A muted track stays
       silent when soloed; a take played in the editor ignores solos.
 
+### Track meters
+
+- [ ] **A meter beside each fader.** Each moves with its own track while a
+      rifff plays; a muted, faded-down or solo-silenced track's meter stays
+      dark. One line per track (stereo read as one).
+- [ ] **On macOS too.** The meters use the same silent-path trick as the
+      master meter (`MEMORY.md`); check they move there.
+
 ### Take start and end handles
 
 - [ ] **Grow the start.** Drag the start handle left: the first rifff
