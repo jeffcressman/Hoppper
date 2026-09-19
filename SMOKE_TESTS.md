@@ -299,6 +299,11 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
       goes past the nearest hop point.
 - [ ] **Snap and undo.** Both handles follow Beat/Bar/Off, and Ctrl/Cmd+Z
       undoes a resize.
+- [ ] **End handle scrolls.** Drag the end handle to the right edge of the
+      timeline and hold: it scrolls on, and the take keeps growing, faster
+      the further into the edge.
+- [ ] **Leaving stops playback.** Play a take in the editor, then go to any
+      other page: the take stops.
 
 ### Independent pages (fixes 2026-09-18)
 

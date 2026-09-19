@@ -307,4 +307,53 @@ describe('HopEditingView', () => {
       expect(blocks[0]!.findAll('[data-test="loop-line"]')).toHaveLength(0);
     });
   });
+
+  it('leaving the editor stops its playback', async () => {
+    const wrapper = await mounted();
+    recorder.isPlaying = true;
+    wrapper.unmount();
+    expect(recorderStub.stopPlayback).toHaveBeenCalled();
+  });
+
+  it('leaving while nothing plays stops nothing', async () => {
+    const wrapper = await mounted();
+    wrapper.unmount();
+    expect(recorderStub.stopPlayback).not.toHaveBeenCalled();
+  });
+
+  describe('scrolling while the end handle is dragged', () => {
+    function sizeTimeline(el: HTMLElement, visibleWidth: number) {
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: visibleWidth });
+      el.getBoundingClientRect = () => ({ left: 0, right: visibleWidth, top: 0, bottom: 400, width: visibleWidth, height: 400 }) as DOMRect;
+    }
+    const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    it('follows the end out of view as it is dragged right', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 300);
+      const px = Number(tl.dataset.pxPerSec);
+      await find(wrapper, 'take-end').trigger('pointerdown', { clientX: 280 });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 280 + 4 * px }));
+      await flushPromises();
+      // The new end (28 s) sits past the 300 px view: it has scrolled to it.
+      expect(tl.scrollLeft).toBeGreaterThan(0);
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: 280 + 4 * px }));
+    });
+
+    it('keeps extending while the pointer is held at the edge, counting the scroll', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 300);
+      await find(wrapper, 'take-end').trigger('pointerdown', { clientX: 280 });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 298 }));
+      for (let i = 0; i < 5; i++) await nextFrame();
+      const scrolled = tl.scrollLeft;
+      expect(scrolled).toBeGreaterThan(0);
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: 298 }));
+      await flushPromises();
+      const px = Number(tl.dataset.pxPerSec);
+      expect(editorStub.resizeEnd).toHaveBeenCalledWith(expect.closeTo(24 + (18 + scrolled) / px, 6), 'beat');
+    });
+  });
 });

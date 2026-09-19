@@ -519,33 +519,61 @@ function onPinDown(e: PointerEvent, p: TimelinePin): void {
   };
 }
 
-// Dragging the take's start or end handle: the same preview-then-edit.
+// Dragging the take's start or end handle: the same preview-then-edit. The
+// end handle scrolls the timeline along when held near its right edge, so
+// what's being extended stays in view; the scroll counts as drag.
+const EDGE_PX = 40;
 function onHandleDown(e: PointerEvent, which: 'start' | 'end'): void {
   const base = editor.take;
-  if (!base) return;
+  const tl = timelineEl.value;
+  if (!base || !tl) return;
   clearSelection();
   const startX = e.clientX;
+  const startScroll = tl.scrollLeft;
+  let lastX = startX;
+  let edgeFrame = 0;
+  // How far the pointer has travelled over the take, scrolling included.
+  const travelled = () => (lastX - startX + (tl.scrollLeft - startScroll)) / PX_PER_SEC;
   // Start: dragged left means more take at the front.
-  const amount = (clientX: number) =>
-    which === 'start' ? (startX - clientX) / PX_PER_SEC : base.durationSec + (clientX - startX) / PX_PER_SEC;
-  const edit = (clientX: number) =>
+  const amount = () => (which === 'start' ? -travelled() : base.durationSec + travelled());
+  const edit = () =>
     which === 'start'
-      ? resizeStart(base, amount(clientX), snap.value, editor.gridOf)
-      : resizeEnd(base, amount(clientX), snap.value, editor.gridOf);
+      ? resizeStart(base, amount(), snap.value, editor.gridOf)
+      : resizeEnd(base, amount(), snap.value, editor.gridOf);
+  const moved = () => Math.abs(lastX - startX) >= 3 || tl.scrollLeft !== startScroll;
+  const refresh = () => {
+    if (moved()) preview.value = edit();
+  };
+  // Held near (or past) the right edge: scroll on, faster the further in.
+  const scrollAtEdge = () => {
+    const rect = tl.getBoundingClientRect();
+    const into = lastX - (rect.right - EDGE_PX);
+    // Nothing to scroll in a timeline that hasn't been laid out.
+    if (which !== 'end' || rect.width <= 0 || into <= 0) {
+      edgeFrame = 0;
+      return;
+    }
+    tl.scrollLeft += Math.min(30, 4 + into * 0.5);
+    refresh();
+    edgeFrame = requestAnimationFrame(scrollAtEdge);
+  };
   const move = (ev: PointerEvent | MouseEvent) => {
-    if (Math.abs(ev.clientX - startX) >= 3) preview.value = edit(ev.clientX);
+    lastX = ev.clientX;
+    refresh();
+    if (!edgeFrame) scrollAtEdge();
   };
   const up = (ev: PointerEvent | MouseEvent) => {
+    lastX = ev.clientX;
     dragCleanup?.();
     preview.value = null;
-    if (Math.abs(ev.clientX - startX) < 3) return;
-    void (which === 'start'
-      ? editor.resizeStart(amount(ev.clientX), snap.value)
-      : editor.resizeEnd(amount(ev.clientX), snap.value));
+    if (!moved()) return;
+    void (which === 'start' ? editor.resizeStart(amount(), snap.value) : editor.resizeEnd(amount(), snap.value));
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
   dragCleanup = () => {
+    cancelAnimationFrame(edgeFrame);
+    edgeFrame = 0;
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
     dragCleanup = null;
@@ -605,6 +633,8 @@ onMounted(() => {
   }
 });
 onUnmounted(() => {
+  // The editor's playback belongs to the editor.
+  if (recorder.isPlaying) recorder.stopPlayback();
   resizeObserver?.disconnect();
   window.removeEventListener('keydown', onKey);
   cancelAnimationFrame(frame);
