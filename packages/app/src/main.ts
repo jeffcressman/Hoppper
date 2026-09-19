@@ -10,16 +10,23 @@ import {
   StemFetcher,
 } from '@hoppper/sdk';
 import App from './App.vue';
-import LoginView from './views/LoginView.vue';
-import JamListView from './views/JamListView.vue';
-import JamDetailView from './views/JamDetailView.vue';
+import PublicJamsView from './views/PublicJamsView.vue';
+import MyJamsView from './views/MyJamsView.vue';
+import HopsView from './views/HopsView.vue';
+import SettingsView from './views/SettingsView.vue';
 import PerformView from './views/PerformView.vue';
+import HopEditingView from './views/HopEditingView.vue';
+import './styles/lwlkcing/index.css';
+import './styles/components.css';
 import { initClient } from './client';
 import { createAppRouter } from './router';
 import {
+  initHopEditorStore,
   initPerformanceStore,
   initRecorderStore,
+  useRiffDocsStore,
   useSessionStore,
+  useStemDocsStore,
 } from './stores';
 import { openTokenStore } from './tauri/open-token-store';
 import { tauriFsAdapter } from './tauri/fs-adapter';
@@ -134,6 +141,7 @@ async function bootstrap() {
   const prefetcher = createPrefetchRing({ loader });
   engine.onStateChange((s) => log('info', 'audio', `engine state → ${s}`));
 
+  const stemDocs = useStemDocsStore();
   const resolveStems = async (
     jamId: JamCouchID,
     riff: RiffDocument,
@@ -141,10 +149,12 @@ async function bootstrap() {
     log('debug', 'audio', `resolveStems jam=${jamId} riff=${riff.riffId}`);
     await unlockAudioContext();
     log('debug', 'audio', `AudioContext resumed → ${audioContext.state}`);
-    const resolved = await client.getStemUrls(jamId, riff);
-    const filtered = resolved.filter((r): r is ResolvedStem => r !== null);
-    log('info', 'audio', `resolveStems → ${filtered.length} stems`);
-    return filtered;
+    // Through the stem-document store: the rifff history already fetched
+    // these documents to colour its splats, and they never change, so a hop
+    // on a rifff that's on screen costs no request.
+    const resolved = await stemDocs.resolve(jamId, riff);
+    log('info', 'audio', `resolveStems → ${resolved.length} stems`);
+    return resolved;
   };
 
   const hopRecorder = createHopRecorder({
@@ -156,6 +166,7 @@ async function bootstrap() {
     prefetcher,
     resolveStems,
     recorder: hopRecorder,
+    peekBuffer: (stemId) => loader.peek(stemId),
   });
   log('info', 'boot', 'performance store initialized');
 
@@ -164,9 +175,11 @@ async function bootstrap() {
     fs: tauriFsAdapter(),
     root: sequencesRoot,
   });
+  // Through the rifff-document store: a replay's rifffs are fetched once, not
+  // once per hop, and the editor and the jam pages share them.
+  const riffDocs = useRiffDocsStore();
   const resolveRiff = async (jamId: JamCouchID, riffId: RiffCouchID) => {
-    const riffs = await client.getRiffs(jamId, [riffId]);
-    const riff = riffs[0];
+    const riff = await riffDocs.fetch(jamId, riffId);
     if (!riff) throw new Error(`Rifff not found: ${riffId}`);
     const stems = await resolveStems(jamId, riff);
     return { riff, stems };
@@ -189,13 +202,33 @@ async function bootstrap() {
   });
   log('info', 'boot', 'recorder store initialized');
 
+  initHopEditorStore({
+    storage: sequenceStorage,
+    riffDocs,
+    riffIdsBetween: (jamId, aMs, bMs, limit) => client.getRiffIdsBetween(jamId, aMs, bMs, limit),
+  });
+
   const router = createAppRouter({
     isAuthenticated: () => session.isAuthenticated,
     routes: [
-      { path: '/login', name: 'login', component: LoginView },
-      { path: '/jams', name: 'jams', component: JamListView },
-      { path: '/jams/:jamId', name: 'jam-detail', component: JamDetailView },
-      { path: '/jams/:jamId/perform', name: 'perform', component: PerformView },
+      { path: '/public', name: 'public-jams', component: PublicJamsView },
+      { path: '/mine', name: 'my-jams', component: MyJamsView },
+      { path: '/hops', name: 'hops', component: HopsView },
+      { path: '/settings', name: 'settings', component: SettingsView },
+      // Hop Recording. The Perform view stands in until Slice B.
+      {
+        path: '/jams/:jamId',
+        name: 'hop-recording',
+        component: PerformView,
+        meta: { requiresAuth: true },
+      },
+      // Editing needs a session: a take's rifffs and stems come from Endlesss.
+      {
+        path: '/hops/:jamId/:id',
+        name: 'hop-editing',
+        component: HopEditingView,
+        meta: { requiresAuth: true },
+      },
     ],
     useWebHistory: true,
   });

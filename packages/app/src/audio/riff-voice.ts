@@ -33,11 +33,25 @@ export interface AudioBufferSourceLike extends AudioNodeLike {
   disconnect(): void;
 }
 
+export interface AnalyserNodeLike extends AudioNodeLike {
+  fftSize: number;
+  getFloatTimeDomainData(array: Float32Array): void;
+  connect(destination: AudioNodeLike): void;
+}
+
+export interface ChannelSplitterLike extends AudioNodeLike {
+  connect(destination: AudioNodeLike, output?: number): void;
+  disconnect(): void;
+}
+
 export interface AudioContextLike {
   readonly currentTime: number;
   readonly destination: AudioNodeLike;
   createBufferSource(): AudioBufferSourceLike;
   createGain(): GainNodeLike;
+  /** Optional: only the level meter needs these, and it goes quiet without them. */
+  createAnalyser?(): AnalyserNodeLike;
+  createChannelSplitter?(numberOfOutputs: number): ChannelSplitterLike;
 }
 
 export interface VoiceStem {
@@ -48,7 +62,15 @@ export interface VoiceStem {
    * the rifff's own tempo.
    */
   playbackRate?: number;
+  /**
+   * The gain the rifff gives this stem's slot (`RiffSlot.gain`, LORE's
+   * `m_stemGains`) — the rifff's own mix. Defaults to 1.
+   */
+  gain?: number;
 }
+
+/** Glide time for a mixer move: long enough not to click, short enough to feel instant. */
+const LEVEL_GLIDE_SEC = 0.02;
 
 export interface RiffVoiceOptions {
   context: AudioContextLike;
@@ -57,6 +79,11 @@ export interface RiffVoiceOptions {
   loopDurationSec: number;
   /** Defaults to context.destination if omitted. */
   destination?: AudioNodeLike;
+  /**
+   * The mixer's level per slot (0..1, index = slot), multiplied onto each
+   * stem's own gain — LORE's `m_layerGainMultiplier`. Defaults to 1 each.
+   */
+  levels?: ReadonlyArray<number>;
 }
 
 export interface RiffVoice {
@@ -76,6 +103,8 @@ export interface RiffVoice {
   stop(when: number): void;
   fadeIn(startTime: number, durationSec: number): void;
   fadeOut(startTime: number, durationSec: number): void;
+  /** Glide one slot's mixer level to `level` from `when`. Empty slots ignore it. */
+  setSlotLevel(slot: number, level: number, when: number): void;
   dispose(): void;
 }
 
@@ -97,6 +126,10 @@ function wrapOffset(offset: number, loopSec: number): number {
 
 interface VoiceSource {
   node: AudioBufferSourceLike;
+  /** The stem's level in the mix: its rifff gain × the mixer's slot level. */
+  level: GainNodeLike;
+  /** The rifff's gain for this slot. */
+  riffGain: number;
   /** How fast this stem's buffer is traversed; 1 = its recorded tempo. */
   rate: number;
   /** This stem's own loop length in buffer time (i.e. unscaled). */
@@ -112,8 +145,15 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
   const gain = context.createGain();
   gain.connect(destination);
 
+  const levels = opts.levels ?? [];
+  const levelOf = (slot: number) => {
+    const l = levels[slot];
+    return l !== undefined && Number.isFinite(l) ? Math.max(0, l) : 1;
+  };
+
   const sources: VoiceSource[] = [];
-  for (const stem of stems) {
+  const bySlot = new Map<number, VoiceSource>();
+  for (const [slot, stem] of stems.entries()) {
     if (stem === null) continue;
     const { buffer } = stem;
     // A stem borrowed from a rifff at another tempo is played faster or slower
@@ -136,8 +176,14 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
     // rate; only how quickly we move through them changes.
     node.loopEnd = bufferLoopSec;
     node.playbackRate.value = rate;
-    node.connect(gain);
-    sources.push({ node, rate, bufferLoopSec, loopSec: bufferLoopSec / rate });
+    const riffGain = Number.isFinite(stem.gain ?? 1) ? Math.max(0, stem.gain ?? 1) : 1;
+    const level = context.createGain();
+    level.gain.value = riffGain * levelOf(slot);
+    node.connect(level);
+    level.connect(gain);
+    const source = { node, level, riffGain, rate, bufferLoopSec, loopSec: bufferLoopSec / rate };
+    sources.push(source);
+    bySlot.set(slot, source);
   }
 
   // The riff plays for as long as its longest stem, but never less than the
@@ -154,7 +200,10 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
   function dispose(): void {
     if (disposed) return;
     disposed = true;
-    for (const s of sources) s.node.disconnect();
+    for (const s of sources) {
+      s.node.disconnect();
+      s.level.disconnect();
+    }
     gain.disconnect();
   }
 
@@ -201,6 +250,14 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
       gain.gain.cancelScheduledValues(startTime);
       gain.gain.setValueAtTime(from, startTime);
       gain.gain.linearRampToValueAtTime(0, startTime + durationSec);
+    },
+    setSlotLevel(slot, level, when) {
+      const source = bySlot.get(slot);
+      if (!source || !Number.isFinite(level) || !Number.isFinite(when)) return;
+      const param = source.level.gain;
+      param.cancelScheduledValues(when);
+      param.setValueAtTime(param.value, when);
+      param.linearRampToValueAtTime(source.riffGain * Math.max(0, level), when + LEVEL_GLIDE_SEC);
     },
     dispose,
   };

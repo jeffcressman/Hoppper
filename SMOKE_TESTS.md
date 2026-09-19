@@ -27,15 +27,20 @@ many builds if the checklist gets too long.
 - [x] **Cold start bootstrap splash.** Fresh launch shows "Hoppper /
       spinner / Opening session vault…" until Vue mounts. No blank
       white window during the 30–60s Stronghold open.
-- [x] **Login indicator (manual login).** On `/login`, submitting
-      credentials shows a spinner + the "Endlesss can take 20–60
-      seconds to respond" hint while the round-trip is in flight.
+- [ ] **Login indicator (manual login).** In the login dialog (Public
+      Jams → Log in), submitting credentials shows a spinner + the
+      "Endlesss can take 20–60 seconds to respond" hint while the
+      round-trip is in flight. *(Moved from `/login` to a dialog in
+      Phase 8 Slice A — re-verify.)*
 - [x] **Login indicator (saved-token hydrate).** Restart with a valid
       saved token — the same indicator is visible during hydrate.
-- [x] **Jam list loads.** Post-login `/jams` renders the subscribed
-      jams. Titles populate as `getJam` calls resolve.
-- [x] **Jam detail loads.** Clicking a jam opens `/jams/:jamId`; rifffs
-      list renders.
+- [ ] **Jam lists load.** Post-login, Public Jams and My Jams render
+      their grids. Titles populate as `getJam` calls resolve. *(Was
+      `/jams`; split into two pages in Phase 8 Slice A — re-verify.)*
+- [ ] **A jam opens straight into Perform.** Clicking a jam tile opens
+      `/jams/:jamId` (the Perform view for now); rifffs list renders and
+      Load more pages older ones in. *(The separate jam detail page is
+      gone as of Phase 8 Slice A.)*
 - [x] **Perform view: audio on cold start.** Open a small jam →
       Perform, click a rifff, hear audio within a couple seconds.
       (Regression signal for the ENOENT / stem cache path.)
@@ -57,9 +62,10 @@ many builds if the checklist gets too long.
 - [ ] **DigitalOcean Spaces stems.** Any jam whose stems are hosted at
       `*.digitaloceanspaces.com` plays — no "url not allowed on the
       configured scope" errors in the log panel.
-- [x] **Log out.** Clicking Log out (top-right) shows "Logging out…"
-      and navigates to `/login` immediately. No multi-second freeze
-      while Stronghold saves.
+- [ ] **Log out.** Clicking Log out (now in Settings) shows "Logging
+      out…" and lands on Public Jams immediately. No multi-second freeze
+      while Stronghold saves. *(Moved from a top-right button in Phase 8
+      Slice A — re-verify.)*
 - [x] **Re-login after logout.** After logging out, logging back in
       with a fresh cred pair works; the previous session token is
       cleared.
@@ -184,6 +190,105 @@ passing the same day against the boxes above.
   replay. Assumed: Stop while still armed saves nothing, since there's
   nothing to replay. Design notes in
   `docs/phases/phase-7-hop-recording.md`.
+
+## Phase 8 Slice A — shell and jam lists
+
+Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
+`project resources/Design/Canvas/` (published canvas linked from there).
+
+- [x] **Looks like the design.** Dark warm surfaces, Space Grotesk
+      headings, the rail on the left, the glass top bar — compare
+      gainst the canvas. Fonts load with the network off (they're
+      bundled).
+- [x] **Opens on Public Jams.** A fresh launch lands on Public Jams.
+      Logged out, it shows the striped login prompt instead of a grid;
+      My Jams does the same.
+- [x] **Login from the dialog.** Log in from either page: the dialog
+      closes itself and the grid appears without a reload.
+- [x] **My Jams order.** Personal jam first with a Personal badge, then
+      joined jams newest first, each saying when it was joined.
+- [x] **No repeat fetch.** Switching between Public Jams and My Jams
+      doesn't re-request the jam list (watch the log panel's `http`
+      lines).
+- [x] **Current Jam.** Greyed out until a jam is opened; afterwards it
+      returns to that jam, and that jam's tile says Current.
+- [x] **Hops.** Lists takes from every jam with jam name, day, hop
+      count and length. Play/pause works; Delete asks first; with no
+      takes it shows the empty state.
+- [x] **Log out from Settings.** Returns to Public Jams logged out,
+      Current Jam greys out, and logging in as someone else shows
+      their jams, not the previous user's.
+
+### Slice B — rifff splats
+
+- [x] **Splats in stem colours.** Opening a jam shows its rifffs as splats
+      grouped by day, each layer in a stem's colour, the committer's initial
+      on each. Colours can arrive a moment after the shapes.
+- [x] **One request per page.** The log panel shows one `_all_docs` POST
+      for the splats when the jam opens, and one more per Load more — not
+      one per rifff.
+- [x] **Hops cost no stem-document request.** Clicking a splat that's on
+      screen plays it without another `_all_docs` POST in the log.
+- [x] **Current rifff ringed.** The playing rifff's splat has the amber
+      ring; a rifff still loading pulses.
+
+### Slice B — splats from stem audio
+
+- [x] **Splats take their real shape once played.** Before a rifff is
+      played its splat has seeded spikes; after you play it, each layer's
+      outline is its stem's waveform wrapped round the circle — jagged all
+      the way round for every stem, pads included, with long spikes where a
+      stem hits — and other splats that reuse those stems change too.
+- [x] **No stutter.** Playing a rifff while a long journal is on screen
+      doesn't hitch the audio or the playhead when the splats redraw.
+
+### Slice B — mixer, waveform, transport
+
+- [x] **Rifffs play at their own mix.** A rifff with a quiet stem sounds
+      as it does in Endlesss — before 2026-09-18 every stem played at full
+      volume. Compare a rifff or two against the Endlesss app.
+- [x] **Mixer.** Each channel shows the stem's preset name in its colour
+      and who made it. A fader drag or arrow key changes that track's
+      volume smoothly (no click); mute silences it and remembers the fader.
+      Levels and mutes stay put across hops.
+- [x] **Waveform.** Rows show the playing rifff's stems, short stems
+      repeating across the loop; the playhead sweeps in time with what you
+      hear and stays in phase across hops.
+- [x] **Transport in the top bar.** Stop, Play (restarts the last rifff),
+      Record (only on a jam page); REC badge and clock while recording,
+      "Waiting for first rifff…" while armed. Quantise toggle works as the
+      old checkbox did.
+- [x] **Level meter.** Both bars move with the output — on macOS too (see
+      `MEMORY.md` if it stays dark).
+
+## Phase 8 Slice C — hop editor
+
+Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
+
+- [ ] **Ways in.** Stop on a recording lands the new take in the editor;
+      Edit on the Hops page opens a take; afterwards the rail's Editor goes
+      back to it.
+- [ ] **Lanes.** Each rifff shows its eight tracks, drawn where the audio
+      is — a rifff that came in mid-loop starts mid-waveform. Rifffs load
+      without a download if they were played before (log panel).
+- [ ] **Select and drag.** Clicking a hop point splits the lanes, with
+      each side running on dashed. Dragging it moves when the next rifff
+      comes in, snapped to the beat; Bar and Off change the snap. Other hop
+      points don't move. Play afterwards and hear the change on the beat.
+- [ ] **Delete.** Delete (or Backspace) on a selected hop point removes
+      the rifff it brought in and closes the gap.
+- [ ] **Expand and Add.** Expand shows the rifffs the hop skipped, dashed,
+      in commit order. **Check the log:** one `rifffLoopsByCreateTime` GET
+      with `startkey`/`endkey` — the first time that ranged query has run
+      against Endlesss. Pick one and Add puts it in for one loop.
+- [ ] **Duplicate.** Pick a rifff, Duplicate: another copy follows it.
+- [ ] **Undo/redo and saving.** Ctrl/Cmd+Z undoes, Shift+Ctrl/Cmd+Z
+      redoes; edits survive leaving and reopening the take, and the Hops
+      page shows the new length and hop count.
+- [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
+      rifff-document requests the second time.
+
+---
 
 ## Cross-tempo stems
 

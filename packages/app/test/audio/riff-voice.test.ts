@@ -120,30 +120,85 @@ function buf(label = 'b', duration = 32): AudioBufferLike {
 }
 
 describe('createRiffVoice', () => {
-  it('creates one BufferSource per non-null slot and a single shared GainNode', () => {
+  // The voice's own gain (fades) is the one wired to the destination; each
+  // stem also has a gain of its own, for its level in the mix.
+  const voiceGainOf = (ctx: ReturnType<typeof createMockContext>) =>
+    ctx.gains.find((g) => g.connections.includes(ctx.destination))!;
+  const stemGainOf = (src: MockSource) => src.connections[0] as MockGain;
+
+  it('creates one BufferSource per non-null slot, each with its own gain, and one voice gain', () => {
     const ctx = createMockContext();
     const stems = [{ buffer: buf('a') }, null, { buffer: buf('c') }, null, { buffer: buf('e') }, null, null, { buffer: buf('h') }];
     const voice = createRiffVoice({ context: ctx, stems, loopDurationSec: 8 });
 
     expect(ctx.sources.length).toBe(4);
-    expect(ctx.gains.length).toBe(1);
+    expect(ctx.gains.length).toBe(5);
     expect(voice.stemCount).toBe(4);
   });
 
-  it('routes every source through the gain to the destination', () => {
+  it('routes every source through its stem gain, then the voice gain, to the destination', () => {
     const ctx = createMockContext();
-    const voice = createRiffVoice({
+    createRiffVoice({
       context: ctx,
       stems: [{ buffer: buf() }, { buffer: buf() }, { buffer: buf() }, { buffer: buf() }, null, null, null, null],
       loopDurationSec: 4,
     });
-    void voice;
 
-    const gain = ctx.gains[0]!;
+    const voiceGain = voiceGainOf(ctx);
     for (const src of ctx.sources) {
-      expect(src.connections).toContain(gain);
+      const stemGain = stemGainOf(src);
+      expect(stemGain).not.toBe(voiceGain);
+      expect(stemGain.connections).toContain(voiceGain);
     }
-    expect(gain.connections).toContain(ctx.destination);
+  });
+
+  it('plays each stem at the gain the rifff gives its slot (LORE: m_stemGains)', () => {
+    const ctx = createMockContext();
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf(), gain: 0.5 }, null, { buffer: buf(), gain: 0.8 }, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    expect(ctx.sources.map((s) => stemGainOf(s).gain.value)).toEqual([0.5, 0.8]);
+  });
+
+  it('starts each stem at its mixer level times the rifff’s gain', () => {
+    const ctx = createMockContext();
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf(), gain: 0.5 }, { buffer: buf(), gain: 1 }, null, null, null, null, null, null],
+      loopDurationSec: 4,
+      levels: [0.5, 0, 1, 1, 1, 1, 1, 1],
+    });
+    expect(ctx.sources.map((s) => stemGainOf(s).gain.value)).toEqual([0.25, 0]);
+  });
+
+  it('setSlotLevel glides one slot to its new level, leaving the others alone', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf(), gain: 0.5 }, { buffer: buf(), gain: 1 }, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.setSlotLevel(0, 0.4, 10);
+    const moved = stemGainOf(ctx.sources[0]!).param.events;
+    // A short glide rather than a jump, so a fader move doesn't click.
+    expect(moved).toEqual([
+      { kind: 'cancel', time: 10 },
+      { kind: 'set', value: 0.5, time: 10 },
+      { kind: 'ramp', value: 0.2, time: 10.02 },
+    ]);
+    expect(stemGainOf(ctx.sources[1]!).param.events).toEqual([]);
+  });
+
+  it('setSlotLevel on an empty slot does nothing', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    expect(() => voice.setSlotLevel(3, 0, 1)).not.toThrow();
   });
 
   it('enables looping from the start of every source', () => {
@@ -432,7 +487,8 @@ describe('createRiffVoice', () => {
     for (const src of ctx.sources) {
       expect(src.disconnected).toBe(true);
     }
-    expect((ctx.gains[0] as MockGain).disconnected).toBe(true);
+    // Every gain: the voice's and each stem's.
+    expect(ctx.gains.every((g) => g.disconnected)).toBe(true);
   });
 
   it('handles a riff with all null slots (silent voice) — no sources created', () => {

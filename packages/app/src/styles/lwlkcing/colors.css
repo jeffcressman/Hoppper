@@ -1,0 +1,100 @@
+/* LwlkcIng — Color system
+   ────────────────────────────────────────────────────────────────────────
+   Two master knobs drive the ENTIRE system. Re-theme the product by changing
+   just these on :root (or a scope):
+
+     --brand-hue        0–360  · rotates accent + warms every neutral
+     --ui-brightness   -0.05–0.06 · lifts/drops all dark surfaces together
+
+   Everything is authored in OKLCH so hue rotation stays perceptually even and
+   neutrals carry a faint, consistent warmth. Default = warm amber, dark-first
+   (Endlesss-style near-black), with a macOS-Sequoia light theme available via
+   [data-theme="light"]. */
+
+:root {
+  /* ── Master knobs ───────────────────────────────────────────── */
+  --brand-hue: 42;        /* @kind other */
+  --brand-chroma: 0.155;  /* @kind other */
+  --ui-brightness: 0;     /* @kind other */
+
+  /* ── Surfaces (dark, warm-tinted) ───────────────────────────── */
+  --bg:         oklch(calc(0.145 + var(--ui-brightness)) 0.009 var(--brand-hue));
+  --bg-sunken:  oklch(calc(0.115 + var(--ui-brightness)) 0.008 var(--brand-hue));
+  --surface-1:  oklch(calc(0.185 + var(--ui-brightness)) 0.011 var(--brand-hue));
+  --surface-2:  oklch(calc(0.227 + var(--ui-brightness)) 0.013 var(--brand-hue));
+  --surface-3:  oklch(calc(0.278 + var(--ui-brightness)) 0.014 var(--brand-hue));
+  --surface-inset: oklch(calc(0.095 + var(--ui-brightness)) 0.007 var(--brand-hue));
+
+  /* ── Lines & borders ────────────────────────────────────────── */
+  --line:        oklch(1 0 0 / 0.09);
+  --line-strong: oklch(1 0 0 / 0.16);
+  --line-faint:  oklch(1 0 0 / 0.05);
+
+  /* ── Text ───────────────────────────────────────────────────── */
+  --text-1: oklch(0.97 0.006 var(--brand-hue));
+  --text-2: oklch(0.78 0.008 var(--brand-hue));
+  --text-3: oklch(0.605 0.008 var(--brand-hue));
+  --text-4: oklch(0.45 0.006 var(--brand-hue));
+
+  /* ── Accent (follows the hue knob) ──────────────────────────── */
+  --accent:        oklch(0.74 var(--brand-chroma) var(--brand-hue));
+  --accent-hover:  oklch(0.79 var(--brand-chroma) var(--brand-hue));
+  --accent-press:  oklch(0.67 var(--brand-chroma) var(--brand-hue));
+  --accent-soft:   oklch(0.74 var(--brand-chroma) var(--brand-hue) / 0.16);
+  --accent-line:   oklch(0.74 var(--brand-chroma) var(--brand-hue) / 0.45);
+  --on-accent:     oklch(0.16 0.012 var(--brand-hue));
+
+  /* ── Spectrum (fixed category coding — the signature rainbow) ─ */
+  --spectrum-amber:  oklch(0.76 0.16 58);
+  --spectrum-yellow: oklch(0.86 0.15 96);
+  --spectrum-green:  oklch(0.80 0.16 150);
+  --spectrum-teal:   oklch(0.82 0.115 188);
+  --spectrum-blue:   oklch(0.69 0.145 248);
+  --spectrum-indigo: oklch(0.60 0.165 285);
+  --spectrum-violet: oklch(0.64 0.19 312);
+  --spectrum-pink:   oklch(0.69 0.205 352);
+  --spectrum-red:    oklch(0.645 0.21 26);
+
+  /* ── Semantic ───────────────────────────────────────────────── */
+  --success: var(--spectrum-green);
+  --warning: var(--spectrum-yellow);
+  --danger:  var(--spectrum-red);
+  --info:    var(--spectrum-blue);
+  --danger-soft:  oklch(0.645 0.21 26 / 0.16);
+  --success-soft: oklch(0.80 0.16 150 / 0.15);
+
+  /* ── Semantic aliases (consume these in components) ─────────── */
+  --text-body:        var(--text-2);
+  --text-heading:     var(--text-1);
+  --text-muted:       var(--text-3);
+  --surface-app:      var(--bg);
+  --surface-panel:    var(--surface-1);
+  --surface-card:     var(--surface-2);
+  --surface-control:  var(--surface-3);
+  --border-default:   var(--line);
+  --border-focus:     var(--accent);
+}
+
+/* ── Light theme — macOS Sequoia influence: warm paper, soft depth ── */
+[data-theme="light"] {
+  --bg:         oklch(calc(0.965 + var(--ui-brightness)) 0.006 var(--brand-hue));
+  --bg-sunken:  oklch(calc(0.93 + var(--ui-brightness)) 0.007 var(--brand-hue));
+  --surface-1:  oklch(calc(0.995 + var(--ui-brightness)) 0.003 var(--brand-hue));
+  --surface-2:  oklch(calc(1 + var(--ui-brightness)) 0.002 var(--brand-hue));
+  --surface-3:  oklch(calc(0.955 + var(--ui-brightness)) 0.006 var(--brand-hue));
+  --surface-inset: oklch(calc(0.915 + var(--ui-brightness)) 0.008 var(--brand-hue));
+
+  --line:        oklch(0.2 0.02 var(--brand-hue) / 0.12);
+  --line-strong: oklch(0.2 0.02 var(--brand-hue) / 0.20);
+  --line-faint:  oklch(0.2 0.02 var(--brand-hue) / 0.06);
+
+  --text-1: oklch(0.24 0.014 var(--brand-hue));
+  --text-2: oklch(0.40 0.014 var(--brand-hue));
+  --text-3: oklch(0.55 0.012 var(--brand-hue));
+  --text-4: oklch(0.68 0.010 var(--brand-hue));
+
+  --accent:       oklch(0.62 calc(var(--brand-chroma) + 0.02) var(--brand-hue));
+  --accent-hover: oklch(0.57 calc(var(--brand-chroma) + 0.02) var(--brand-hue));
+  --accent-press: oklch(0.52 calc(var(--brand-chroma) + 0.02) var(--brand-hue));
+  --on-accent:    oklch(0.99 0.004 var(--brand-hue));
+}

@@ -68,6 +68,10 @@ function mockEngine(): MockEngine {
       currentRiffId = null;
       for (const l of listeners) l(state);
     }),
+    slotLevels: [1, 1, 1, 1, 1, 1, 1, 1],
+    setSlotLevels: vi.fn(),
+    playhead: vi.fn(() => null),
+    levels: vi.fn((): [number, number] => [0, 0]),
     onStateChange(fn: (s: AudioEngineState) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -546,5 +550,106 @@ describe('definePerformanceStore', () => {
       const store = useStore();
       await expect(store.hopTo(JAM, riff('r1'))).resolves.toBeDefined();
     });
+  });
+});
+
+describe('definePerformanceStore — mixer', () => {
+  const store = () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    return { engine, s };
+  };
+
+  it('starts every slot at full level, unmuted — each rifff as it was committed', () => {
+    const { s } = store();
+    expect(s.slotLevels).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(s.slotMuted).toEqual([false, false, false, false, false, false, false, false]);
+  });
+
+  it('a fader move sets that slot’s level in the engine', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(2, 0.4);
+    expect(s.slotLevels[2]).toBe(0.4);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 0.4, 1, 1, 1, 1, 1]);
+  });
+
+  it('keeps a level between 0 and 1', () => {
+    const { s } = store();
+    s.setSlotLevel(0, 1.7);
+    s.setSlotLevel(1, -0.2);
+    expect(s.slotLevels.slice(0, 2)).toEqual([1, 0]);
+  });
+
+  it('mute silences a slot in the engine without losing its fader level', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(3, 0.6);
+    s.toggleMute(3);
+    expect(s.slotMuted[3]).toBe(true);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 0, 1, 1, 1, 1]);
+    s.toggleMute(3);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 0.6, 1, 1, 1, 1]);
+  });
+});
+
+describe('definePerformanceStore — play again', () => {
+  it('remembers the last rifff played, so Play can start it again after a stop', async () => {
+    const engine = mockEngine();
+    const resolveStems = vi.fn(async () => [fakeStem('s1')]);
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems })();
+    expect(s.canResume).toBe(false);
+    await s.hopTo(JAM, riff('r1'));
+    s.stop();
+    expect(s.canResume).toBe(true);
+    await s.resume();
+    expect(engine.hopTo).toHaveBeenLastCalledWith(JAM, riff('r1'), [fakeStem('s1')]);
+  });
+});
+
+describe('definePerformanceStore — what the page draws from', () => {
+  it('passes on where the engine’s playhead is and how loud it is', () => {
+    const engine = mockEngine();
+    const head = { riffId: 'r1' as RiffCouchID, positionSec: 3, loopSec: 16 };
+    vi.mocked(engine.playhead).mockReturnValue(head);
+    vi.mocked(engine.levels).mockReturnValue([0.5, 0.4]);
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    expect(s.playhead()).toEqual(head);
+    expect(s.levels()).toEqual([0.5, 0.4]);
+  });
+
+  it('hands out a stem’s decoded audio when it has been loaded, for the waveform', () => {
+    const buffer = { length: 1, numberOfChannels: 1, sampleRate: 1, duration: 1 };
+    const s = definePerformanceStore({
+      engine: mockEngine(),
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(),
+      peekBuffer: (id) => (id === 's1' ? buffer : undefined),
+    })();
+    expect(s.bufferFor('s1' as StemCouchID)).toBe(buffer);
+    expect(s.bufferFor('s2' as StemCouchID)).toBeUndefined();
+  });
+});
+
+describe('definePerformanceStore — decoded audio', () => {
+  it('ticks whenever a rifff starts playing, since its stems are decoded by then — so shapes drawn from audio can refresh', () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    const before = s.decodedTick;
+    engine._emitRiff('r1' as RiffCouchID);
+    expect(s.decodedTick).toBe(before + 1);
+    engine._emitRiff(null);
+    expect(s.decodedTick).toBe(before + 1);
+  });
+});
+
+describe('definePerformanceStore — loading without playing', () => {
+  it('warm(jamId, riff) loads a rifff’s stems for drawing, and ticks when they are in', async () => {
+    const engine = mockEngine();
+    const resolveStems = vi.fn(async () => [fakeStem('s1')]);
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems })();
+    const before = s.decodedTick;
+    await s.warm(JAM, riff('r1'));
+    expect(engine.warmRiff).toHaveBeenCalledWith(JAM, riff('r1'), [fakeStem('s1')]);
+    expect(engine.hopTo).not.toHaveBeenCalled();
+    expect(s.decodedTick).toBe(before + 1);
   });
 });

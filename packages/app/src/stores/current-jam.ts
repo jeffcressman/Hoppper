@@ -13,6 +13,8 @@ const PAGE_SIZE = 25;
 export function defineCurrentJamStore(client: CurrentJamClient) {
   return defineStore('currentJam', () => {
     const jamId = ref<JamCouchID | null>(null);
+    // Outlives close(): the rail's Current Jam button goes back to it.
+    const lastJamId = ref<JamCouchID | null>(null);
     const riffPage = ref<RiffDocument[]>([]);
     const hasMore = ref(false);
 
@@ -43,6 +45,7 @@ export function defineCurrentJamStore(client: CurrentJamClient) {
 
     async function open(id: JamCouchID): Promise<void> {
       jamId.value = id;
+      lastJamId.value = id;
       riffPage.value = [];
       nextBuffered = null;
       hasMore.value = false;
@@ -72,6 +75,10 @@ export function defineCurrentJamStore(client: CurrentJamClient) {
       nextBuffered = null;
     }
 
-    return { jamId, riffPage, hasMore, open, loadNextPage, close };
+    function forget(): void {
+      lastJamId.value = null;
+    }
+
+    return { jamId, lastJamId, riffPage, hasMore, open, loadNextPage, close, forget };
   });
 }

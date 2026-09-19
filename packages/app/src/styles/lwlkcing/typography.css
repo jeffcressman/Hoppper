@@ -1,0 +1,45 @@
+/* LwlkcIng — Typography
+   Display: Space Grotesk  · headings, wordmark, large numerics
+   Sans:    Hanken Grotesk · body, UI labels, controls
+   Mono:    Space Mono     · parameter readouts, BPM, time, code
+   Type scale is a ~1.2 minor-third with tighter display tracking. */
+
+:root {
+  /* ── Families ───────────────────────────────────────────────── */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-sans:    'Hanken Grotesk', system-ui, sans-serif;
+  --font-mono:    'Space Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* ── Weights ────────────────────────────────────────────────── */
+  --fw-regular: 400;   /* @kind font */
+  --fw-medium:  500;   /* @kind font */
+  --fw-semibold: 600;  /* @kind font */
+  --fw-bold:    700;   /* @kind font */
+  --fw-extra:   800;   /* @kind font */
+
+  /* ── Sizes ──────────────────────────────────────────────────── */
+  --text-2xs: 0.6875rem;  /* 11 — meter ticks, micro labels  */
+  --text-xs:  0.75rem;    /* 12 — captions, badges           */
+  --text-sm:  0.8125rem;  /* 13 — secondary UI, table cells  */
+  --text-base:0.9375rem;  /* 15 — body / control text        */
+  --text-md:  1.0625rem;  /* 17 — emphasized body            */
+  --text-lg:  1.3125rem;  /* 21 — card titles, section heads */
+  --text-xl:  1.75rem;    /* 28 — view titles                */
+  --text-2xl: 2.375rem;   /* 38 — page headings              */
+  --text-3xl: 3.25rem;    /* 52 — hero                       */
+  --text-4xl: 4.5rem;     /* 72 — display hero               */
+
+  /* ── Line heights ───────────────────────────────────────────── */
+  --leading-none:  1;
+  --leading-tight: 1.14;
+  --leading-snug:  1.32;
+  --leading-normal:1.55;
+
+  /* ── Letter spacing ─────────────────────────────────────────── */
+  --tracking-tight: -0.02em;
+  --tracking-snug:  -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide:  0.04em;
+  --tracking-wordmark: 0.24em;  /* uppercase wordmark lockup */
+  --tracking-label: 0.08em;     /* uppercase eyebrow labels  */
+}

@@ -22,6 +22,7 @@ export {
   type TokenStore,
 } from './token-store.js';
 export * from './types/index.js';
+export { resolveStemUrl } from './parse.js';
 export {
   ReadonlyCacheError,
   type StemBlob,

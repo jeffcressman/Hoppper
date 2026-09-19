@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import type {
   JamCouchID,
   ResolvedStem,
@@ -14,6 +14,7 @@ import type {
   HopResult,
 } from '../audio/engine.js';
 import type { RiffPrefetcher } from '../audio/prefetch.js';
+import type { AudioBufferLike } from '../audio/audio-buffer-cache.js';
 import type { HopRecorder } from '../hop-recorder/recorder.js';
 
 // The view needs a way to look up resolved stems for a riff. The SDK has
@@ -36,6 +37,8 @@ export interface PerformanceDeps {
    * default: a bar can mean waiting a couple of seconds, which reads as lag.
    */
   quantiseGrid?: HopQuantise;
+  /** A stem's decoded audio if it's loaded — what the waveform is drawn from. */
+  peekBuffer?: (stemId: StemCouchID) => AudioBufferLike | undefined;
 }
 
 /**
@@ -56,13 +59,39 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     const quantiseEntry = ref(false);
     const quantiseGrid: HopQuantise = deps.quantiseGrid ?? 'beat';
 
+    // The mixer, per slot. Full level is the rifff as committed; mute keeps
+    // the fader's level for when it comes back.
+    const slotLevels = ref<number[]>([...deps.engine.slotLevels]);
+    const slotMuted = ref<boolean[]>(slotLevels.value.map(() => false));
+    function applyMix(): void {
+      deps.engine.setSlotLevels(slotLevels.value.map((l, i) => (slotMuted.value[i] ? 0 : l)));
+    }
+    function setSlotLevel(slot: number, level: number): void {
+      if (!(slot in slotLevels.value) || !Number.isFinite(level)) return;
+      slotLevels.value[slot] = Math.min(1, Math.max(0, level));
+      applyMix();
+    }
+    function toggleMute(slot: number): void {
+      if (!(slot in slotMuted.value)) return;
+      slotMuted.value[slot] = !slotMuted.value[slot];
+      applyMix();
+    }
+
+    // What Play starts again after a Stop.
+    const lastPlayed = shallowRef<{ jamId: JamCouchID; riff: RiffDocument } | null>(null);
+    const canResume = computed(() => lastPlayed.value !== null);
+
     deps.engine.onStateChange((s) => {
       state.value = s;
     });
     // Every hop, not just idle ↔ playing: replay hops the engine directly,
     // and the state is 'playing' on both sides of a hop.
+    // Bumped each time a rifff starts playing: its stems are decoded by then,
+    // so anything drawn from decoded audio (splats) can look again.
+    const decodedTick = ref(0);
     deps.engine.onRiffChange((riffId) => {
       currentRiffId.value = riffId;
+      if (riffId !== null) decodedTick.value += 1;
     });
 
     // Bumped by every click and by stop(). A hop still loading when it moves
@@ -99,6 +128,7 @@ export function definePerformanceStore(deps: PerformanceDeps) {
         return result;
       }
       currentRiffId.value = result.riffId;
+      lastPlayed.value = { jamId, riff };
       // A take holds what was heard: the hop registers when its rifff began
       // playing, after loading, at the engine's own time for it. A click that
       // never played isn't part of it. Replay re-applies `quantise`, so the
@@ -122,6 +152,21 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       deps.engine.stop();
     }
 
+    /**
+     * Load a rifff's stems without playing it — for the hop editor, which
+     * draws rifffs from their audio. Ticks `decodedTick` once they're in.
+     */
+    async function warm(jamId: JamCouchID, riff: RiffDocument): Promise<void> {
+      const stems = await deps.resolveStems(jamId, riff);
+      await deps.engine.warmRiff(jamId, riff, stems);
+      decodedTick.value += 1;
+    }
+
+    async function resume(): Promise<PerformanceHopResult | null> {
+      const last = lastPlayed.value;
+      return last ? hopTo(last.jamId, last.riff) : null;
+    }
+
     async function prefetchWindow(
       jamId: JamCouchID,
       riffs: RiffDocument[],
@@ -137,12 +182,29 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       deps.prefetcher.setWindow(jamId, items);
     }
 
+    // Read every animation frame by the page, so plain functions rather than
+    // reactive state.
+    const playhead = () => deps.engine.playhead();
+    const levels = () => deps.engine.levels();
+    const bufferFor = (stemId: StemCouchID) => deps.peekBuffer?.(stemId);
+
     return {
       state,
+      playhead,
+      levels,
+      bufferFor,
+      decodedTick,
       currentRiffId,
       missingStems,
       lastError,
       quantiseEntry,
+      slotLevels,
+      slotMuted,
+      setSlotLevel,
+      toggleMute,
+      canResume,
+      resume,
+      warm,
       hopTo,
       stop,
       prefetchWindow,

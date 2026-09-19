@@ -52,6 +52,19 @@ Newest entries at the top of each section. Date entries absolutely
   and the context starts suspended until a user gesture (`unlockAudioContext`
   is called from `resolveStems`, before any hop scheduling).
 
+- **Until 2026-09-18 the engine ignored each rifff's slot gains** — every
+  stem played at full volume, not at the rifff's committed mix. LORE mixes
+  each stem at `stemGains[i] × m_layerGainMultiplier[i]`
+  (`r4.toolbox/mix/preview.cpp`); the engine now does the same, with the
+  mixer's per-slot levels as the multiplier. Rifffs will sound different
+  from before, so a "the mix changed" report after that date is expected, not
+  a regression. Stems keep their slot through `audio/slots.ts`
+  (`placeStems`), because the stem resolver hands back only resolved stems.
+- **The level meter's analysers feed a silent gain to the destination**,
+  because some WebKit builds (Tauri on macOS) only process an analyser that
+  feeds something. The meter was confirmed working on macOS in the
+  2026-09-18 smoke tests; keep the silent path if you touch the bus.
+
 ## Recording principle
 
 - **A take is what the performer heard, not what they clicked** (set by
@@ -199,6 +212,10 @@ Newest entries at the top of each section. Date entries absolutely
   reach a `watch` in the view. The mock hands out `reactive(recorderStub)`,
   and a test that needs a watcher to fire mutates `reactive(recorderStub)`.
   Do the same for another stub if a view watcher depends on it.
+- **A view test that serves a store stub through `reactive()` needs
+  `enableAutoUnmount(afterEach)`.** Otherwise the watchers of views mounted by
+  earlier tests stay alive and fire on the shared stub, so a call count that
+  should be 1 comes out as 3. Found 2026-09-18 in `PublicJamsView.test.ts`.
 - **Model audibility, don't just assert calls.** `test/audio/hop-audibility.test.ts`
   has a mock `AudioContext` that tracks, per source: started / scheduled stop /
   still connected / its voice's gain automation — so a test can ask "which
@@ -250,6 +267,67 @@ Newest entries at the top of each section. Date entries absolutely
 - Storage-management UI (eviction policy, per-jam totals, "clear cache") is
   post-v1 — see `CLAUDE.md`.
 
+## UI redesign (LwlkcIng design system)
+
+- **The design system lives only on claude.ai/design**, not in any repo: the
+  project "LwlkcIng Design System" (`2d637a94-a2ad-4f87-ab03-88274a54988f`;
+  note the capital I). Read it with `DesignSync` `get_file` after the user
+  runs `/design-login`. `/design-sync` *uploads* a local DS repo; it cannot
+  pull one down, so don't suggest it for fetching (I did on 2026-09-18, and it
+  was wrong). The files that matter: `tokens/*.css`, `ui_kits/studio/*`
+  (shell, `JamsGrid`, icons), `components/**/*.jsx`.
+- **Redesign canvas** (2026-09-18): working files are in
+  `project resources/Design/Canvas/`, published at
+  https://claude.ai/artifact/DG5RrdPN1TJBudUkFHQShU. To change it, edit
+  `Main.dc.html` and re-run `/design`'s seed step; never edit the seeded
+  `hoppper-app-redesign.html`. Every page in the sketches is designed; Account
+  is the only placeholder. All jam, rifff and hop data in it is generated
+  sample data.
+- **Test seam for the canvas:** there is no browser in the container, but the
+  artboard's `<script data-dc-script>` runs in Node with a stub `DCLogic`
+  (`setState` merges, `window` listeners captured). Calling `renderVals()`
+  and its handlers exercises every flow; that's how the 2026-09-18 pass was
+  checked.
+- **Hop editor rules signed off 2026-09-18** — drag moves only the two
+  neighbouring rifffs, snaps to beats (toggle for bars/off), Delete and
+  Add/Duplicate ripple later hop points, edits save in place with undo,
+  crossfade editing deferred. The full spec is in
+  `docs/phases/phase-8-redesign-and-editor.md` → "Slice C"; build to that,
+  not to the canvas mock, which predates it.
+
+- **The app's design tokens are the design system's files, copied unchanged**
+  (`packages/app/src/styles/lwlkcing/`, except `fonts.css`), so a later sync
+  is a plain diff. `fonts.css` is the one deliberate difference: fonts come
+  from `@fontsource/*` packages bundled into the app instead of the design
+  system's Google Fonts import, because the app has to look the same offline.
+  Component styles (`styles/components.css`) are the design system's JSX
+  component CSS as plain `lw-*` classes.
+- **Jam tiles have generated covers** (`ui/jam-cover.ts`). Endlesss jam
+  profiles carry no image, and neither ours nor LORE's `JamProfile` has one.
+- **The jam list is fetched once per session** (2026-09-18): Public Jams and
+  My Jams only call `jams.refresh()` while `listing` is null, and Settings →
+  Log out clears it. A jam joined elsewhere shows up after the next log-in or
+  restart. That's server etiquette, not an oversight.
+- **`getRiffIdsBetween` (Expand) is the first ranged query on
+  `rifffLoopsByCreateTime`** — CouchDB `startkey`/`endkey` in unix ns. LORE
+  never ranges that view, so as of 2026-09-18 it's unit-tested only; the
+  Slice C smoke test checks it live. If Expand finds nothing where it
+  should, suspect the key's units first (ns keys, ms `createdAt`).
+- **Hop points are placed at *arrival*, not `tSec`** — see
+  `src/hop-editor/edits.ts`. Any new code that positions or moves hops
+  must go through `arrivalSec`/`moveHop`, or quantised and crossfaded hops
+  land in the wrong place.
+- **A splat layer is the stem's waveform wrapped round a circle, never its
+  loudness envelope** (user correction, 2026-09-18). An envelope (abs peaks)
+  smooths pads into circles, which is wrong; the min/max per slice, peaks out
+  and troughs in, keeps every stem jagged. Details:
+  `docs/phases/phase-8-redesign-and-editor.md` → "Splats from audio".
+- **Splats are drawn from stem colours** (user's choice, 2026-09-18), so the
+  rifff history asks for its stem documents — one batched request per page,
+  only for stems not already held. `primaryColour` is AARRGGBB (alpha first),
+  per LORE's `ParseHexColour`. Hops resolve stems through the same store, so
+  anything drawn on screen plays without a stem-document request.
+
 ## Build and dev loop
 
 - **The app consumes the SDK's `dist/`, not its source.** `@hoppper/sdk`'s
@@ -270,6 +348,10 @@ Newest entries at the top of each section. Date entries absolutely
 
 ## Environment quirks (dev container)
 
+- **`pnpm --filter @hoppper/sdk test` runs the live tests here.** With
+  `.env.local` populated, the whole SDK suite downloads real stems from
+  Endlesss (it did on 2026-09-18). To check an SDK change, run just its test
+  file: `npx vitest run test/<file>.test.ts` from `packages/sdk`.
 - **`/refs/OUROVEON` is mounted and fine.** On 2026-07-24 I concluded it was
   missing; it wasn't. The real cause: LORE's source tree is now
   `src/r3.endlesss/` (was `r0.endlesss`, which `CLAUDE.md` still documented),

@@ -88,6 +88,13 @@ export interface GetRiffIdsOptions {
   limit?: number;
   skip?: number;
   descending?: boolean;
+  /**
+   * Range on the view's key, the commit time in unix nanoseconds (CouchDB
+   * `startkey`/`endkey`, inclusive). Given in the view's order: with
+   * `descending`, start is the later time.
+   */
+  startKeyNs?: bigint;
+  endKeyNs?: bigint;
 }
 
 export interface IterateRiffsOptions {
@@ -223,6 +230,8 @@ export class EndlesssClient {
     if (opts.descending !== false) query.push('descending=true');
     if (opts.limit !== undefined) query.push(`limit=${opts.limit}`);
     if (opts.skip !== undefined) query.push(`skip=${opts.skip}`);
+    if (opts.startKeyNs !== undefined) query.push(`startkey=${opts.startKeyNs}`);
+    if (opts.endKeyNs !== undefined) query.push(`endkey=${opts.endKeyNs}`);
     const qs = query.length ? `?${query.join('&')}` : '';
     const url = `${this.dataDomain}/user_appdata$${path}/_design/types/_view/rifffLoopsByCreateTime${qs}`;
 
@@ -247,6 +256,29 @@ export class EndlesssClient {
     });
 
     return { totalRows: raw.total_rows, rows };
+  }
+
+  /**
+   * The rifffs committed between two times (unix ms, either order), both
+   * ends included, in commit order — at most `limit` of them. One ranged
+   * request on the create-time view instead of paging through the jam, so the
+   * hop editor can show what a hop skipped without asking for the whole jam.
+   */
+  async getRiffIdsBetween(
+    jamId: string,
+    aMs: number,
+    bMs: number,
+    limit = 50,
+  ): Promise<RiffCouchID[]> {
+    const from = BigInt(Math.floor(Math.min(aMs, bMs))) * 1_000_000n;
+    const to = BigInt(Math.floor(Math.max(aMs, bMs))) * 1_000_000n + 999_999n;
+    const index = await this.getRiffIds(jamId, {
+      descending: false,
+      startKeyNs: from,
+      endKeyNs: to,
+      limit,
+    });
+    return index.rows.map((r) => r.riffId);
   }
 
   async getRiffs(jamId: string, riffIds: string[]): Promise<RiffDocument[]> {

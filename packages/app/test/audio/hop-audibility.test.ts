@@ -65,6 +65,7 @@ interface GainEvent {
 }
 
 interface SpySource extends AudioBufferSourceLike {
+  /** The voice this source plays in (1, 2, … in start order). */
   voiceId: number;
   startWhen?: number;
   startOffset?: number;
@@ -73,13 +74,14 @@ interface SpySource extends AudioBufferSourceLike {
 }
 
 interface SpyGain extends GainNodeLike {
-  voiceId: number;
+  id: number;
+  initial: number;
   events: GainEvent[];
   target: AudioNodeLike | null;
 }
 
 /** Gain value at time t, honouring cancels and interpolating linear ramps. */
-function gainAt(events: GainEvent[], t: number): number {
+function gainAt(events: GainEvent[], t: number, initial = 1): number {
   const timeline: GainEvent[] = [];
   for (const ev of events) {
     if (ev.kind === 'cancel') {
@@ -93,7 +95,7 @@ function gainAt(events: GainEvent[], t: number): number {
   }
   timeline.sort((a, b) => a.time - b.time);
 
-  let value = 1;
+  let value = initial;
   let lastTime = -Infinity;
   for (const ev of timeline) {
     if (ev.time <= t) {
@@ -127,10 +129,29 @@ function createSpyContext(): SpyCtx {
   const sources: SpySource[] = [];
   const gains: SpyGain[] = [];
   const destination: AudioNodeLike = {};
-  let voiceCounter = 0;
-  // createRiffVoice makes its gain first, then its sources, so a new gain
-  // marks the start of a new voice.
-  let currentVoice = 0;
+  let gainCounter = 0;
+  const voiceOrder: SpyGain[] = [];
+
+  // A source plays through its stem gain, then its voice's gain, then on to
+  // the destination. The voice is identified by that voice gain.
+  function voiceGainOf(src: SpySource): SpyGain | null {
+    const stemGain = gains.find((g) => g === src.target);
+    return gains.find((g) => g === stemGain?.target) ?? null;
+  }
+
+  /** The gain a source is heard at: every gain on its path, multiplied. Zero if it doesn't reach the destination. */
+  function levelAt(src: SpySource, t: number): number {
+    let node: AudioNodeLike | null = src.target;
+    let level = 1;
+    for (let hops = 0; node !== null && hops < 8; hops++) {
+      if (node === destination) return level;
+      const g = gains.find((cand) => cand === node);
+      if (!g) return 0;
+      level *= gainAt(g.events, t, g.initial);
+      node = g.target;
+    }
+    return 0;
+  }
 
   const ctx: SpyCtx = {
     currentTime: 0,
@@ -139,7 +160,9 @@ function createSpyContext(): SpyCtx {
     gains,
     createBufferSource() {
       const src: SpySource = {
-        voiceId: currentVoice,
+        // Voices are numbered 1, 2, … in the order they start, fixed at start
+        // so a voice keeps its number after it has been torn down.
+        voiceId: 0,
         buffer: null,
         loop: false,
         loopStart: 0,
@@ -155,6 +178,9 @@ function createSpyContext(): SpyCtx {
         start(when = 0, offset = 0) {
           src.startWhen = when;
           src.startOffset = offset;
+          const own = voiceGainOf(src);
+          if (own && !voiceOrder.includes(own)) voiceOrder.push(own);
+          src.voiceId = own ? voiceOrder.indexOf(own) + 1 : 0;
         },
         stop(when = 0) {
           src.stopWhen = when;
@@ -170,18 +196,21 @@ function createSpyContext(): SpyCtx {
       return src;
     },
     createGain() {
-      currentVoice += 1;
-      voiceCounter = currentVoice;
+      gainCounter += 1;
       const events: GainEvent[] = [];
-      const g: SpyGain = {
-        voiceId: voiceCounter,
+      const g: SpyGain & { initial: number } = {
+        id: gainCounter,
         events,
+        initial: 1,
         target: null,
         gain: {
           get value() {
-            return gainAt(events, ctx.currentTime);
+            return gainAt(events, ctx.currentTime, g.initial);
           },
-          set value(_v: number) {},
+          // Assigning .value sets the level before any automation.
+          set value(v: number) {
+            g.initial = v;
+          },
           setValueAtTime(v, t) {
             events.push({ kind: 'set', value: v, time: t });
           },
@@ -206,10 +235,7 @@ function createSpyContext(): SpyCtx {
       return sources.filter((src) => {
         if (src.startWhen === undefined || src.startWhen > t) return false;
         if (src.stopWhen !== undefined && src.stopWhen <= t) return false;
-        if (src.target === null) return false; // disconnected
-        const g = gains.find((cand) => cand.voiceId === src.voiceId);
-        if (!g || g.target !== destination) return false;
-        return gainAt(g.events, t) > 0.001;
+        return levelAt(src, t) > 0.001;
       });
     },
     audibleVoicesAt(t) {

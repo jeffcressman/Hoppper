@@ -151,10 +151,15 @@ Detailed design: [`docs/phases/phase-7-hop-recording.md`](docs/phases/phase-7-ho
 
 **Goal**: the actual product — non-linear hop editing.
 
-- [ ] Timeline component (consider `wavesurfer.js` for waveform display; build hop UI on top).
-- [ ] Edit operations: drag hop to new time, change transition duration, delete hop, insert hop from rifff browser.
-- [ ] Live preview: edits play back instantly using the AudioBuffer cache.
-- [ ] Undo/redo.
+Ships inside a whole-app redesign on the LwlkcIng design system, in three slices (A: shell and lists, B: Hop Recording, C: Hop Editing). Detailed design: [`docs/phases/phase-8-redesign-and-editor.md`](docs/phases/phase-8-redesign-and-editor.md).
+
+- [x] Slice A — app shell, Public Jams, My Jams, Hops, Settings, login dialog. ✓ Checkpoint A passed 2026-09-18 (`SMOKE_TESTS.md`).
+- [x] Slice B — Hop Recording: rifff splats, mixer (with the rifff's own slot gains now applied), waveform, top-bar transport and level meter. ✓ Checkpoint B passed 2026-09-18 (`SMOKE_TESTS.md`).
+- [ ] Slice C — Hop Editing, to the spec signed off 2026-09-18 in the design doc:
+- [x] Timeline component: stacked tracks per rifff, split lanes around a selected hop point, drawn phase-true from cached buffers (our own SVG, like the Hop Recording waveform, rather than `wavesurfer.js`). *(2026-09-18)*
+- [x] Edit operations: drag a hop point (beat snap), delete a hop point, expand/add skipped rifffs, duplicate a rifff. *(2026-09-18. Changing transition duration: deferred by the user.)*
+- [x] Live preview: edits play back instantly using the AudioBuffer cache. *(Play in the editor replays the edited take.)*
+- [x] Undo/redo. *(Buttons and Ctrl/Cmd+Z, per editing session.)*
 
 **Checkpoint**: a recorded session can be tightened, looped sections shortened, transitions tuned.
 
@@ -168,7 +173,7 @@ Moved out of Phases 6–8 on 2026-09-17 so the timeline editor and UI overhaul c
 
 - [ ] **Live pre-loading.** Start pre-loading once the first rifff is selected. Decide which rifffs (list neighbours of the last click, or something that tracks where the user is looking, since hops go anywhere in the list), how many, and when the window moves. `PrefetchRing` and `performance.prefetchWindow` already exist, tested but never called. Server etiquette caps speculative fetching at N±2.
 - [ ] **Stem-file tier.** The SDK's `prefetchRiffs` (Phase 4) keeps stem files on disk ahead of decoding. It's not used by the app either; decide whether live pre-loading needs it or the decode ring is enough.
-- [ ] **Stop re-fetching immutable data.** Every Hop click asks the server for the rifff's stem documents again (`getStemUrls` → `getStemDocuments`), even for a rifff already played. Replay's `resolveRiff` also re-fetches the rifff document for every hop. Rifff and stem documents never change, so cache them by ID, on disk, which also helps offline use.
+- [ ] **Stop re-fetching immutable data.** *(Done in memory 2026-09-18: `stores/stem-docs.ts` and `stores/riff-docs.ts` keep stem and rifff documents by ID, and hops and replay go through them. Still to do: keep them on disk.)* Every Hop click used to ask the server for the rifff's stem documents again (`getStemUrls` → `getStemDocuments`), even for a rifff already played. Replay's `resolveRiff` also re-fetches the rifff document for every hop. Rifff and stem documents never change, so cache them by ID, on disk, which also helps offline use.
 - [ ] **Memory budget for decoded audio.** The in-memory `AudioBufferCache` holds 256 MB (LRU), and one rifff of eight 16-second stems takes about 50 MB decoded, so a five-rifff window could evict what was just played. Size the window and the cap together.
 - [ ] **Measure it.** Log or show load time per click, so we can tell whether pre-loading is working in real use.
 

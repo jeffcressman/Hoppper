@@ -114,4 +114,21 @@ describe('useCurrentJamStore', () => {
     expect(client.iterateRiffs).toHaveBeenCalledTimes(2);
     expect(client.iterateRiffs).toHaveBeenLastCalledWith('band2', expect.any(Object));
   });
+
+  it('remembers the last jam opened after it closes, for the Current Jam button', async () => {
+    const store = defineCurrentJamStore(makeStub([[makeRiff('r1')]]))();
+    expect(store.lastJamId).toBeNull();
+    await store.open('band1');
+    store.close();
+    expect(store.jamId).toBeNull();
+    expect(store.lastJamId).toBe('band1');
+  });
+
+  it('forget() clears the remembered jam, as logging out does', async () => {
+    const store = defineCurrentJamStore(makeStub([[makeRiff('r1')]]))();
+    await store.open('band1');
+    store.close();
+    store.forget();
+    expect(store.lastJamId).toBeNull();
+  });
 });

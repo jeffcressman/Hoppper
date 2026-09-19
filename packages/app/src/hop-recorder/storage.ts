@@ -16,6 +16,8 @@ export interface SequenceStorage {
   saveSequence(seq: HopSequence): Promise<void>;
   loadSequence(jamId: JamCouchID, id: string): Promise<HopSequence>;
   listSequences(jamId: JamCouchID): Promise<HopSequence[]>;
+  /** Every jam's takes together, newest first — for the Hops page. */
+  listAllSequences(): Promise<HopSequence[]>;
   deleteSequence(jamId: JamCouchID, id: string): Promise<void>;
 }
 
@@ -39,6 +41,31 @@ export function createSequenceStorage(
   const filePath = (jamId: JamCouchID, id: string) =>
     `${jamDir(jamId)}/${id}.json`;
 
+  const newestFirst = (a: HopSequence, b: HopSequence) =>
+    a.recordedAt < b.recordedAt ? 1 : -1;
+
+  async function listSequences(jamId: JamCouchID): Promise<HopSequence[]> {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(jamDir(jamId));
+    } catch (err) {
+      if (isNotFound(err)) return [];
+      throw err;
+    }
+    const sequences: HopSequence[] = [];
+    for (const entry of entries) {
+      if (!entry.endsWith('.json')) continue;
+      try {
+        const bytes = await fs.readFile(`${jamDir(jamId)}/${entry}`);
+        sequences.push(parseSequence(decoder.decode(bytes)));
+      } catch {
+        // Malformed file in the sequences dir; skip rather than fail
+        // the entire listing.
+      }
+    }
+    return sequences.sort(newestFirst);
+  }
+
   return {
     async saveSequence(seq) {
       const dir = jamDir(seq.jamId);
@@ -55,28 +82,22 @@ export function createSequenceStorage(
       return parseSequence(decoder.decode(bytes));
     },
 
-    async listSequences(jamId) {
-      let entries: string[];
+    listSequences,
+
+    async listAllSequences() {
+      let jamIds: string[];
       try {
-        entries = await fs.readdir(jamDir(jamId));
+        jamIds = await fs.readdir(root);
       } catch (err) {
         if (isNotFound(err)) return [];
         throw err;
       }
-      const sequences: HopSequence[] = [];
-      for (const entry of entries) {
-        if (!entry.endsWith('.json')) continue;
-        try {
-          const bytes = await fs.readFile(`${jamDir(jamId)}/${entry}`);
-          sequences.push(parseSequence(decoder.decode(bytes)));
-        } catch {
-          // Malformed file in the sequences dir; skip rather than fail
-          // the entire listing.
-        }
-      }
-      // Newest-first by recordedAt.
-      sequences.sort((a, b) => (a.recordedAt < b.recordedAt ? 1 : -1));
-      return sequences;
+      // Anything beside the jam folders (a .DS_Store, say) isn't a jam: skip
+      // it rather than fail the whole page.
+      const perJam = await Promise.all(
+        jamIds.map((jamId) => listSequences(jamId).catch(() => [])),
+      );
+      return perJam.flat().sort(newestFirst);
     },
 
     async deleteSequence(jamId, id) {

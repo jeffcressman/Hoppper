@@ -1,0 +1,240 @@
+<template>
+  <div class="mixer" role="group" aria-label="Track mixer">
+    <div
+      v-for="ch in channels"
+      :key="ch.slot"
+      :class="['ch', { 'is-empty': !ch.stemId, 'is-muted': ch.muted }]"
+      data-test="channel"
+    >
+      <button
+        type="button"
+        class="ch__mute"
+        :title="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
+        :aria-label="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
+        :aria-pressed="ch.muted"
+        :disabled="!ch.stemId"
+        data-test="mute"
+        @click="performance.toggleMute(ch.slot)"
+      >
+        <span
+          class="ch__lamp"
+          :style="{
+            background: ch.lit ? ch.colour : 'transparent',
+            borderColor: ch.lit ? ch.colour : 'var(--line-strong)',
+          }"
+        />
+      </button>
+      <div
+        class="fader"
+        role="slider"
+        :tabindex="ch.stemId ? 0 : -1"
+        :aria-label="`${ch.name} volume`"
+        aria-orientation="vertical"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="ch.pct"
+        @pointerdown="(e) => onFaderDown(e, ch.slot)"
+        @keydown="(e) => onFaderKey(e, ch.slot)"
+      >
+        <div class="fader__track">
+          <div class="fader__fill" :style="{ height: `${ch.pct}%`, background: ch.colour }" />
+          <div class="fader__thumb" :style="{ bottom: `${ch.pct}%` }" />
+        </div>
+      </div>
+      <span class="ch__name" :style="{ color: ch.stemId ? ch.colour : 'var(--text-4)' }" data-test="channel-name">
+        {{ ch.name }}
+      </span>
+      <span class="ch__user">
+        <span class="ch__dot" :style="{ background: ch.user ? userColour(ch.user) : 'var(--surface-3)' }" />
+        {{ ch.user ?? '—' }}
+      </span>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import type { RiffDocument, StemCouchID } from '@hoppper/sdk';
+import { usePerformanceStore, useStemDocsStore } from '../stores';
+import { stemColour } from '../ui/stem-colour';
+import { userColour } from '../ui/user-colour';
+
+const props = defineProps<{ riff: RiffDocument | null }>();
+
+const performance = usePerformanceStore();
+const stemDocs = useStemDocsStore();
+
+const STEP = 0.05;
+
+// Eight channels always: the mixer belongs to the slots, not to one rifff, so
+// its levels hold across hops. Names, owners and colours come from the
+// playing rifff's stems.
+const channels = computed(() =>
+  Array.from({ length: 8 }, (_, slot) => {
+    const riffSlot = props.riff?.slots[slot];
+    const stemId = riffSlot?.on && riffSlot.stemId ? (riffSlot.stemId as StemCouchID) : null;
+    const doc = stemId ? stemDocs.get(stemId) : null;
+    const muted = performance.slotMuted[slot] ?? false;
+    return {
+      slot,
+      stemId,
+      muted,
+      lit: !!stemId && !muted,
+      name: stemId ? doc?.presetName || `Track ${slot + 1}` : 'Empty',
+      user: stemId ? doc?.creatorUserName || null : null,
+      colour: (doc && stemColour(doc.primaryColour)) || 'var(--accent)',
+      pct: Math.round((performance.slotLevels[slot] ?? 1) * 100),
+    };
+  }),
+);
+
+function onFaderKey(e: KeyboardEvent, slot: number): void {
+  const level = performance.slotLevels[slot] ?? 1;
+  const delta = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? STEP : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -STEP : 0;
+  if (delta === 0) return;
+  e.preventDefault();
+  performance.setSlotLevel(slot, Math.round((level + delta) * 100) / 100);
+}
+
+function onFaderDown(e: PointerEvent, slot: number): void {
+  const el = e.currentTarget as HTMLElement;
+  const set = (clientY: number) => {
+    const r = el.getBoundingClientRect();
+    if (r.height <= 0) return;
+    performance.setSlotLevel(slot, 1 - (clientY - r.top) / r.height);
+  };
+  set(e.clientY);
+  const move = (ev: PointerEvent) => set(ev.clientY);
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+</script>
+
+<style scoped>
+.mixer {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 12px 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.ch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ch.is-empty {
+  opacity: 0.4;
+}
+.ch.is-empty .fader {
+  pointer-events: none;
+}
+.ch.is-muted .fader__fill {
+  opacity: 0.3;
+}
+.ch__mute {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.ch__mute:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.ch__mute:disabled {
+  cursor: default;
+}
+/* The Studio kit's lane checkbox: lit in the stem's colour while it plays. */
+.ch__lamp {
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 4px;
+}
+/* Slider, vertical fader variant (forms/Slider) */
+.fader {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 28px;
+  height: 150px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.fader__track {
+  position: relative;
+  width: 6px;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--surface-inset);
+}
+.fader__fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  border-radius: var(--r-pill);
+}
+.fader__thumb {
+  position: absolute;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-1);
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, 50%);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.fader:hover .fader__thumb {
+  box-shadow: var(--shadow-sm), 0 0 0 5px var(--accent-soft);
+}
+.fader:focus-visible .fader__thumb {
+  box-shadow: var(--glow-focus-ring);
+}
+.ch__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ch__user {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ch__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+</style>

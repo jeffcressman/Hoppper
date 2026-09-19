@@ -69,6 +69,7 @@ function mockStorage(): SequenceStorage & {
     listSequences: vi.fn(async (j) =>
       [..._saved.values()].filter((s) => s.jamId === j),
     ),
+    listAllSequences: vi.fn(async () => [..._saved.values()]),
     deleteSequence: vi.fn(async (j, id) => {
       _saved.delete(`${j}/${id}`);
     }),
@@ -97,6 +98,7 @@ function mockPlayer(loading?: Promise<void>): HopPlayer {
     stop: vi.fn(() => {
       emit('idle');
     }),
+    positionSec: vi.fn(() => (state === 'playing' ? 3 : null)),
     onStateChange(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -322,5 +324,42 @@ describe('defineRecorderStore', () => {
     await store.delete(JAM, 'a');
     expect(storage.deleteSequence).toHaveBeenCalledWith(JAM, 'a');
     expect(store.saved.length).toBe(0);
+  });
+
+  it('loadAll() lists the takes of every jam, for the Hops page', async () => {
+    const storage = mockStorage();
+    storage._saved.set(`${JAM}/a`, fixtureSeq({ id: 'a' }));
+    storage._saved.set('band-B/b', fixtureSeq({ id: 'b', jamId: 'band-B' as JamCouchID }));
+    const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer() })();
+    await store.loadAll();
+    expect(store.allSaved.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('a new take shows up in the full list as soon as it is saved', async () => {
+    const recorder = mockRecorder();
+    const storage = mockStorage();
+    const store = defineRecorderStore({ recorder, storage, player: mockPlayer() })();
+    await store.loadAll();
+    store.start(JAM);
+    recorder.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    await store.stop();
+    expect(store.allSaved.length).toBe(1);
+  });
+
+  it('delete() takes the sequence out of the full list too', async () => {
+    const storage = mockStorage();
+    storage._saved.set(`${JAM}/a`, fixtureSeq({ id: 'a' }));
+    storage._saved.set('band-B/b', fixtureSeq({ id: 'b', jamId: 'band-B' as JamCouchID }));
+    const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer() })();
+    await store.loadAll();
+    await store.delete('band-B' as JamCouchID, 'b');
+    expect(store.allSaved.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('passes on how far into the take a replay is', async () => {
+    const store = defineRecorderStore({ recorder: mockRecorder(), storage: mockStorage(), player: mockPlayer() })();
+    expect(store.playPosition()).toBeNull();
+    await store.play(fixtureSeq());
+    expect(store.playPosition()).toBe(3);
   });
 });
