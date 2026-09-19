@@ -1,5 +1,6 @@
 import type { RiffCouchID } from '@hoppper/sdk';
 import type { HopEvent, HopSequence } from '../hop-recorder/types';
+import { cutTime, insertTime, trimAfter } from '../automation/automation';
 
 // The hop editor's operations, each a pure function from one take to the
 // next, so undo is a stack of takes. Rules signed off 2026-09-18:
@@ -25,6 +26,11 @@ export interface Segment {
   riffId: RiffCouchID;
   startSec: number;
   endSec: number;
+}
+
+/** A take with its automation replaced — left out entirely when it has none. */
+function withAutomation(seq: HopSequence, automation: HopSequence['automation']): HopSequence {
+  return automation === undefined ? seq : { ...seq, automation };
 }
 
 /** The smallest gap left between two hop points when snapping is off. */
@@ -103,7 +109,10 @@ export function deleteHop(seq: HopSequence, index: number, gridOf: GridOf): HopS
   // Work out later arrivals against the take as it was, then drop the hop.
   const shifted = shiftFrom(seq, seq.hops, index + 1, -length, gridOf);
   shifted.splice(index, 1);
-  return { ...seq, hops: shifted, durationSec: seq.durationSec - length };
+  return withAutomation(
+    { ...seq, hops: shifted, durationSec: seq.durationSec - length },
+    cutTime(seq.automation, seg.startSec, seg.endSec),
+  );
 }
 
 /**
@@ -124,7 +133,10 @@ export function insertRiff(
   const added: HopEvent = arrivingAt({ ...template, riffId, jamId: seq.jamId }, at);
   const shifted = shiftFrom(seq, seq.hops, index, lengthSec, gridOf);
   shifted.splice(index, 0, added);
-  return { ...seq, hops: shifted, durationSec: seq.durationSec + lengthSec };
+  return withAutomation(
+    { ...seq, hops: shifted, durationSec: seq.durationSec + lengthSec },
+    insertTime(seq.automation, at, lengthSec),
+  );
 }
 
 /** Another copy of rifff `index`, right after it, for `lengthSec`. */
@@ -176,7 +188,10 @@ export function resizeStart(seq: HopSequence, bySec: number, snap: Snap, gridOf:
   const mostTrim = unit ? Math.floor((firstLength - gap) / unit + 1e-9) * unit : firstLength - gap;
   by = Math.max(by, -Math.max(0, mostTrim));
   if (Math.abs(by) < 1e-9) return seq;
-  return { ...seq, hops: shiftFrom(seq, seq.hops, 1, by, gridOf), durationSec: seq.durationSec + by };
+  return withAutomation(
+    { ...seq, hops: shiftFrom(seq, seq.hops, 1, by, gridOf), durationSec: seq.durationSec + by },
+    by > 0 ? insertTime(seq.automation, 0, by) : cutTime(seq.automation, 0, -by),
+  );
 }
 
 /**
@@ -198,5 +213,5 @@ export function resizeEnd(seq: HopSequence, toSec: number, snap: Snap, gridOf: G
   }
   at = Math.max(lo, at);
   if (Math.abs(at - seq.durationSec) < 1e-9) return seq;
-  return { ...seq, durationSec: at };
+  return withAutomation({ ...seq, durationSec: at }, at < seq.durationSec ? trimAfter(seq.automation, at) : seq.automation);
 }
