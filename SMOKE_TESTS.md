@@ -303,6 +303,18 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Mute wins, and solo stays on this page.** A muted track stays
       silent when soloed; a take played in the editor ignores solos.
 
+### Zoom and scrolling (editor)
+
+- [ ] **Time zoom.** The zoom buttons, and Ctrl/Cmd + scroll, zoom time;
+      with the wheel, the moment under the pointer stays put. Fit shows the
+      whole take. Dragging hop points, handles and automation points still
+      lands where you let go at any zoom.
+- [ ] **Track height.** Taller/Shorter, and Alt/Option + scroll, change the
+      tracks' height; taller than the window scrolls vertically, with the
+      ruler and hop points staying at the top.
+- [ ] **Automation up close.** Zoom in on a track's automation and add and
+      drag points precisely.
+
 ### No clicks, anywhere
 
 - [ ] **Listen for clicks** with headphones, a sustained pad rifff playing:

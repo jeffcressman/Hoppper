@@ -463,4 +463,82 @@ describe('HopEditingView', () => {
       expect(editorStub.moveAutomationPoint).toHaveBeenCalledWith(1, 'volume', 0, expect.closeTo(4, 6), expect.closeTo(0.5, 6));
     });
   });
+
+  describe('zoom and scrolling', () => {
+    const pxOf = (w: ReturnType<typeof mount>) => Number(w.find('[data-test="timeline"]').attributes('data-px-per-sec'));
+    const blockHeight = (w: ReturnType<typeof mount>) => parseFloat((all(w, 'block')[0]!.element as HTMLElement).style.height);
+    function sizeTimeline(el: HTMLElement, width: number) {
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: width });
+      el.getBoundingClientRect = () => ({ left: 0, right: width, top: 0, bottom: 400, width, height: 400 }) as DOMRect;
+    }
+
+    it('zooms time in and out', async () => {
+      const wrapper = await mounted();
+      const start = pxOf(wrapper);
+      await find(wrapper, 'zoom-in').trigger('click');
+      expect(pxOf(wrapper)).toBeCloseTo(start * 1.5, 6);
+      await find(wrapper, 'zoom-out').trigger('click');
+      await find(wrapper, 'zoom-out').trigger('click');
+      expect(pxOf(wrapper)).toBeCloseTo(start / 1.5, 6);
+    });
+
+    it('stops at sensible limits', async () => {
+      const wrapper = await mounted();
+      for (let i = 0; i < 30; i++) await find(wrapper, 'zoom-in').trigger('click');
+      const most = pxOf(wrapper);
+      await find(wrapper, 'zoom-in').trigger('click');
+      expect(pxOf(wrapper)).toBe(most);
+      expect(find(wrapper, 'zoom-in').attributes('disabled')).toBeDefined();
+    });
+
+    it('Fit shows the whole take across the view', async () => {
+      const wrapper = await mounted();
+      sizeTimeline(find(wrapper, 'timeline').element as HTMLElement, 600);
+      await find(wrapper, 'zoom-fit').trigger('click');
+      // 24 s across what's left of 600 px after the margins.
+      const px = pxOf(wrapper);
+      expect(24 * px).toBeLessThanOrEqual(600);
+      expect(24 * px).toBeGreaterThan(450);
+    });
+
+    it('Ctrl/Cmd + wheel zooms time around the pointer, keeping that moment under it', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 600);
+      tl.scrollLeft = 100;
+      const px = pxOf(wrapper);
+      const pointerX = 300;
+      const before = (tl.scrollLeft + pointerX) / px;
+      await find(wrapper, 'timeline').trigger('wheel', { deltaY: -100, ctrlKey: true, clientX: pointerX });
+      await flushPromises();
+      const after = pxOf(wrapper);
+      expect(after).toBeGreaterThan(px);
+      // Allow for the timeline's 20 px left margin.
+      expect((tl.scrollLeft + pointerX - 20) / after).toBeCloseTo((before * px - 20) / px, 1);
+    });
+
+    it('makes tracks taller and shorter — taller than the view scrolls', async () => {
+      const wrapper = await mounted();
+      const start = blockHeight(wrapper);
+      await find(wrapper, 'taller').trigger('click');
+      expect(blockHeight(wrapper)).toBeGreaterThan(start);
+      await find(wrapper, 'shorter').trigger('click');
+      expect(blockHeight(wrapper)).toBe(start);
+      expect(find(wrapper, 'shorter').attributes('disabled')).toBeDefined();
+    });
+
+    it('Alt + wheel makes tracks taller', async () => {
+      const wrapper = await mounted();
+      const start = blockHeight(wrapper);
+      await find(wrapper, 'timeline').trigger('wheel', { deltaY: -100, altKey: true });
+      await flushPromises();
+      expect(blockHeight(wrapper)).toBeGreaterThan(start);
+    });
+
+    it('keeps the ruler and hop points in view while scrolling down', async () => {
+      const wrapper = await mounted();
+      expect(find(wrapper, 'timeline-head').exists()).toBe(true);
+      expect(find(wrapper, 'timeline-head').findAll('[data-test="hop-point"]')).toHaveLength(2);
+    });
+  });
 });

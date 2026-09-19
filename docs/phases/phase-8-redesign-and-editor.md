@@ -234,4 +234,9 @@ all eight tracks shown at once.
   undoable.
 - **Track meters** (side feature): a meter beside each mixer fader, one line
   per track — each stem also feeds a per-slot analyser after its level.
+- **Zoom and scrolling** (asked for 2026-09-18, once automation made it
+  needed): time zoom (buttons, Fit, Ctrl/Cmd + wheel anchored at the pointer,
+  2–160 px/s) and track-height zoom (buttons, Alt + wheel, 1–8× the fitted
+  height), with the timeline scrolling both ways and the ruler and hop points
+  pinned at the top.
 

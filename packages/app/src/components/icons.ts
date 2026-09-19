@@ -31,6 +31,10 @@ export const ICONS = {
   redo: [['path', { d: 'm15 14 5-5-5-5' }], ['path', { d: 'M20 9H9.5a5.5 5.5 0 0 0 0 11H13' }]],
   download: [['path', { d: 'M12 4v11' }], ['path', { d: 'm7 10 5 5 5-5' }], ['path', { d: 'M5 20h14' }]],
   automation: [['path', { d: 'M3 17 8 11l4 3 4-7 5 4' }], ['circle', { cx: 8, cy: 11, r: 1.6, fill: 'currentColor', stroke: 'none' }], ['circle', { cx: 16, cy: 7, r: 1.6, fill: 'currentColor', stroke: 'none' }]],
+  zoomIn: [['circle', { cx: 11, cy: 11, r: 6.5 }], ['path', { d: 'm20 20-4.2-4.2M11 8v6M8 11h6' }]],
+  zoomOut: [['circle', { cx: 11, cy: 11, r: 6.5 }], ['path', { d: 'm20 20-4.2-4.2M8 11h6' }]],
+  taller: [['path', { d: 'M12 3v18' }], ['path', { d: 'm8 7 4-4 4 4' }], ['path', { d: 'm8 17 4 4 4-4' }]],
+  shorter: [['path', { d: 'M12 3v6M12 15v6' }], ['path', { d: 'm8 5 4 4 4-4' }], ['path', { d: 'm8 19 4-4 4 4' }], ['path', { d: 'M5 12h14' }]],
   logout: [['path', { d: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3' }], ['path', { d: 'M10 16l-4-4 4-4M6 12h10' }]],
 } satisfies Record<string, El[]>;
 
