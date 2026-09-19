@@ -59,6 +59,14 @@ describe('AppShell', () => {
     expect(wrapper.find('[data-test="content"]').exists()).toBe(true);
   });
 
+  it('shows the Hoppper app icon beside the wordmark', async () => {
+    const { wrapper } = await mountAt('/public');
+    const icon = wrapper.find('.topbar__brand img');
+    expect(icon.attributes('src')).toMatch(/hoppper-icon\.svg/);
+    // Decorative: the wordmark says the name.
+    expect(icon.attributes('alt')).toBe('');
+  });
+
   it('lists the rail in the order of the sketch, with Account at the foot', async () => {
     const { wrapper } = await mountAt('/public');
     expect(rail(wrapper).map((b) => b.text())).toEqual([

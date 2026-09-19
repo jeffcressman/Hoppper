@@ -8,7 +8,6 @@ type El = [tag: 'path' | 'circle' | 'rect', attrs: Record<string, string | numbe
 const filled = { fill: 'currentColor', stroke: 'none' };
 
 export const ICONS = {
-  logo: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M8.5 7.5v9M15.5 7.5v9M8.5 12h7' }]],
   note: [['circle', { cx: 7, cy: 18, r: 2.5 }], ['circle', { cx: 18, cy: 16, r: 2.5 }], ['path', { d: 'M9.5 18V6l11-2v12' }]],
   headphones: [['path', { d: 'M3 18v-6a9 9 0 0 1 18 0v6' }], ['path', { d: 'M21 19a2 2 0 0 1-2 2h-1v-7h3v5zM3 19a2 2 0 0 0 2 2h1v-7H3v5z' }]],
   users: [['circle', { cx: 9, cy: 7, r: 3.2 }], ['path', { d: 'M2.5 20.5v-1a6 6 0 0 1 12 0v1' }], ['path', { d: 'M16.5 4.2a3.2 3.2 0 0 1 0 6.1' }], ['path', { d: 'M21.5 20.5v-1a6 6 0 0 0-3.6-5.5' }]],

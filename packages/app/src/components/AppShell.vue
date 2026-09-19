@@ -2,7 +2,7 @@
   <div class="shell">
     <header class="topbar lwlkc-glass">
       <div class="topbar__brand">
-        <LwIcon name="logo" :size="26" />
+        <img :src="appIcon" alt="" class="topbar__icon" />
         <span class="lwlkc-wordmark">Hoppper</span>
       </div>
       <TransportBar />
@@ -57,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+import appIcon from '../assets/hoppper-icon.svg';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCurrentJamStore, useHopEditorStore } from '../stores';
@@ -135,6 +136,10 @@ const top = computed<RailItem[]>(() => [
   align-items: center;
   gap: 11px;
   color: var(--accent);
+}
+.topbar__icon {
+  width: 28px;
+  height: 28px;
 }
 .topbar__brand .lwlkc-wordmark {
   font-size: 15px;

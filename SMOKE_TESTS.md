@@ -232,6 +232,17 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
 - [ ] **Scrolling a long grid.** Images load as tiles scroll into view
       (lazy), not all at once when the page opens.
 
+### App icon (2026-09-18)
+
+- [ ] **Dock and window.** `pnpm tauri dev` shows the bunny icon in the
+      Dock / app switcher, not Tauri's default.
+- [ ] **Top bar.** The bunny sits left of the Hoppper wordmark, crisp at
+      its small size.
+- [ ] **Built app.** After `pnpm tauri build`, the `.app` in Finder and
+      the installer use the bunny. Check it sits the same size as other
+      Dock icons: it fills the canvas edge to edge, and macOS icons
+      normally leave a margin.
+
 ### Slice B — rifff splats
 
 - [x] **Splats in stem colours.** Opening a jam shows its rifffs as splats
