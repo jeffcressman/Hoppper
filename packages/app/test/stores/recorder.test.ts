@@ -364,4 +364,31 @@ describe('defineRecorderStore', () => {
     await store.play(fixtureSeq());
     expect(store.playPosition()).toBe(3);
   });
+
+  it('names the take as it saves it — from its first rifff’s date and its jam', async () => {
+    const recorder = mockRecorder();
+    const storage = mockStorage();
+    const nameTake = vi.fn(async () => '20260919 Sunday drift hoppp');
+    const store = defineRecorderStore({ recorder, storage, player: mockPlayer(), nameTake })();
+    store.start(JAM);
+    recorder.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    const seq = await store.stop();
+    expect(nameTake).toHaveBeenCalled();
+    expect(seq?.title).toBe('20260919 Sunday drift hoppp');
+    expect(vi.mocked(storage.saveSequence).mock.calls[0]![0].title).toBe('20260919 Sunday drift hoppp');
+  });
+
+  it('still saves the take, under its default name, if naming it fails', async () => {
+    const recorder = mockRecorder();
+    const storage = mockStorage();
+    const nameTake = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    const store = defineRecorderStore({ recorder, storage, player: mockPlayer(), nameTake })();
+    store.start(JAM);
+    recorder.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    const seq = await store.stop();
+    expect(storage.saveSequence).toHaveBeenCalled();
+    expect(seq?.title).toBe('Untitled');
+  });
 });

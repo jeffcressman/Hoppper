@@ -330,6 +330,13 @@ Newest entries at the top of each section. Date entries absolutely
   never ranges that view, so as of 2026-09-18 it's unit-tested only; the
   Slice C smoke test checks it live. If Expand finds nothing where it
   should, suspect the key's units first (ns keys, ms `createdAt`).
+- **A take is named "YYYYMMDD <jam> hoppp" from its *first rifff's* commit
+  day, not the recording day** (user's format, 2026-09-18), so a hop — and
+  its exported WAV, which takes the same name — can be traced back to its
+  place in Endlesss or LORE. The Hops list's "Created" column is when it was
+  made in Hoppper. `hop-recorder/naming.ts`; applied when a recording is
+  saved (`recorder.nameTake`). Takes recorded before this keep their old
+  ISO-timestamp names.
 - **Automation lives on the take and overrides the mixer while it plays**
   (2026-09-18): `engine.setAutomation(curves, origin)` makes every voice
   follow each track's level curve and makes `setSlotLevels` wait;

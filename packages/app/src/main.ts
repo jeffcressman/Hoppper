@@ -26,6 +26,7 @@ import {
   initHopEditorStore,
   initPerformanceStore,
   initRecorderStore,
+  useJamsStore,
   useRiffDocsStore,
   useSessionStore,
   useStemDocsStore,
@@ -51,6 +52,7 @@ import {
 } from './hop-recorder';
 import { installGlobalErrorCapture, log } from './logging/log-store';
 import { renderTake, type OfflineContextLike } from './export/render';
+import { hopName } from './hop-recorder/naming';
 import type {
   JamCouchID,
   ResolvedStem,
@@ -202,6 +204,13 @@ async function bootstrap() {
     recorder: hopRecorder,
     storage: sequenceStorage,
     player: hopPlayer,
+    // "20260919 <jam> hoppp": the first rifff's day, so the hop can be found
+    // again in Endlesss or LORE. The rifff was just played, so it's held.
+    nameTake: async (seq) => {
+      const first = await riffDocs.fetch(seq.jamId, seq.hops[0]!.riffId);
+      const jam = useJamsStore().profilesById.get(seq.jamId)?.displayName ?? seq.jamId;
+      return hopName(first?.createdAt ?? Date.parse(seq.recordedAt), jam);
+    },
   });
   log('info', 'boot', 'recorder store initialized');
 

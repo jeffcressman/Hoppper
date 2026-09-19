@@ -180,7 +180,7 @@ describe('HopsView', () => {
     it('each take has an Export button that exports it as a WAV', async () => {
       const wrapper = mount(HopsView);
       await rows(wrapper)[1]!.find('[data-test="export"]').trigger('click');
-      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1], 'me');
+      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1]);
     });
 
     it('shows the take being exported, and holds the other buttons off meanwhile', async () => {
@@ -197,5 +197,11 @@ describe('HopsView', () => {
       expect(wrapper.text()).toContain('Saved Sunday drift.wav');
       expect(wrapper.find('[role="alert"]').text()).toContain('Couldn’t load rifff B');
     });
+  });
+
+  it('shows when each take was created in Hoppper, apart from the jam date in its name', () => {
+    const wrapper = mount(HopsView);
+    expect(wrapper.find('.hops__head').text()).toContain('Created');
+    expect(rows(wrapper)[0]!.find('[data-test="created"]').text()).toBe('14 Sep 2026');
   });
 });

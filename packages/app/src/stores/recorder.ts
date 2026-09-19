@@ -5,11 +5,18 @@ import type { HopRecorder } from '../hop-recorder/recorder.js';
 import type { SequenceStorage } from '../hop-recorder/storage.js';
 import type { HopPlayer } from '../hop-recorder/player.js';
 import type { HopSequence } from '../hop-recorder/types.js';
+import { log } from '../logging/log-store.js';
 
 export interface RecorderDeps {
   recorder: HopRecorder;
   storage: SequenceStorage;
   player: HopPlayer;
+  /**
+   * A finished take's name — "20260919 <jam> hoppp", from its first rifff
+   * (`hop-recorder/naming.ts`). Without it, or if it fails, the take keeps
+   * the recorder's default.
+   */
+  nameTake?: (seq: HopSequence) => Promise<string>;
 }
 
 export function defineRecorderStore(deps: RecorderDeps) {
@@ -49,9 +56,16 @@ export function defineRecorderStore(deps: RecorderDeps) {
 
     async function stop(): Promise<HopSequence | null> {
       if (!isRecording.value) return null;
-      const seq = deps.recorder.stop();
+      let seq = deps.recorder.stop();
       // Stopped before any rifff was clicked: nothing to replay, so no take.
       if (seq.hops.length === 0) return null;
+      if (deps.nameTake) {
+        try {
+          seq = { ...seq, title: await deps.nameTake(seq) };
+        } catch (err) {
+          log('warn', 'recorder', `naming the take: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
       try {
         await deps.storage.saveSequence(seq);
         await Promise.all([loadSaved(seq.jamId), loadAll()]);

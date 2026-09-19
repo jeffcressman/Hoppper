@@ -11,7 +11,7 @@
       <div class="hops__row hops__head">
         <span />
         <span class="lwlkc-eyebrow">Hop</span>
-        <span class="lwlkc-eyebrow">Recorded</span>
+        <span class="lwlkc-eyebrow" title="When the take was made in Hoppper">Created</span>
         <span class="lwlkc-eyebrow">Hops</span>
         <span class="lwlkc-eyebrow">Length</span>
         <span />
@@ -41,7 +41,7 @@
             {{ take.exportError }}
           </div>
         </div>
-        <span class="hops__num">{{ take.day }}</span>
+        <span class="hops__num" data-test="created">{{ take.day }}</span>
         <span class="hops__num lwlkc-readout">{{ take.seq.hops.length }}</span>
         <span class="hops__num lwlkc-readout">{{ take.length }}</span>
         <div class="hops__actions">
@@ -61,7 +61,7 @@
             :aria-label="`Export ${take.seq.title} as a WAV file`"
             :disabled="exporter.exportingId !== null && !take.exporting"
             data-test="export"
-            @click="exporter.exportTake(take.seq, take.jam)"
+            @click="exporter.exportTake(take.seq)"
           >
             <LwIcon name="download" />
             {{ take.exporting ? 'Exporting…' : 'Export' }}
