@@ -150,3 +150,65 @@ describe('createHopRecorder', () => {
     expect(r.isRecording).toBe(false);
   });
 });
+
+describe('createHopRecorder — mixer automation', () => {
+  const unity = { volume: [1, 1, 1, 1, 1, 1, 1, 1], mute: Array(8).fill(false), solo: Array(8).fill(false) };
+
+  function recording(start = 100) {
+    const clock = { t: start };
+    const r = createHopRecorder({ clock: () => clock.t, idGen: () => 'seq-1' });
+    r.start({ jamId: JAM });
+    return { clock, r };
+  }
+
+  it('starts every track’s lines from the mixer as it stands at the first rifff', () => {
+    const { clock, r } = recording();
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    r.startMix({ ...unity, volume: [0.5, 1, 1, 1, 1, 1, 1, 1], mute: [false, true, false, false, false, false, false, false] });
+    clock.t = 110;
+    const seq = r.stop();
+    expect(seq.automation).toHaveLength(8);
+    expect(seq.automation![0]!.volume).toEqual([{ tSec: 0, value: 0.5 }]);
+    expect(seq.automation![1]!.mute).toEqual([{ tSec: 0, value: 1 }]);
+    expect(seq.automation![2]!.solo).toEqual([{ tSec: 0, value: 0 }]);
+  });
+
+  it('records each mixer move at its time in the take', () => {
+    const { clock, r } = recording();
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    r.startMix(unity);
+    clock.t = 104;
+    r.recordMix({ slot: 3, param: 'mute', value: 1 });
+    clock.t = 106.5;
+    r.recordMix({ slot: 3, param: 'solo', value: 1 }, 106);
+    clock.t = 110;
+    const seq = r.stop();
+    expect(seq.automation![3]!.mute).toEqual([{ tSec: 0, value: 0 }, { tSec: 4, value: 1 }]);
+    expect(seq.automation![3]!.solo).toEqual([{ tSec: 0, value: 0 }, { tSec: 6, value: 1 }]);
+  });
+
+  it('keeps a fader drag to a point every 30 ms at most', () => {
+    const { clock, r } = recording();
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    r.startMix(unity);
+    for (const [t, v] of [[101, 0.9], [101.01, 0.8], [101.02, 0.7], [101.05, 0.6]] as const) {
+      clock.t = t;
+      r.recordMix({ slot: 0, param: 'volume', value: v });
+    }
+    const points = r.stop().automation![0]!.volume;
+    expect(points.map((p) => p.value)).toEqual([1, 0.7, 0.6]);
+  });
+
+  it('ignores mixer moves before the first rifff — they only set where it starts', () => {
+    const { r } = recording();
+    r.recordMix({ slot: 0, param: 'mute', value: 1 });
+    r.recordHop({ riffId: 'r1', jamId: JAM, transitionMs: 0 });
+    r.startMix(unity);
+    expect(r.stop().automation![0]!.mute).toEqual([{ tSec: 0, value: 0 }]);
+  });
+
+  it('a take with no hops has no automation', () => {
+    const { r } = recording();
+    expect(r.stop().automation).toBeUndefined();
+  });
+});

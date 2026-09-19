@@ -45,6 +45,8 @@ function mockRecorder(): HopRecorder {
       lastSeq!.hops.push({ tSec: lastSeq!.hops.length, ...event });
       if (state === 'armed') emit('recording');
     }),
+    startMix: vi.fn(),
+    recordMix: vi.fn(),
     stop: vi.fn(() => {
       emit('idle');
       return lastSeq!;

@@ -1051,3 +1051,69 @@ describe('createAudioEngine — scheduling ahead (offline render)', () => {
     expect(result).toMatchObject({ kind: 'phase-locked', atSec: 8 });
   });
 });
+
+describe('createAudioEngine — playing automation', () => {
+  const setup = () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>(
+      ['a', 'b'].map((id) => [id as StemCouchID, fakeBuffer()]),
+    );
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers), defaultCrossfadeMs: 250 });
+    return { ctx, engine };
+  };
+  const stemEvents = (src: MockSource) => (src.target as MockGain).events;
+  // Slot 0 fades 1 → 0 over the take's first 8 s; the rest stay at full level.
+  const curves = [
+    [{ tSec: 0, from: 1, to: 0 }, { tSec: 8, from: 0, to: 0 }],
+    ...Array.from({ length: 7 }, () => [{ tSec: 0, from: 1, to: 1 }]),
+  ];
+
+  it('plays each voice’s slots along the take’s automation, from when the voice starts', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 100;
+    engine.setAutomation(curves, 100);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    expect(stemEvents(ctx.sources[0]!)).toEqual([
+      { kind: 'cancel', time: 100 },
+      { kind: 'set', value: 1, time: 100 },
+      { kind: 'ramp', value: 0, time: 108 },
+    ]);
+  });
+
+  it('a voice hopped to mid-take picks the curve up where it is', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 100;
+    engine.setAutomation(curves, 100);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 104;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+    // Fading in from 104 (the crossfade's start), half way down the fade.
+    const events = stemEvents(ctx.sources[1]!);
+    expect(events[1]).toEqual({ kind: 'set', value: 0.5, time: 104 });
+    expect(events[2]).toEqual({ kind: 'ramp', value: 0, time: 108 });
+  });
+
+  it('the mixer stands aside while automation plays, and comes back after', async () => {
+    const { ctx, engine } = setup();
+    engine.setAutomation(curves, 0);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    const before = stemEvents(ctx.sources[0]!).length;
+    engine.setSlotLevels([0.3, 1, 1, 1, 1, 1, 1, 1]);
+    expect(stemEvents(ctx.sources[0]!).length).toBe(before);
+    ctx.currentTime = 2;
+    engine.setAutomation(null, 0);
+    expect(stemEvents(ctx.sources[0]!).at(-1)).toEqual({ kind: 'ramp', value: 0.3, time: 2.02 });
+  });
+
+  it('automation set while a rifff plays reaches it straight away', async () => {
+    const { ctx, engine } = setup();
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 3;
+    engine.setAutomation(curves, 0);
+    expect(stemEvents(ctx.sources[0]!).slice(-3)).toEqual([
+      { kind: 'cancel', time: 3 },
+      { kind: 'set', value: 0.625, time: 3 },
+      { kind: 'ramp', value: 0, time: 8 },
+    ]);
+  });
+});

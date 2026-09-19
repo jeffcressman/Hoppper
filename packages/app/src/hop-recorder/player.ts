@@ -6,6 +6,7 @@ import type {
 } from '@hoppper/sdk';
 import type { AudioEngine } from '../audio/engine.js';
 import type { HopEvent, HopSequence } from './types.js';
+import { automationCurves } from '../automation/automation.js';
 
 export type PlayerState = 'idle' | 'playing';
 
@@ -111,6 +112,7 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
     const delayMs = Math.max(0, (endAt - clock()) * 1000);
     const cancel = scheduler.schedule(delayMs, () => {
       engine.stop();
+      engine.setAutomation(null, 0);
       startedAt = null;
       setState('idle');
     });
@@ -143,6 +145,9 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
 
       const t0 = clock();
       startedAt = t0;
+      // The take's mixer moves, on its own timeline from t0; without any,
+      // each rifff plays at its own mix.
+      engine.setAutomation(seq.automation ? automationCurves(seq.automation) : null, seq.automation ? t0 : 0);
       scheduleHop(seq, 0, t0);
     },
 
@@ -155,6 +160,7 @@ export function createHopPlayer(opts: HopPlayerOptions): HopPlayer {
       startedAt = null;
       clearAll();
       engine.stop();
+      engine.setAutomation(null, 0);
       setState('idle');
     },
 

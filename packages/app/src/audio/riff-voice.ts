@@ -69,6 +69,13 @@ export interface VoiceStem {
   gain?: number;
 }
 
+/** A stretch of an automation curve, in context time. */
+export interface AutomationStretch {
+  atSec: number;
+  from: number;
+  to: number;
+}
+
 /** Glide time for a mixer move: long enough not to click, short enough to feel instant. */
 const LEVEL_GLIDE_SEC = 0.02;
 
@@ -110,6 +117,12 @@ export interface RiffVoice {
   fadeOut(startTime: number, durationSec: number): void;
   /** Glide one slot's mixer level to `level` from `when`. Empty slots ignore it. */
   setSlotLevel(slot: number, level: number, when: number): void;
+  /**
+   * Schedule a slot's automation from `fromSec` on: a curve of straight
+   * stretches in context time — each ramps `from` → `to` until the next,
+   * the last holds — times the rifff's own gain for the slot.
+   */
+  automateSlot(slot: number, curve: ReadonlyArray<AutomationStretch>, fromSec: number): void;
   dispose(): void;
 }
 
@@ -265,6 +278,41 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
       param.cancelScheduledValues(when);
       param.setValueAtTime(param.value, when);
       param.linearRampToValueAtTime(source.riffGain * Math.max(0, level), when + LEVEL_GLIDE_SEC);
+    },
+    automateSlot(slot, curve, fromSec) {
+      const source = bySlot.get(slot);
+      if (!source || curve.length === 0 || !Number.isFinite(fromSec)) return;
+      const g = source.riffGain;
+      const param = source.level.gain;
+      param.cancelScheduledValues(fromSec);
+      // The stretch playing at fromSec, if the curve has begun by then.
+      let i = -1;
+      while (i + 1 < curve.length && curve[i + 1]!.atSec <= fromSec) i++;
+      let current: number;
+      if (i === -1) {
+        current = curve[0]!.from;
+        param.setValueAtTime(current * g, fromSec);
+      } else {
+        const seg = curve[i]!;
+        const next = curve[i + 1];
+        current = next ? seg.from + ((seg.to - seg.from) * (fromSec - seg.atSec)) / (next.atSec - seg.atSec) : seg.from;
+        param.setValueAtTime(current * g, fromSec);
+        if (next) {
+          param.linearRampToValueAtTime(seg.to * g, next.atSec);
+          current = seg.to;
+        }
+      }
+      for (let k = i + 1; k < curve.length; k++) {
+        const seg = curve[k]!;
+        const next = curve[k + 1];
+        // A step where the curve jumps; nothing where it carries straight on.
+        if (seg.from !== current) param.setValueAtTime(seg.from * g, seg.atSec);
+        current = seg.from;
+        if (next) {
+          param.linearRampToValueAtTime(seg.to * g, next.atSec);
+          current = seg.to;
+        }
+      }
     },
     dispose,
   };

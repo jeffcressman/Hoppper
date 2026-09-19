@@ -26,6 +26,9 @@ function setup(opts: { notReady?: string } = {}) {
     return rendered;
   }) };
   const engine = {
+    setAutomation: vi.fn((curves: unknown, _originSec: number) => {
+      calls.push(curves ? 'automation' : 'no automation');
+    }),
     warmRiff: vi.fn(async (_j: string, r: RiffDocument) => {
       calls.push(`warm ${r.riffId}`);
     }),
@@ -59,7 +62,7 @@ describe('renderTake', () => {
   it('loads every rifff first, once each, then lays each hop out at its time, then renders', async () => {
     const { deps, calls } = setup();
     await renderTake(take, deps as never);
-    expect(calls).toEqual(['warm A', 'warm B', 'hop A@0', 'hop B@1.2', 'hop A@1.6', 'render']);
+    expect(calls).toEqual(['warm A', 'warm B', 'no automation', 'hop A@0', 'hop B@1.2', 'hop A@1.6', 'render']);
     expect(deps.resolveRiff).toHaveBeenCalledTimes(2);
   });
 
@@ -72,5 +75,13 @@ describe('renderTake', () => {
   it('fails, rather than rendering a gap, when a rifff can’t be loaded', async () => {
     const { deps } = setup({ notReady: 'B' });
     await expect(renderTake(take, deps as never)).rejects.toThrow(/B/);
+  });
+
+  it('renders the take’s automation from its start', async () => {
+    const { deps, calls, engine } = setup();
+    const blank = { volume: [], mute: [], solo: [] };
+    await renderTake({ ...take, automation: Array.from({ length: 8 }, () => blank) }, deps as never);
+    expect(calls.indexOf('automation')).toBeLessThan(calls.indexOf('hop A@0'));
+    expect(engine.setAutomation.mock.calls[0]![1]).toBe(0);
   });
 });

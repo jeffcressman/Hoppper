@@ -12,6 +12,7 @@ import {
   createRiffVoice,
   type AnalyserNodeLike,
   type AudioContextLike,
+  type AutomationStretch,
   type RiffVoice,
   type VoiceStem,
 } from './riff-voice.js';
@@ -89,6 +90,13 @@ export interface AudioEngine {
   readonly slotLevels: ReadonlyArray<number>;
   setSlotLevels(levels: ReadonlyArray<number>): void;
   /**
+   * Play a take's automation: per slot, its heard-level curve on the take's
+   * timeline, which starts at context time `originSec`. Every voice follows
+   * it from when it starts, and the mixer's levels stand aside until
+   * `setAutomation(null)` hands the slots back to them.
+   */
+  setAutomation(curves: ReadonlyArray<ReadonlyArray<{ tSec: number; from: number; to: number }>> | null, originSec: number): void;
+  /**
    * Where playback is in the playing rifff's loop, on the same continuous
    * grid hops are measured against — so it is where the audio is. Null while
    * nothing plays.
@@ -142,6 +150,13 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   // these as well as `current`.
   let outgoing: OutgoingVoice[] = [];
   let slotLevels: number[] = Array(SLOT_COUNT).fill(1);
+  // A take's automation, in context time, while one is playing.
+  let automation: AutomationStretch[][] | null = null;
+  const unity: number[] = Array(SLOT_COUNT).fill(1);
+
+  function automate(voice: RiffVoice, fromSec: number): void {
+    automation?.forEach((curve, slot) => voice.automateSlot(slot, curve, fromSec));
+  }
 
   // Every voice plays into one master bus, which the level meter taps.
   const master = context.createGain();
@@ -217,6 +232,14 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       `rifff ${riffId} has stems that don't fit its ${sec(loopSec)} loop a whole ` +
         `number of times: ${ragged.join(', ')}`,
     );
+  }
+
+  /** The rifff playing, and any still fading out, follow the mixer at once. */
+  function applyMixerLevels(now: number): void {
+    for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) {
+      if (!v) continue;
+      slotLevels.forEach((level, slot) => v.setSlotLevel(slot, level, now));
+    }
   }
 
   function emitRiffChange(): void {
@@ -362,10 +385,11 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           context,
           stems: voiceStems,
           loopDurationSec: timing.loopDurationSec,
-          levels: slotLevels,
+          levels: automation ? unity : slotLevels,
           destination: master,
           slotTaps,
         });
+        automate(voice, now);
         gridOrigin = now;
         voice.start(now, 0);
         warnOnDeclaredLengthMismatch(riff.riffId, stems, buffers);
@@ -394,7 +418,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         context,
         stems: voiceStems,
         loopDurationSec: timing.loopDurationSec,
-        levels: slotLevels,
+        levels: automation ? unity : slotLevels,
         destination: master,
         slotTaps,
       });
@@ -425,6 +449,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       const callOffset = hop.offsetInNew - crossfadeSec;
       newVoice.start(fadeStart, callOffset);
       newVoice.fadeIn(fadeStart, crossfadeSec);
+      automate(newVoice, fadeStart);
 
       // Fade the old voice out over the same window and stop it once the fade
       // has landed. The voice disposes itself when the stop takes effect —
@@ -522,12 +547,21 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         const l = levels[i];
         return l !== undefined && Number.isFinite(l) ? Math.max(0, l) : 1;
       });
-      // The rifff playing and any still fading out follow the fader at once.
+      // While automation plays, it has the slots; the levels wait for it.
+      if (automation) return;
+      applyMixerLevels(context.currentTime);
+    },
+
+    setAutomation(curves, originSec) {
       const now = context.currentTime;
-      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) {
-        if (!v) continue;
-        slotLevels.forEach((level, slot) => v.setSlotLevel(slot, level, now));
+      automation = curves
+        ? curves.map((curve) => curve.map((s) => ({ atSec: originSec + s.tSec, from: s.from, to: s.to })))
+        : null;
+      if (!automation) {
+        applyMixerLevels(now);
+        return;
       }
+      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) if (v) automate(v, now);
     },
 
     onStateChange(fn) {

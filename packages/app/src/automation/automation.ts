@@ -70,6 +70,11 @@ export function levelCurve(tracks: TrackAutomation[], slot: number): CurveSegmen
   });
 }
 
+/** Every track's level curve, for the engine. */
+export function automationCurves(tracks: TrackAutomation[]): CurveSegment[][] {
+  return Array.from({ length: TRACKS }, (_, slot) => (tracks[slot] ? levelCurve(tracks, slot) : [{ tSec: 0, from: 1, to: 1 }]));
+}
+
 /** Volume approaching `t` from before — ignoring a jump exactly at `t`. */
 function valueBefore(points: AutomationPoint[], t: number): number {
   const before = points.filter((p) => p.tSec < t);

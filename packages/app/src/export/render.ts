@@ -2,6 +2,7 @@ import type { JamCouchID, ResolvedStem, RiffCouchID, RiffDocument } from '@hoppp
 import type { AudioEngine } from '../audio/engine';
 import type { AudioContextLike } from '../audio/riff-voice';
 import type { HopSequence } from '../hop-recorder/types';
+import { automationCurves } from '../automation/automation';
 
 export interface RenderedBufferLike {
   numberOfChannels: number;
@@ -18,7 +19,7 @@ export interface RenderDeps {
   /** A stereo OfflineAudioContext `frames` long. */
   createContext(frames: number, sampleRate: number): OfflineContextLike;
   /** An engine playing into that context, sharing the app's decoded stems. */
-  createEngine(context: OfflineContextLike): Pick<AudioEngine, 'warmRiff' | 'hopTo'>;
+  createEngine(context: OfflineContextLike): Pick<AudioEngine, 'warmRiff' | 'hopTo' | 'setAutomation'>;
   resolveRiff(jamId: JamCouchID, riffId: RiffCouchID): Promise<{ riff: RiffDocument; stems: ResolvedStem[] }>;
 }
 
@@ -45,6 +46,9 @@ export async function renderTake(seq: HopSequence, deps: RenderDeps): Promise<Re
     resolved.set(h.riffId, entry);
     await engine.warmRiff(seq.jamId, entry.riff, entry.stems);
   }
+
+  // The take's mixer moves, from its start at context time 0.
+  engine.setAutomation(seq.automation ? automationCurves(seq.automation) : null, 0);
 
   for (const h of seq.hops) {
     const { riff, stems } = resolved.get(h.riffId)!;
