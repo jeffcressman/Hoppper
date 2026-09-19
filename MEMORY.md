@@ -313,6 +313,14 @@ Newest entries at the top of each section. Date entries absolutely
   never ranges that view, so as of 2026-09-18 it's unit-tested only; the
   Slice C smoke test checks it live. If Expand finds nothing where it
   should, suspect the key's units first (ns keys, ms `createdAt`).
+- **Automation lives on the take and overrides the mixer while it plays**
+  (2026-09-18): `engine.setAutomation(curves, origin)` makes every voice
+  follow each track's level curve and makes `setSlotLevels` wait;
+  `setAutomation(null)` hands the slots back. Anything that plays a take must
+  set it (replay and the render do) and clear it after, or the recording
+  page's mixer is left sidelined. Curves are *heard* levels — mute and every
+  track's solo folded in by `levelCurve` — so a solo on one track is a step in
+  every other track's curve.
 - **Export writes through its own Rust command, `write_export`**
   (2026-09-18), not the fs plugin: the WAV goes as the raw invoke body (tens
   of MB — JSON would multiply it) and the path, percent-encoded, in the

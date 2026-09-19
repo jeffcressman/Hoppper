@@ -160,6 +160,8 @@ Ships inside a whole-app redesign on the LwlkcIng design system, in three slices
 - [x] Edit operations: drag a hop point (beat snap), delete a hop point, expand/add skipped rifffs, duplicate a rifff. *(2026-09-18. Changing transition duration: deferred by the user.)*
 - [x] Live preview: edits play back instantly using the AudioBuffer cache. *(Play in the editor replays the edited take.)*
 - [x] Undo/redo. *(Buttons and Ctrl/Cmd+Z, per editing session.)*
+- [x] Automation: mixer fader, mute and solo recorded into takes, played back in replay, the editor and exports, and edited as lines in the editor. *(2026-09-18; design in the Phase 8 doc → "Automation".)*
+- [x] A level meter beside each mixer fader. *(2026-09-18)*
 
 **Checkpoint**: a recorded session can be tightened, looped sections shortened, transitions tuned.
 

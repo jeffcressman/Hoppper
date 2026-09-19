@@ -201,3 +201,37 @@ dashed), drawn from cached buffers. Playback is phase-locked to one
 continuous grid, so what a segment shows at time *t* is its rifff at the
 grid's position then, not from its loop start — the lanes draw what will be
 heard. Playback through `HopPlayer`.
+
+## Automation (asked for 2026-09-18)
+
+Record the recording page's mixer — each track's fader, mute and solo — into
+takes, play it back wherever a take plays, and edit it in the hop editor. The
+user's choices (asked 2026-09-18): always recorded while recording, no arm
+button; it moves with the music under hop edits; points edited like Ableton;
+all eight tracks shown at once.
+
+- **Model.** `HopSequence.automation`: per track slot, `volume` / `mute` /
+  `solo` points `{tSec, value}` on the take's timeline (first rifff at 0).
+  Optional — a take without it plays at each rifff's own mix. Volume ramps
+  between points; mute and solo step. A track is heard at its volume when not
+  muted and, if any track is soloed, soloed itself (mute wins).
+  `src/automation/automation.ts`.
+- **Recording.** At the first rifff the mixer as it stands becomes every
+  track's starting points; each move after that is a point at its time (a
+  fader drag, one per 30 ms at most). Moves while armed only set the start.
+- **Playback.** `engine.setAutomation` takes each track's heard-level curve
+  and every voice follows it from its start (`RiffVoice.automateSlot`, times
+  the rifff's own slot gain); the mixer's levels stand aside meanwhile.
+  Replay (`HopPlayer`) and the WAV render set it from the take, so the editor,
+  Hops replay and exports all hear it; the live recording page does not.
+- **Hop edits carry it.** Delete cuts its rifff's stretch; Add, Duplicate and
+  growing the start insert time holding the level; trimming cuts; moving a
+  hop point leaves it alone.
+- **Editing.** An Automation button on the editor shows each track's line for
+  the selected parameter (Volume / Mute / Solo) over its row, and sets hop
+  editing aside. Click a line to add a point (mute/solo: upper half on, lower
+  half off), drag to move, double-click to remove; each is an edit, saved and
+  undoable.
+- **Track meters** (side feature): a meter beside each mixer fader, one line
+  per track — each stem also feeds a per-slot analyser after its level.
+

@@ -15,6 +15,8 @@ import {
   type Snap,
 } from '../hop-editor/edits.js';
 import { createEditHistory, type EditHistory } from '../hop-editor/history.js';
+import { addPoint, blankAutomation, movePoint, removePoint } from '../automation/automation.js';
+import type { AutomationParam, AutomationPoint } from '../hop-recorder/types.js';
 import { log } from '../logging/log-store.js';
 
 export interface HopEditorDeps {
@@ -146,6 +148,27 @@ export function defineHopEditorStore(deps: HopEditorDeps) {
       if (seq) await apply(resizeEndIn(seq, toSec, snap, gridOf));
     }
 
+    /** Change one track's line for one parameter; an older take gets flat lines to start from. */
+    async function editLine(
+      slot: number,
+      param: AutomationParam,
+      edit: (points: AutomationPoint[]) => AutomationPoint[],
+    ): Promise<void> {
+      const seq = current();
+      if (!seq) return;
+      const tracks = seq.automation ?? blankAutomation();
+      const track = tracks[slot];
+      if (!track) return;
+      const automation = tracks.map((t, i) => (i === slot ? { ...t, [param]: edit(t[param]) } : t));
+      await apply({ ...seq, automation });
+    }
+    const addAutomationPoint = (slot: number, param: AutomationParam, tSec: number, value: number) =>
+      editLine(slot, param, (points) => addPoint(points, tSec, param === 'volume' ? value : Math.round(value)));
+    const moveAutomationPoint = (slot: number, param: AutomationParam, index: number, tSec: number, value: number) =>
+      editLine(slot, param, (points) => movePoint(points, index, tSec, param === 'volume' ? value : Math.round(value)));
+    const removeAutomationPoint = (slot: number, param: AutomationParam, index: number) =>
+      editLine(slot, param, (points) => removePoint(points, index));
+
     async function undo(): Promise<void> {
       if (!history?.canUndo) return;
       take.value = history.undo();
@@ -175,6 +198,9 @@ export function defineHopEditorStore(deps: HopEditorDeps) {
       duplicate,
       resizeStart,
       resizeEnd,
+      addAutomationPoint,
+      moveAutomationPoint,
+      removeAutomationPoint,
       undo,
       redo,
     };

@@ -52,6 +52,30 @@
         </button>
 
         <span class="bar__divider" />
+        <button
+          type="button"
+          :class="['lw-btn', 'lw-btn--outline', 'lw-btn--sm', { 'is-on': automating }]"
+          :aria-pressed="automating"
+          data-test="automation-toggle"
+          @click="toggleAutomation"
+        >
+          <LwIcon name="automation" />
+          Automation
+        </button>
+        <div v-if="automating" class="snap" role="group" aria-label="Automation to edit">
+          <button
+            v-for="p in AUTO_PARAMS"
+            :key="p.value"
+            type="button"
+            :class="['snap__opt', { 'is-on': autoParam === p.value }]"
+            :aria-pressed="autoParam === p.value"
+            :data-test="`auto-param-${p.value}`"
+            @click="autoParam = p.value"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+        <span class="bar__divider" />
         <div class="snap" role="group" aria-label="Snap hop points to">
           <button
             v-for="s in SNAPS"
@@ -140,7 +164,7 @@
           :class="['pin', `is-${p.kind}`]"
           :style="{ left: `${x(p.atSec)}px` }"
           :title="p.kind === 'candidate' ? 'Where a hop could go' : `Hop point ${p.num}`"
-          :disabled="p.hopIndex === undefined"
+          :disabled="p.hopIndex === undefined || automating"
           data-test="hop-point"
           @pointerdown.stop="(e) => onPinDown(e, p)"
           @click.stop="onPinClick(p)"
@@ -148,7 +172,42 @@
           {{ p.num }}
         </button>
 
-        <template v-if="take && !expanded">
+        <!-- Automation: each track's line for the chosen parameter, over its row. -->
+        <svg
+          v-if="automating && take"
+          class="auto"
+          :style="{ left: `${x(0)}px`, top: `${geometry.lane1Y}px` }"
+          :width="take.durationSec * PX_PER_SEC"
+          :height="geometry.laneH"
+          data-test="automation"
+        >
+          <g v-for="row in autoRows" :key="row.slot">
+            <rect
+              class="auto__row"
+              x="0"
+              :y="row.top"
+              :width="take.durationSec * PX_PER_SEC"
+              :height="row.height"
+              data-test="auto-row"
+              @click.stop="(e) => onAutoRowClick(e, row.slot)"
+            />
+            <path class="auto__line" :d="row.path" data-test="auto-line" />
+            <circle
+              v-for="pt in row.points"
+              :key="pt.index"
+              class="auto__point"
+              :cx="pt.cx"
+              :cy="pt.cy"
+              r="4.5"
+              data-test="auto-point"
+              @click.stop
+              @pointerdown.stop="(e) => onAutoPointDown(e, row.slot, pt.index)"
+              @dblclick.stop="editor.removeAutomationPoint(row.slot, autoParam, pt.index)"
+            />
+          </g>
+        </svg>
+
+        <template v-if="take && !expanded && !automating">
           <button
             type="button"
             class="take-handle is-start"
@@ -191,6 +250,9 @@ import {
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
 import { moveHop, resizeEnd, resizeStart, segmentsOf, type Snap } from '../hop-editor/edits';
+import { automationLine } from '../hop-editor/automation-line';
+import { blankAutomation, movePoint } from '../automation/automation';
+import type { AutomationParam } from '../hop-recorder/types';
 import { laneGeometry, timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
 import { phaseRow, rowPath } from '../ui/peaks';
 import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
@@ -227,7 +289,17 @@ const SNAPS: { value: Snap; label: string }[] = [
   { value: 'off', label: 'Off' },
 ];
 
+const AUTO_PARAMS: { value: AutomationParam; label: string }[] = [
+  { value: 'volume', label: 'Volume' },
+  { value: 'mute', label: 'Mute' },
+  { value: 'solo', label: 'Solo' },
+];
+// Space left above and below a line inside its track row.
+const AUTO_PAD = 3;
+
 const jamId = computed(() => String(route.params.jamId) as JamCouchID);
+const automating = ref(false);
+const autoParam = ref<AutomationParam>('volume');
 const snap = ref<Snap>('beat');
 const point = ref<number | null>(null);
 const expanded = ref(false);
@@ -406,7 +478,95 @@ const meta = computed(() => {
   return `${jam} · ${n} ${n === 1 ? 'hop' : 'hops'} · ${formatDuration(seq.durationSec)}`;
 });
 
+// ── Automation overlay ───────────────────────────────────────────────────
+
+function toggleAutomation(): void {
+  clearSelection();
+  automating.value = !automating.value;
+}
+
+const rowHeight = computed(() => geometry.value.laneH / 8);
+const yFor = (slot: number, value: number) =>
+  slot * rowHeight.value + AUTO_PAD + (1 - value) * (rowHeight.value - 2 * AUTO_PAD);
+function valueForY(slot: number, y: number): number {
+  const v = 1 - (y - slot * rowHeight.value - AUTO_PAD) / (rowHeight.value - 2 * AUTO_PAD);
+  const clamped = Math.min(1, Math.max(0, v));
+  // Mute and solo are on or off: the upper half of the row is on.
+  return autoParam.value === 'volume' ? clamped : clamped >= 0.5 ? 1 : 0;
+}
+
+const autoRows = computed(() => {
+  const seq = take.value;
+  if (!seq) return [];
+  const tracks = seq.automation ?? blankAutomation();
+  return tracks.map((track, slot) => {
+    const points = track[autoParam.value];
+    const line = automationLine(points, autoParam.value, seq.durationSec);
+    return {
+      slot,
+      top: slot * rowHeight.value,
+      height: rowHeight.value,
+      path: line.map((p, i) => `${i ? 'L' : 'M'}${(p.tSec * PX_PER_SEC).toFixed(1)} ${yFor(slot, p.value).toFixed(1)}`).join(''),
+      points: points
+        .map((p, index) => ({ index, cx: p.tSec * PX_PER_SEC, cy: yFor(slot, p.value), tSec: p.tSec }))
+        .filter((p) => p.tSec <= seq.durationSec),
+    };
+  });
+});
+
+/** Where a pointer is on the overlay, in its own px. */
+function overlayPoint(e: MouseEvent, el: Element | null): { x: number; y: number } {
+  const svg = el?.closest('svg');
+  const rect = svg?.getBoundingClientRect();
+  return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
+}
+
+function onAutoRowClick(e: MouseEvent, slot: number): void {
+  const { x: px, y } = overlayPoint(e, e.currentTarget as Element);
+  void editor.addAutomationPoint(slot, autoParam.value, Math.max(0, px / PX_PER_SEC), valueForY(slot, y));
+}
+
+// Dragging a point: a preview while it moves, one edit when it's let go.
+function onAutoPointDown(e: PointerEvent, slot: number, index: number): void {
+  const base = editor.take;
+  if (!base) return;
+  const param = autoParam.value;
+  const target = e.currentTarget as Element;
+  const start = { x: e.clientX, y: e.clientY };
+  const at = (ev: MouseEvent) => {
+    const { x: px, y } = overlayPoint(ev, target);
+    return { tSec: Math.max(0, px / PX_PER_SEC), value: valueForY(slot, y) };
+  };
+  const moved = (ev: MouseEvent) => Math.hypot(ev.clientX - start.x, ev.clientY - start.y) >= 3;
+  const move = (ev: PointerEvent | MouseEvent) => {
+    if (!moved(ev)) return;
+    const { tSec, value } = at(ev);
+    const tracks = base.automation ?? blankAutomation();
+    preview.value = {
+      ...base,
+      automation: tracks.map((t, i) => (i === slot ? { ...t, [param]: movePoint(t[param], index, tSec, value) } : t)),
+    };
+  };
+  const up = (ev: PointerEvent | MouseEvent) => {
+    dragCleanup?.();
+    preview.value = null;
+    if (!moved(ev)) return;
+    const { tSec, value } = at(ev);
+    void editor.moveAutomationPoint(slot, param, index, tSec, value);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  dragCleanup = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragCleanup = null;
+  };
+}
+
 const hint = computed(() => {
+  if (automating.value) {
+    return `${AUTO_PARAMS.find((p) => p.value === autoParam.value)!.label}: click a track’s line to add a point, drag to move it, double-click to remove it.`;
+  }
   if (skippedNothing.value) return 'This hop skipped nothing: its two rifffs were committed one after the other.';
   if (expanded.value) return 'Skipped rifffs are dashed. Pick one, then Add it to the hop.';
   if (point.value !== null) return `Drag hop point ${point.value} to change when the next rifff comes in. Expand shows what it skipped.`;
@@ -432,10 +592,11 @@ function selectPoint(index: number): void {
 }
 
 function onPinClick(p: TimelinePin): void {
-  if (p.hopIndex !== undefined) selectPoint(p.hopIndex);
+  if (p.hopIndex !== undefined && !automating.value) selectPoint(p.hopIndex);
 }
 
 function onPickBlock(b: TimelineBlock): void {
+  if (automating.value) return;
   if (b.kind === 'skip' && b.skipIndex !== undefined) {
     pickedSkip.value = b.skipIndex;
   } else if (b.kind === 'seg' && b.segIndex !== undefined) {
@@ -876,6 +1037,32 @@ onUnmounted(() => {
 }
 .pin:disabled:not(.is-candidate) {
   cursor: default;
+}
+.auto {
+  position: absolute;
+  overflow: visible;
+}
+.auto__row {
+  fill: transparent;
+  cursor: crosshair;
+}
+.auto__row:hover {
+  fill: oklch(1 0 0 / 0.04);
+}
+.auto__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.auto__point {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: grab;
+}
+.auto__point:hover {
+  fill: var(--accent);
 }
 .blk__loop {
   position: absolute;

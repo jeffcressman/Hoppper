@@ -303,6 +303,24 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Mute wins, and solo stays on this page.** A muted track stays
       silent when soloed; a take played in the editor ignores solos.
 
+### Automation
+
+- [ ] **Recorded.** Record a take while moving a fader, muting one track
+      and soloing another. Open it in the editor, press Automation: Volume
+      shows the fader move on that track, Mute and Solo show the switches,
+      at the times you made them.
+- [ ] **Played back.** Play the take in the editor and from Hops: the
+      fader moves, mutes and solos happen as recorded, smoothly (no clicks).
+      Export it: the WAV has them too.
+- [ ] **Editing.** Click a line to add a point, drag it, double-click to
+      remove it; Mute/Solo points snap on or off by the half of the row you
+      click. Undo works. Play to hear the change.
+- [ ] **Moves with hop edits.** Delete a rifff whose stretch had a fade:
+      the fade goes with it and the rest carries on unchanged.
+- [ ] **The recording page is its own.** A take's automation doesn't move
+      the recording page's mixer, and replaying a take then going back to
+      recording leaves your mixer as you had it.
+
 ### Track meters
 
 - [ ] **A meter beside each fader.** Each moves with its own track while a

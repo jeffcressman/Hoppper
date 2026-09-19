@@ -30,6 +30,7 @@ export const ICONS = {
   undo: [['path', { d: 'M9 14 4 9l5-5' }], ['path', { d: 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11' }]],
   redo: [['path', { d: 'm15 14 5-5-5-5' }], ['path', { d: 'M20 9H9.5a5.5 5.5 0 0 0 0 11H13' }]],
   download: [['path', { d: 'M12 4v11' }], ['path', { d: 'm7 10 5 5 5-5' }], ['path', { d: 'M5 20h14' }]],
+  automation: [['path', { d: 'M3 17 8 11l4 3 4-7 5 4' }], ['circle', { cx: 8, cy: 11, r: 1.6, fill: 'currentColor', stroke: 'none' }], ['circle', { cx: 16, cy: 7, r: 1.6, fill: 'currentColor', stroke: 'none' }]],
   logout: [['path', { d: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3' }], ['path', { d: 'M10 16l-4-4 4-4M6 12h10' }]],
 } satisfies Record<string, El[]>;
 
