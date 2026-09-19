@@ -150,3 +150,53 @@ export function skippedBetween(history: RiffCouchID[], from: RiffCouchID, to: Ri
   if (a === -1 || b === -1) return [];
   return history.slice(Math.min(a, b) + 1, Math.max(a, b));
 }
+
+function snapUnit(riffId: RiffCouchID | undefined, snap: Snap, gridOf: GridOf): number | undefined {
+  if (!riffId || snap === 'off') return undefined;
+  const grid = gridOf(riffId);
+  const unit = snap === 'beat' ? grid?.beatSec : grid?.barSec;
+  return unit && unit > 0 ? unit : undefined;
+}
+
+/**
+ * The handle at the take's start. `bySec` > 0 (dragged left) starts the first
+ * rifff that much earlier — it repeats its loop into the past — so the take
+ * grows at the front and every later hop comes that much later. `bySec` < 0
+ * trims the first rifff's start, never past its own hop point. Snapped to the
+ * first rifff's beat or bar.
+ */
+export function resizeStart(seq: HopSequence, bySec: number, snap: Snap, gridOf: GridOf): HopSequence {
+  const first = seq.hops[0];
+  if (!first || !Number.isFinite(bySec)) return seq;
+  const unit = snapUnit(first.riffId, snap, gridOf);
+  const gap = unit ?? MIN_GAP_SEC;
+  const firstLength = segmentsOf(seq, gridOf)[0]!.endSec;
+  let by = unit ? Math.round(bySec / unit) * unit : bySec;
+  // Trimming leaves at least one snap of the first rifff.
+  const mostTrim = unit ? Math.floor((firstLength - gap) / unit + 1e-9) * unit : firstLength - gap;
+  by = Math.max(by, -Math.max(0, mostTrim));
+  if (Math.abs(by) < 1e-9) return seq;
+  return { ...seq, hops: shiftFrom(seq, seq.hops, 1, by, gridOf), durationSec: seq.durationSec + by };
+}
+
+/**
+ * The handle at the take's end: the last rifff plays on — repeating its
+ * loop — until `toSec`, or is trimmed back to it, never past its own hop
+ * point. Snapped to the last rifff's beat or bar on the take's grid.
+ */
+export function resizeEnd(seq: HopSequence, toSec: number, snap: Snap, gridOf: GridOf): HopSequence {
+  const last = seq.hops.at(-1);
+  if (!last || !Number.isFinite(toSec)) return seq;
+  const unit = snapUnit(last.riffId, snap, gridOf);
+  const gap = unit ?? MIN_GAP_SEC;
+  const lastStart = segmentsOf(seq, gridOf).at(-1)!.startSec;
+  let lo = lastStart + gap;
+  let at = toSec;
+  if (unit) {
+    lo = Math.ceil(lo / unit - 1e-9) * unit;
+    at = Math.round(toSec / unit) * unit;
+  }
+  at = Math.max(lo, at);
+  if (Math.abs(at - seq.durationSec) < 1e-9) return seq;
+  return { ...seq, durationSec: at };
+}

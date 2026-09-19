@@ -133,4 +133,16 @@ describe('hop editor store', () => {
     expect(await store.skippedAt(5)).toEqual([]);
     expect(riffIdsBetween).not.toHaveBeenCalled();
   });
+
+  it('the start and end handles resize the take, saved and undoable like any edit', async () => {
+    const { store, saved } = setup();
+    await store.open(JAM, 't1');
+    await store.resizeStart(4, 'beat');
+    expect(store.take!.durationSec).toBe(28);
+    await store.resizeEnd(40, 'bar');
+    expect(saved.at(-1)?.durationSec).toBe(40);
+    await store.undo();
+    await store.undo();
+    expect(store.take!.durationSec).toBe(24);
+  });
 });

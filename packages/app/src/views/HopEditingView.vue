@@ -99,6 +99,13 @@
           data-test="block"
           @click.stop="onPickBlock(b)"
         >
+          <span
+            v-for="lx in b.loopLines"
+            :key="`loop-${lx}`"
+            class="blk__loop"
+            :style="{ left: `${lx}px` }"
+            data-test="loop-line"
+          />
           <svg
             v-for="row in b.rows"
             :key="row.slot"
@@ -141,6 +148,29 @@
           {{ p.num }}
         </button>
 
+        <template v-if="take && !expanded">
+          <button
+            type="button"
+            class="take-handle is-start"
+            :style="{ left: `${x(0)}px`, top: `${geometry.lane1Y}px`, height: `${linesBottom - geometry.lane1Y}px` }"
+            title="Drag left to start the first rifff earlier"
+            aria-label="Start of the take"
+            data-test="take-start"
+            @pointerdown.stop="(e) => onHandleDown(e, 'start')"
+            @click.stop
+          />
+          <button
+            type="button"
+            class="take-handle is-end"
+            :style="{ left: `${x(take.durationSec)}px`, top: `${geometry.lane1Y}px`, height: `${linesBottom - geometry.lane1Y}px` }"
+            title="Drag right to let the last rifff play on"
+            aria-label="End of the take"
+            data-test="take-end"
+            @pointerdown.stop="(e) => onHandleDown(e, 'end')"
+            @click.stop
+          />
+        </template>
+
         <span v-if="playheadSec !== null" class="take-playhead" :style="{ left: `${x(playheadSec)}px` }" data-test="take-playhead" />
       </div>
     </div>
@@ -160,7 +190,7 @@ import {
   useStemDocsStore,
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
-import { moveHop, segmentsOf, type Snap } from '../hop-editor/edits';
+import { moveHop, resizeEnd, resizeStart, segmentsOf, type Snap } from '../hop-editor/edits';
 import { laneGeometry, timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
 import { phaseRow, rowPath } from '../ui/peaks';
 import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
@@ -323,6 +353,21 @@ function rowsFor(b: TimelineBlock): { slot: number; d: string; bins: number; col
   return rows;
 }
 
+/**
+ * Where a new copy of the rifff's loop begins inside a block, in px from its
+ * left edge. Phase-true like the lanes: loops start at multiples of the loop
+ * on the take's grid, not at the block's edge.
+ */
+function loopLinesFor(b: TimelineBlock): number[] {
+  const loop = loopSec(b.riffId);
+  if (!(loop > 0)) return [];
+  const out: number[] = [];
+  for (let t = Math.ceil(b.startSec / loop + 1e-9) * loop; t < b.endSec - 1e-9; t += loop) {
+    out.push((t - b.startSec) * PX_PER_SEC);
+  }
+  return out;
+}
+
 const drawn = computed(() => {
   void performance.decodedTick;
   return layout.value.blocks.map((b) => {
@@ -333,6 +378,7 @@ const drawn = computed(() => {
       y: b.lane === 1 ? geometry.value.lane1Y : geometry.value.lane2Y,
       w: Math.max(2, (b.endSec - b.startSec) * PX_PER_SEC),
       rows: rowsFor(b),
+      loopLines: loopLinesFor(b),
       label: doc ? `${formatTime(doc.createdAt)} · ${doc.userName}` : b.riffId,
       picked:
         (b.kind === 'seg' && b.segIndex === pickedSeg.value) || (b.kind === 'skip' && b.skipIndex === pickedSkip.value),
@@ -463,6 +509,39 @@ function onPinDown(e: PointerEvent, p: TimelinePin): void {
     dragCleanup?.();
     preview.value = null;
     if (Math.abs(ev.clientX - startX) >= 3) void editor.moveHop(index, secAt(ev.clientX), snap.value);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  dragCleanup = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragCleanup = null;
+  };
+}
+
+// Dragging the take's start or end handle: the same preview-then-edit.
+function onHandleDown(e: PointerEvent, which: 'start' | 'end'): void {
+  const base = editor.take;
+  if (!base) return;
+  clearSelection();
+  const startX = e.clientX;
+  // Start: dragged left means more take at the front.
+  const amount = (clientX: number) =>
+    which === 'start' ? (startX - clientX) / PX_PER_SEC : base.durationSec + (clientX - startX) / PX_PER_SEC;
+  const edit = (clientX: number) =>
+    which === 'start'
+      ? resizeStart(base, amount(clientX), snap.value, editor.gridOf)
+      : resizeEnd(base, amount(clientX), snap.value, editor.gridOf);
+  const move = (ev: PointerEvent | MouseEvent) => {
+    if (Math.abs(ev.clientX - startX) >= 3) preview.value = edit(ev.clientX);
+  };
+  const up = (ev: PointerEvent | MouseEvent) => {
+    dragCleanup?.();
+    preview.value = null;
+    if (Math.abs(ev.clientX - startX) < 3) return;
+    void (which === 'start'
+      ? editor.resizeStart(amount(ev.clientX), snap.value)
+      : editor.resizeEnd(amount(ev.clientX), snap.value));
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
@@ -757,6 +836,40 @@ onUnmounted(() => {
 }
 .pin:disabled:not(.is-candidate) {
   cursor: default;
+}
+.blk__loop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--line-strong);
+  pointer-events: none;
+}
+/* The take's ends: a grip either side, dragged to grow or trim it. */
+.take-handle {
+  position: absolute;
+  width: 10px;
+  padding: 0;
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  cursor: ew-resize;
+  touch-action: none;
+  transition: var(--transition-control);
+}
+.take-handle.is-start {
+  margin-left: -12px;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+.take-handle.is-end {
+  margin-left: 2px;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+.take-handle:hover,
+.take-handle:focus-visible {
+  background: var(--accent);
+  box-shadow: var(--glow-accent);
 }
 .take-playhead {
   position: absolute;

@@ -288,6 +288,18 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
       rifff-document requests the second time.
 
+### Take start and end handles
+
+- [ ] **Grow the start.** Drag the start handle left: the first rifff
+      starts earlier (new dashed loop lines appear in it), the take gets
+      longer and the rest moves right. Play: the extra time is the first
+      rifff looping.
+- [ ] **Grow the end.** Drag the end handle right: the last rifff plays on
+      for longer, repeating. Drag either handle back in to trim; neither
+      goes past the nearest hop point.
+- [ ] **Snap and undo.** Both handles follow Beat/Bar/Off, and Ctrl/Cmd+Z
+      undoes a resize.
+
 ### Independent pages (fixes 2026-09-18)
 
 - [ ] **Mutes stay on the recording page.** Mute a track on Hop Recording,

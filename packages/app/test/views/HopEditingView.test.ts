@@ -33,6 +33,8 @@ const editorStub = vi.hoisted(() => ({
   deleteHop: vi.fn(async () => {}),
   addRiff: vi.fn(async () => {}),
   duplicate: vi.fn(async () => {}),
+  resizeStart: vi.fn(async () => {}),
+  resizeEnd: vi.fn(async () => {}),
   undo: vi.fn(async () => {}),
   redo: vi.fn(async () => {}),
 }));
@@ -86,7 +88,7 @@ beforeEach(() => {
   editor.canUndo = false;
   editor.canRedo = false;
   editor.lastError = null;
-  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.undo, editorStub.redo]) {
+  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.resizeStart, editorStub.resizeEnd, editorStub.undo, editorStub.redo]) {
     fn.mockReset().mockResolvedValue(undefined);
   }
   editorStub.open.mockReset().mockResolvedValue(undefined);
@@ -256,5 +258,53 @@ describe('HopEditingView', () => {
     performanceStub.useMix.mockClear();
     await mounted();
     expect(performanceStub.useMix).toHaveBeenCalledWith('editor');
+  });
+
+  describe('the take’s start and end handles', () => {
+    const pxPerSecOf = (w: ReturnType<typeof mount>) => Number(w.find('[data-test="timeline"]').attributes('data-px-per-sec'));
+    const drag = async (el: ReturnType<ReturnType<typeof mount>['find']>, fromX: number, toX: number) => {
+      await el.trigger('pointerdown', { clientX: fromX });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: toX }));
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: toX }));
+      await flushPromises();
+    };
+
+    it('drags the end right to let the last rifff play on', async () => {
+      const wrapper = await mounted();
+      const px = pxPerSecOf(wrapper);
+      await drag(find(wrapper, 'take-end'), 900, 900 + 6.1 * px);
+      expect(editorStub.resizeEnd).toHaveBeenCalledWith(expect.closeTo(30.1, 6), 'beat');
+    });
+
+    it('drags the start left to grow the first rifff into the past', async () => {
+      const wrapper = await mounted();
+      const px = pxPerSecOf(wrapper);
+      await drag(find(wrapper, 'take-start'), 100, 100 - 4 * px);
+      expect(editorStub.resizeStart).toHaveBeenCalledWith(expect.closeTo(4, 6), 'beat');
+    });
+
+    it('a click on a handle isn’t an edit', async () => {
+      const wrapper = await mounted();
+      await drag(find(wrapper, 'take-end'), 900, 901);
+      expect(editorStub.resizeEnd).not.toHaveBeenCalled();
+    });
+
+    it('hides the handles while expanded, where the take’s ends are not where they appear', async () => {
+      const wrapper = await mounted();
+      await pin(wrapper, 1).trigger('click');
+      await find(wrapper, 'expand').trigger('click');
+      await flushPromises();
+      expect(find(wrapper, 'take-start').exists()).toBe(false);
+      expect(find(wrapper, 'take-end').exists()).toBe(false);
+    });
+
+    it('marks each loop inside a rifff, so its repeats show as it is stretched', async () => {
+      // C runs from 16 s to 40 s; its loop is 16 s, so a new copy starts at 32 s.
+      editor.take = { ...take(), durationSec: 40 };
+      const wrapper = await mounted();
+      const blocks = all(wrapper, 'block').filter((b) => b.classes().includes('is-seg'));
+      expect(blocks[2]!.findAll('[data-test="loop-line"]')).toHaveLength(1);
+      expect(blocks[0]!.findAll('[data-test="loop-line"]')).toHaveLength(0);
+    });
   });
 });
