@@ -114,11 +114,67 @@ async fn stem_cache_self_test(app: tauri::AppHandle, byte: u8) -> Result<u8, Str
         .ok_or_else(|| "self-test wrote 1 byte but read 0".to_string())
 }
 
+/// Write an exported take to the file the user picked in the Save dialog.
+/// Only `.wav` paths: this is the export's way to disk, nothing more.
+fn write_export_file(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    let is_wav = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("wav"));
+    if !is_wav {
+        return Err(format!("not a .wav file: {}", path.display()));
+    }
+    std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+// The WAV arrives as the raw invoke body — a four-minute take is ~70 MB, far
+// too much to push through JSON — and its path, percent-encoded so any
+// character survives, in the `x-export-path` header.
+#[tauri::command]
+fn write_export(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let encoded = request
+        .headers()
+        .get("x-export-path")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("missing export path")?;
+    let path = percent_encoding::percent_decode_str(encoded)
+        .decode_utf8()
+        .map_err(|e| format!("bad export path: {e}"))?
+        .into_owned();
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the WAV as raw bytes".into());
+    };
+    write_export_file(std::path::Path::new(&path), bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_export_file;
+
+    #[test]
+    fn writes_a_wav_where_asked() {
+        let dir = std::env::temp_dir().join(format!("hoppper-export-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Sunday drift é.WAV");
+        write_export_file(&path, b"RIFF").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"RIFF");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_anything_but_a_wav() {
+        let path = std::env::temp_dir().join("hoppper-not-an-export.txt");
+        assert!(write_export_file(&path, b"x").is_err());
+        assert!(!path.exists());
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             StrongholdBuilder::new(|password| {
                 // Hoppper's vault password is the 64-char hex of 32 random
@@ -133,7 +189,8 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             stem_cache_self_test,
-            endlesss_http_fetch
+            endlesss_http_fetch,
+            write_export
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -185,8 +185,8 @@ Moved out of Phases 6–8 on 2026-09-17 so the timeline editor and UI overhaul c
 
 **Goal**: render a sequence to disk.
 
-- [ ] `OfflineAudioContext` render path matching the live engine exactly.
-- [ ] Stereo WAV export (16/24-bit).
+- [x] `OfflineAudioContext` render path matching the live engine exactly. *(2026-09-18: `src/export/render.ts` renders through `createAudioEngine` itself, each hop scheduled at its time via `HopOptions.atSec`.)*
+- [x] Stereo WAV export (16/24-bit). *(2026-09-18: 24-bit, from an Export button per take on the Hops page, via the system Save dialog.)*
 - [ ] Multitrack export: 8 stems × N rifffs collapsed onto 8 output tracks at hop boundaries (FLAC, individual files).
 - [ ] Project export: `.zip` with sequence JSON + referenced stems for portability.
 

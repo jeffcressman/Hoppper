@@ -338,6 +338,20 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
       dashed ring and is in the mixer and waveform. Playing it again turns
       the ring solid amber.
 
+## Phase 10 — WAV export
+
+- [ ] **Save dialog.** Export on a take opens the system Save dialog,
+      offering the take's title as the file name, WAV only. Cancel does
+      nothing.
+- [ ] **The file.** The row says Exporting…, then Saved <name>.wav. The file
+      opens in a DAW or player as stereo 24-bit at the app's sample rate,
+      exactly as long as the take.
+- [ ] **Sounds like replay.** It matches playing the take in the app: the
+      same hops at the same moments, crossfaded, on the beat — at each
+      rifff's own mix (the recording page's mutes and solos don't apply).
+- [ ] **Anywhere you can save.** Export to the Desktop, to a folder with a
+      non-English name, and over an existing file.
+
 ---
 
 ## Cross-tempo stems

@@ -58,6 +58,11 @@ export interface HopOptions {
    * enter immediately, which is the default everywhere.
    */
   quantise?: HopQuantise;
+  /**
+   * Act as if the hop were made at this context time rather than now — for
+   * an offline render, which lays the whole take out before any time passes.
+   */
+  atSec?: number;
 }
 
 export interface AudioEngine {
@@ -328,7 +333,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       const timing = computeRiffTiming(riff);
       const crossfadeMs = hopOpts?.crossfadeMs ?? defaultCrossfadeMs;
       const crossfadeSec = crossfadeMs / 1000;
-      const now = context.currentTime;
+      const now = hopOpts?.atSec ?? context.currentTime;
 
       // Cold start — no crossfade needed.
       if (current === null) {

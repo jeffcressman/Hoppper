@@ -313,6 +313,13 @@ Newest entries at the top of each section. Date entries absolutely
   never ranges that view, so as of 2026-09-18 it's unit-tested only; the
   Slice C smoke test checks it live. If Expand finds nothing where it
   should, suspect the key's units first (ns keys, ms `createdAt`).
+- **Export writes through its own Rust command, `write_export`**
+  (2026-09-18), not the fs plugin: the WAV goes as the raw invoke body (tens
+  of MB — JSON would multiply it) and the path, percent-encoded, in the
+  `x-export-path` header, since headers can't carry every character a path
+  can. It only writes `.wav` paths. The render reuses the live engine with an
+  `OfflineAudioContext` and `HopOptions.atSec`, so an export is what replay
+  plays.
 - **Hop points are placed at *arrival*, not `tSec`** — see
   `src/hop-editor/edits.ts`. Any new code that positions or moves hops
   must go through `arrivalSec`/`moveHop`, or quantised and crossfaded hops

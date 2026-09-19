@@ -1016,3 +1016,24 @@ describe('createAudioEngine — output level', () => {
     expect(voiceGains(ctx)[0]!.target).toBe(master);
   });
 });
+
+describe('createAudioEngine — scheduling ahead (offline render)', () => {
+  it('atSec plays a hop as if it were made then, not now', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers), defaultCrossfadeMs: 250 });
+    // The clock never moves: everything is laid out before rendering.
+    await engine.hopTo(JAM, riff('r1'), [stem('a')], { atSec: 0 });
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('b')], { atSec: 8 });
+    const [first, second] = ctx.sources;
+    expect(first!.startedAt?.when).toBe(0);
+    // Crossfade 8 → 8.25, the new rifff at its grid position 8.25 then.
+    expect(second!.startedAt?.when).toBeCloseTo(8, 6);
+    expect(second!.startedAt?.offset).toBeCloseTo(8, 6);
+    expect(first!.stoppedAt).toBeCloseTo(8.26, 6);
+    expect(result).toMatchObject({ kind: 'phase-locked', atSec: 8 });
+  });
+});

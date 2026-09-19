@@ -15,6 +15,12 @@ const recorderStub = vi.hoisted(() => ({
   delete: vi.fn(async () => {}),
 }));
 const sessionStub = vi.hoisted(() => ({ isAuthenticated: true }));
+const exportStub = vi.hoisted(() => ({
+  exportingId: null as string | null,
+  lastSaved: null as null | { id: string; path: string },
+  lastError: null as null | { id: string; message: string },
+  exportTake: vi.fn(async () => {}),
+}));
 const jamsStub = vi.hoisted(() => ({
   profilesById: new Map<string, { displayName: string }>(),
   loadProfile: vi.fn(async (_jamId: string) => {}),
@@ -23,10 +29,12 @@ const jamsStub = vi.hoisted(() => ({
 vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
   const recorder = reactive(recorderStub);
+  const exportState = reactive(exportStub);
   return {
     useRecorderStore: () => recorder,
     useSessionStore: () => sessionStub,
     useJamsStore: () => jamsStub,
+    useExportStore: () => exportState,
     __recorder: recorder,
   };
 });
@@ -72,6 +80,10 @@ beforeEach(() => {
   jamsStub.profilesById = new Map([['band1', { displayName: 'Hoppper' }]]);
   jamsStub.loadProfile.mockReset().mockResolvedValue(undefined);
   routerPush.mockReset();
+  exportStub.exportingId = null;
+  exportStub.lastSaved = null;
+  exportStub.lastError = null;
+  exportStub.exportTake.mockReset().mockResolvedValue(undefined);
 });
 
 const rows = (w: ReturnType<typeof mount>) => w.findAll('[data-test="hop-row"]');
@@ -162,5 +174,28 @@ describe('HopsView', () => {
     const wrapper = mount(HopsView);
     await rows(wrapper)[0]!.find('[data-test="edit"]').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({ name: 'hop-editing', params: { jamId: 'band1', id: 'take-1' } });
+  });
+
+  describe('export', () => {
+    it('each take has an Export button that exports it as a WAV', async () => {
+      const wrapper = mount(HopsView);
+      await rows(wrapper)[1]!.find('[data-test="export"]').trigger('click');
+      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1]);
+    });
+
+    it('shows the take being exported, and holds the other buttons off meanwhile', async () => {
+      exportStub.exportingId = 'take-1';
+      const wrapper = mount(HopsView);
+      expect(rows(wrapper)[0]!.find('[data-test="export"]').text()).toContain('Exporting');
+      expect(rows(wrapper)[1]!.find('[data-test="export"]').attributes('disabled')).toBeDefined();
+    });
+
+    it('says where it saved, and why it didn’t', () => {
+      exportStub.lastSaved = { id: 'take-1', path: '/Users/me/Sunday drift.wav' };
+      exportStub.lastError = { id: 'take-2', message: 'Couldn’t load rifff B for the export' };
+      const wrapper = mount(HopsView);
+      expect(wrapper.text()).toContain('Saved Sunday drift.wav');
+      expect(wrapper.find('[role="alert"]').text()).toContain('Couldn’t load rifff B');
+    });
   });
 });

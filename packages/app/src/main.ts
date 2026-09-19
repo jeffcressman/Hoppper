@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import {
   EndlesssClient,
@@ -21,6 +22,7 @@ import './styles/components.css';
 import { initClient } from './client';
 import { createAppRouter } from './router';
 import {
+  initExportStore,
   initHopEditorStore,
   initPerformanceStore,
   initRecorderStore,
@@ -48,6 +50,7 @@ import {
   createSequenceStorage,
 } from './hop-recorder';
 import { installGlobalErrorCapture, log } from './logging/log-store';
+import { renderTake, type OfflineContextLike } from './export/render';
 import type {
   JamCouchID,
   ResolvedStem,
@@ -201,6 +204,24 @@ async function bootstrap() {
     player: hopPlayer,
   });
   log('info', 'boot', 'recorder store initialized');
+
+  // Export: the take rendered offline through its own engine — sharing the
+  // app's decoded stems — and written where the Save dialog says.
+  initExportStore({
+    chooseFile: async (defaultName) =>
+      saveDialog({ defaultPath: defaultName, filters: [{ name: 'WAV audio', extensions: ['wav'] }] }),
+    render: (seq) =>
+      renderTake(seq, {
+        sampleRate: audioContext.sampleRate,
+        createContext: (frames, sampleRate) =>
+          new OfflineAudioContext(2, frames, sampleRate) as unknown as OfflineContextLike,
+        createEngine: (context) => createAudioEngine({ context, loader }),
+        resolveRiff,
+      }),
+    // Raw bytes, not JSON: a take's WAV runs to tens of megabytes.
+    write: (path, bytes) =>
+      invoke('write_export', bytes, { headers: { 'x-export-path': encodeURIComponent(path) } }),
+  });
 
   initHopEditorStore({
     storage: sequenceStorage,
