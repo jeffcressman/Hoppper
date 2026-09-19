@@ -5,7 +5,7 @@
         <span class="lwlkc-eyebrow">Jam</span>
         <h1 class="strip__name">{{ displayName }}</h1>
       </div>
-      <span v-if="performance.currentRiffId" class="strip__meta lwlkc-readout" data-test="current-riff">
+      <span v-if="currentRiff" class="strip__meta lwlkc-readout" data-test="current-riff">
         {{ riffMeta }}
       </span>
     </div>
@@ -15,7 +15,8 @@
         <RiffJournal
           :jam-id="jamId"
           :riffs="currentJam.riffPage"
-          :current-riff-id="performance.currentRiffId"
+          :current-riff-id="liveRiffId"
+          :last-riff-id="currentRiff?.riffId ?? null"
           :loading-ids="loading"
           :not-ready-id="lastNotReady"
           @hop="onHop"
@@ -76,18 +77,24 @@ const jamId = computed(() => String(route.params.jamId));
 const profile = computed(() => jamsStore.profilesById.get(jamId.value));
 const displayName = computed(() => profile.value?.displayName ?? jamId.value);
 
-// The rifff the mixer and waveform show: the one playing, from this jam's
-// history. A replay can play one older than the pages loaded so far; then
-// they show the slots without names until it's in view.
-const currentRiff = computed<RiffDocument | null>(
-  () => currentJam.riffPage.find((r) => r.riffId === performance.currentRiffId) ?? null,
+// This page keeps its own state: the rifff it shows is the last one *it*
+// played in this jam — playing, or where it left off after a Stop. A replay
+// from the editor or Hops moves the engine elsewhere without moving this.
+const currentRiff = computed<RiffDocument | null>(() => {
+  const last = performance.lastPlayed;
+  return last && last.jamId === jamId.value ? last.riff : null;
+});
+// Ringed as playing only while the engine is playing that very rifff.
+const liveRiffId = computed(() =>
+  currentRiff.value && performance.state === 'playing' && performance.currentRiffId === currentRiff.value.riffId
+    ? currentRiff.value.riffId
+    : null,
 );
 
-// "14 Sep 2026 21:40 · lwlkc · 120 BPM" — or the ID, for a rifff a replay is
-// playing from beyond the pages loaded.
+// "14 Sep 2026 21:40 · lwlkc · 120 BPM"
 const riffMeta = computed(() => {
   const r = currentRiff.value;
-  if (!r) return performance.currentRiffId ?? '';
+  if (!r) return '';
   return `${formatDay(r.createdAt)} ${formatTime(r.createdAt)} · ${r.userName} · ${r.bpm} BPM`;
 });
 
@@ -98,6 +105,7 @@ const loading = ref(new Set<RiffCouchID>());
 const lastNotReady = ref<RiffCouchID | null>(null);
 
 onMounted(async () => {
+  performance.useMix('recording');
   await Promise.all([jamsStore.loadProfile(jamId.value), currentJam.open(jamId.value)]);
 });
 

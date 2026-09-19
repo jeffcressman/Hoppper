@@ -130,6 +130,20 @@ describe('RiffJournal', () => {
     expect(rows.map((r) => r.classes().includes('current'))).toEqual([false, true, false]);
   });
 
+  it('marks the last rifff played with a dashed ring once stopped', () => {
+    const wrapper = mountJournal({ currentRiffId: null, lastRiffId: 'r2' });
+    const rows = wrapper.findAll('[data-test="riff-row"]');
+    expect(rows.map((r) => r.classes().includes('last'))).toEqual([false, true, false]);
+    expect(rows.some((r) => r.classes().includes('current'))).toBe(false);
+  });
+
+  it('shows the playing ring, not the dashed one, while that rifff plays', () => {
+    const wrapper = mountJournal({ currentRiffId: 'r2', lastRiffId: 'r2' });
+    const row = wrapper.findAll('[data-test="riff-row"]')[1]!;
+    expect(row.classes()).toContain('current');
+    expect(row.classes()).not.toContain('last');
+  });
+
   it('hops to a rifff when its splat is clicked', async () => {
     const wrapper = mountJournal();
     await wrapper.findAll('[data-test="hop"]')[1].trigger('click');

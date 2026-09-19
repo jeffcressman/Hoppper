@@ -9,6 +9,8 @@ import {
   duplicateSegment,
   insertRiff,
   moveHop as moveHopIn,
+  resizeEnd as resizeEndIn,
+  resizeStart as resizeStartIn,
   type RiffGrid,
   type Snap,
 } from '../hop-editor/edits.js';
@@ -133,6 +135,17 @@ export function defineHopEditorStore(deps: HopEditorDeps) {
       if (seq && h) await apply(duplicateSegment(seq, index, lengthSec ?? loopSecOf(h.riffId), gridOf));
     }
 
+    /** Start handle: > 0 grows the take at the front, < 0 trims it. */
+    async function resizeStart(bySec: number, snap: Snap): Promise<void> {
+      const seq = current();
+      if (seq) await apply(resizeStartIn(seq, bySec, snap, gridOf));
+    }
+    /** End handle: the take ends at `toSec`. */
+    async function resizeEnd(toSec: number, snap: Snap): Promise<void> {
+      const seq = current();
+      if (seq) await apply(resizeEndIn(seq, toSec, snap, gridOf));
+    }
+
     async function undo(): Promise<void> {
       if (!history?.canUndo) return;
       take.value = history.undo();
@@ -160,6 +173,8 @@ export function defineHopEditorStore(deps: HopEditorDeps) {
       deleteHop,
       addRiff,
       duplicate,
+      resizeStart,
+      resizeEnd,
       undo,
       redo,
     };

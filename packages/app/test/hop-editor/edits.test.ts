@@ -7,6 +7,8 @@ import {
   duplicateSegment,
   insertRiff,
   moveHop,
+  resizeEnd,
+  resizeStart,
   segmentsOf,
   skippedBetween,
   type GridOf,
@@ -181,5 +183,59 @@ describe('skippedBetween — what Expand shows', () => {
   it('is nothing for neighbouring rifffs, or for a rifff not in the history', () => {
     expect(skippedBetween(history, 'r2' as RiffCouchID, 'r3' as RiffCouchID)).toEqual([]);
     expect(skippedBetween(history, 'r2' as RiffCouchID, 'gone' as RiffCouchID)).toEqual([]);
+  });
+});
+
+describe('resizeStart — the handle at the take’s start', () => {
+  it('dragged left, the first rifff starts earlier: the take grows at the front and every hop moves later', () => {
+    const grown = resizeStart(take(), 4, 'beat', grid);
+    expect(grown.hops.map((h) => h.riffId)).toEqual(['A', 'B', 'C']);
+    expect(arrivals(grown)).toEqual([0, 12, 20]);
+    expect(grown.durationSec).toBe(28);
+  });
+
+  it('snaps what it adds to the first rifff’s beat or bar', () => {
+    expect(resizeStart(take(), 3.3, 'bar', grid).durationSec).toBe(28);
+    expect(resizeStart(take(), 3.3, 'beat', grid).durationSec).toBe(27.5);
+  });
+
+  it('dragged right, trims the first rifff’s start, stopping short of its hop point', () => {
+    expect(arrivals(resizeStart(take(), -2, 'beat', grid))).toEqual([0, 6, 14]);
+    const trimmed = resizeStart(take(), -30, 'beat', grid);
+    expect(arrivals(trimmed)[1]).toBe(0.5);
+    expect(trimmed.durationSec).toBe(16.5);
+  });
+
+  it('keeps a later quantised hop where it was heard, relative to the change', () => {
+    const t = take([hop(0, 'A'), hop(7.6, 'B', { quantise: 'beat' }), hop(15.75, 'C')]);
+    expect(arrivals(resizeStart(t, 2, 'beat', grid))).toEqual([0, 10, 18]);
+  });
+
+  it('changes nothing for no movement', () => {
+    const t = take();
+    expect(resizeStart(t, 0.1, 'bar', grid)).toBe(t);
+  });
+
+  it('works on a take of one rifff', () => {
+    const one = take([hop(0, 'A')], 8);
+    expect(resizeStart(one, 4, 'beat', grid).durationSec).toBe(12);
+    expect(resizeStart(one, -6, 'beat', grid).durationSec).toBe(2);
+  });
+});
+
+describe('resizeEnd — the handle at the take’s end', () => {
+  it('dragged right, the last rifff plays on for longer', () => {
+    const longer = resizeEnd(take(), 30.2, 'bar', grid);
+    expect(longer.durationSec).toBe(30);
+    expect(arrivals(longer)).toEqual([0, 8, 16]);
+  });
+
+  it('dragged left, trims the last rifff, stopping short of its hop point', () => {
+    expect(resizeEnd(take(), 20.1, 'beat', grid).durationSec).toBe(20);
+    expect(resizeEnd(take(), 3, 'beat', grid).durationSec).toBe(16.5);
+  });
+
+  it('goes exactly where it is put with snapping off', () => {
+    expect(resizeEnd(take(), 25.37, 'off', grid).durationSec).toBeCloseTo(25.37, 9);
   });
 });

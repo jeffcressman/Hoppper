@@ -33,6 +33,8 @@ const editorStub = vi.hoisted(() => ({
   deleteHop: vi.fn(async () => {}),
   addRiff: vi.fn(async () => {}),
   duplicate: vi.fn(async () => {}),
+  resizeStart: vi.fn(async () => {}),
+  resizeEnd: vi.fn(async () => {}),
   undo: vi.fn(async () => {}),
   redo: vi.fn(async () => {}),
 }));
@@ -45,16 +47,28 @@ const recorderStub = vi.hoisted(() => ({
   playPosition: () => recorderStub.position,
 }));
 
+// Rifff documents not fetched yet. Reactive, so the page sees them arrive.
+const riffDocsState = vi.hoisted(() => ({ missing: new Set<string>() }));
+
+const performanceStub = vi.hoisted(() => ({
+  bufferFor: () => undefined,
+  decodedTick: 0,
+  warm: vi.fn(async (_jamId: string, _riff: { riffId: string }) => {}),
+  stop: vi.fn(),
+  useMix: vi.fn(),
+}));
+
 vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
+  riffDocsState.missing = reactive(new Set<string>()) as Set<string>;
   const editor = reactive(editorStub);
   const recorder = reactive(recorderStub);
   return {
     useHopEditorStore: () => editor,
     useRecorderStore: () => recorder,
-    useRiffDocsStore: () => ({ get: (id: string) => riff(id) }),
+    useRiffDocsStore: () => ({ get: (id: string) => (riffDocsState.missing.has(id) ? undefined : riff(id)) }),
     useStemDocsStore: () => ({ get: () => undefined, ensure: async () => {} }),
-    usePerformanceStore: () => ({ bufferFor: () => undefined, decodedTick: 0, warm: vi.fn(async () => {}), stop: vi.fn() }),
+    usePerformanceStore: () => performanceStub,
     useJamsStore: () => ({ profilesById: new Map([['band1', { displayName: 'Hoppper' }]]), loadProfile: vi.fn(async () => {}) }),
     __editor: editor,
     __recorder: recorder,
@@ -74,11 +88,13 @@ const editor = (stores as unknown as { __editor: typeof editorStub }).__editor;
 const recorder = (stores as unknown as { __recorder: typeof recorderStub }).__recorder;
 
 beforeEach(() => {
+  riffDocsState.missing.clear();
+  performanceStub.warm.mockClear();
   editor.take = take();
   editor.canUndo = false;
   editor.canRedo = false;
   editor.lastError = null;
-  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.undo, editorStub.redo]) {
+  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.resizeStart, editorStub.resizeEnd, editorStub.undo, editorStub.redo]) {
     fn.mockReset().mockResolvedValue(undefined);
   }
   editorStub.open.mockReset().mockResolvedValue(undefined);
@@ -242,5 +258,126 @@ describe('HopEditingView', () => {
     } finally {
       if (tall) Object.defineProperty(HTMLElement.prototype, 'clientHeight', tall);
     }
+  });
+
+  it('plays with its own mix: the rifffs as committed, not the recording page’s mutes', async () => {
+    performanceStub.useMix.mockClear();
+    await mounted();
+    expect(performanceStub.useMix).toHaveBeenCalledWith('editor');
+  });
+
+  describe('the take’s start and end handles', () => {
+    const pxPerSecOf = (w: ReturnType<typeof mount>) => Number(w.find('[data-test="timeline"]').attributes('data-px-per-sec'));
+    const drag = async (el: ReturnType<ReturnType<typeof mount>['find']>, fromX: number, toX: number) => {
+      await el.trigger('pointerdown', { clientX: fromX });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: toX }));
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: toX }));
+      await flushPromises();
+    };
+
+    it('drags the end right to let the last rifff play on', async () => {
+      const wrapper = await mounted();
+      const px = pxPerSecOf(wrapper);
+      await drag(find(wrapper, 'take-end'), 900, 900 + 6.1 * px);
+      expect(editorStub.resizeEnd).toHaveBeenCalledWith(expect.closeTo(30.1, 6), 'beat');
+    });
+
+    it('drags the start left to grow the first rifff into the past', async () => {
+      const wrapper = await mounted();
+      const px = pxPerSecOf(wrapper);
+      await drag(find(wrapper, 'take-start'), 100, 100 - 4 * px);
+      expect(editorStub.resizeStart).toHaveBeenCalledWith(expect.closeTo(4, 6), 'beat');
+    });
+
+    it('a click on a handle isn’t an edit', async () => {
+      const wrapper = await mounted();
+      await drag(find(wrapper, 'take-end'), 900, 901);
+      expect(editorStub.resizeEnd).not.toHaveBeenCalled();
+    });
+
+    it('hides the handles while expanded, where the take’s ends are not where they appear', async () => {
+      const wrapper = await mounted();
+      await pin(wrapper, 1).trigger('click');
+      await find(wrapper, 'expand').trigger('click');
+      await flushPromises();
+      expect(find(wrapper, 'take-start').exists()).toBe(false);
+      expect(find(wrapper, 'take-end').exists()).toBe(false);
+    });
+
+    it('marks each loop inside a rifff, so its repeats show as it is stretched', async () => {
+      // C runs from 16 s to 40 s; its loop is 16 s, so a new copy starts at 32 s.
+      editor.take = { ...take(), durationSec: 40 };
+      const wrapper = await mounted();
+      const blocks = all(wrapper, 'block').filter((b) => b.classes().includes('is-seg'));
+      expect(blocks[2]!.findAll('[data-test="loop-line"]')).toHaveLength(1);
+      expect(blocks[0]!.findAll('[data-test="loop-line"]')).toHaveLength(0);
+    });
+  });
+
+  it('leaving the editor stops its playback', async () => {
+    const wrapper = await mounted();
+    recorder.isPlaying = true;
+    wrapper.unmount();
+    expect(recorderStub.stopPlayback).toHaveBeenCalled();
+  });
+
+  it('leaving while nothing plays stops nothing', async () => {
+    const wrapper = await mounted();
+    wrapper.unmount();
+    expect(recorderStub.stopPlayback).not.toHaveBeenCalled();
+  });
+
+  describe('scrolling while the end handle is dragged', () => {
+    function sizeTimeline(el: HTMLElement, visibleWidth: number) {
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: visibleWidth });
+      el.getBoundingClientRect = () => ({ left: 0, right: visibleWidth, top: 0, bottom: 400, width: visibleWidth, height: 400 }) as DOMRect;
+    }
+    const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    it('follows the end out of view as it is dragged right', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 300);
+      const px = Number(tl.dataset.pxPerSec);
+      await find(wrapper, 'take-end').trigger('pointerdown', { clientX: 280 });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 280 + 4 * px }));
+      await flushPromises();
+      // The new end (28 s) sits past the 300 px view: it has scrolled to it.
+      expect(tl.scrollLeft).toBeGreaterThan(0);
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: 280 + 4 * px }));
+    });
+
+    it('keeps extending while the pointer is held at the edge, counting the scroll', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 300);
+      await find(wrapper, 'take-end').trigger('pointerdown', { clientX: 280 });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 298 }));
+      for (let i = 0; i < 5; i++) await nextFrame();
+      const scrolled = tl.scrollLeft;
+      expect(scrolled).toBeGreaterThan(0);
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: 298 }));
+      await flushPromises();
+      const px = Number(tl.dataset.pxPerSec);
+      expect(editorStub.resizeEnd).toHaveBeenCalledWith(expect.closeTo(24 + (18 + scrolled) / px, 6), 'beat');
+    });
+  });
+
+  it('loads each rifff’s audio for the lanes once its document arrives, even after the take opened', async () => {
+    // Opened from the Hops page before the take's rifff documents are in.
+    for (const id of ['A', 'B', 'C']) riffDocsState.missing.add(id);
+    await mounted();
+    expect(performanceStub.warm).not.toHaveBeenCalled();
+    riffDocsState.missing.clear();
+    await flushPromises();
+    expect(performanceStub.warm.mock.calls.map((c) => c[1].riffId).sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('loads each rifff once, however often the take changes', async () => {
+    await mounted();
+    const loads = performanceStub.warm.mock.calls.length;
+    editor.take = { ...take(), durationSec: 30 };
+    await flushPromises();
+    expect(performanceStub.warm.mock.calls.length).toBe(loads);
   });
 });

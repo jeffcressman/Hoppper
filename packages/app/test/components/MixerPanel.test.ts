@@ -7,8 +7,13 @@ enableAutoUnmount(afterEach);
 const performanceStub = vi.hoisted(() => ({
   slotLevels: [1, 1, 1, 1, 1, 1, 1, 1],
   slotMuted: [false, false, false, false, false, false, false, false],
+  slotSoloed: [false, false, false, false, false, false, false, false],
+  slotAudible: [true, true, true, true, true, true, true, true],
+  anySoloed: false,
   setSlotLevel: vi.fn(),
   toggleMute: vi.fn(),
+  toggleSolo: vi.fn(),
+  clearSolos: vi.fn(),
 }));
 const docs = vi.hoisted(() => new Map<string, Partial<StemDocument>>());
 
@@ -30,6 +35,11 @@ function riff(slots: Array<string | null>): RiffDocument {
 beforeEach(() => {
   performanceStub.slotLevels = [1, 1, 1, 1, 1, 1, 1, 1];
   performanceStub.slotMuted = [false, false, false, false, false, false, false, false];
+  performanceStub.slotSoloed = [false, false, false, false, false, false, false, false];
+  performanceStub.slotAudible = [true, true, true, true, true, true, true, true];
+  performanceStub.anySoloed = false;
+  performanceStub.toggleSolo.mockReset();
+  performanceStub.clearSolos.mockReset();
   performanceStub.setSlotLevel.mockReset();
   performanceStub.toggleMute.mockReset();
   docs.clear();
@@ -91,5 +101,40 @@ describe('MixerPanel', () => {
       ({ top: 100, height: 150, left: 0, width: 28, bottom: 250, right: 28 }) as DOMRect;
     await fader.trigger('pointerdown', { clientY: 130 });
     expect(performanceStub.setSlotLevel).toHaveBeenLastCalledWith(0, expect.closeTo(0.8, 6));
+  });
+
+  describe('solo', () => {
+    it('each channel has a Solo switch for its track', async () => {
+      const wrapper = mount(MixerPanel, { props: { riff: riff(['d', null, 'b']) } });
+      const solo = channels(wrapper)[2]!.find('[data-test="solo"]');
+      expect(solo.attributes('aria-pressed')).toBe('false');
+      await solo.trigger('click');
+      expect(performanceStub.toggleSolo).toHaveBeenCalledWith(2);
+    });
+
+    it('shows which tracks are soloed, and dims the ones solo has silenced', () => {
+      performanceStub.slotSoloed[0] = true;
+      performanceStub.anySoloed = true;
+      performanceStub.slotAudible = [true, false, false, false, false, false, false, false];
+      const wrapper = mount(MixerPanel, { props: { riff: riff(['d', null, 'b']) } });
+      expect(channels(wrapper)[0]!.find('[data-test="solo"]').attributes('aria-pressed')).toBe('true');
+      expect(channels(wrapper)[0]!.classes()).toContain('is-soloed');
+      expect(channels(wrapper)[2]!.classes()).toContain('is-silenced');
+      expect(channels(wrapper)[0]!.classes()).not.toContain('is-silenced');
+    });
+
+    it('Un-solo clears every solo, and is off while nothing is soloed', async () => {
+      const wrapper = mount(MixerPanel, { props: { riff: riff(['d', 'b']) } });
+      expect(wrapper.find('[data-test="unsolo"]').attributes('disabled')).toBeDefined();
+      performanceStub.anySoloed = true;
+      const soloed = mount(MixerPanel, { props: { riff: riff(['d', 'b']) } });
+      await soloed.find('[data-test="unsolo"]').trigger('click');
+      expect(performanceStub.clearSolos).toHaveBeenCalledTimes(1);
+    });
+
+    it('an empty channel has nothing to solo', () => {
+      const wrapper = mount(MixerPanel, { props: { riff: riff(['d', null]) } });
+      expect(channels(wrapper)[1]!.find('[data-test="solo"]').attributes('disabled')).toBeDefined();
+    });
   });
 });

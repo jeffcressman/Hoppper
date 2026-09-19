@@ -653,3 +653,125 @@ describe('definePerformanceStore — loading without playing', () => {
     expect(s.decodedTick).toBe(before + 1);
   });
 });
+
+describe('definePerformanceStore — each page has its own mix', () => {
+  const unity = [1, 1, 1, 1, 1, 1, 1, 1];
+  const store = () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    return { engine, s };
+  };
+
+  it('the editor plays at the rifffs’ own mix, whatever the recording page muted', () => {
+    const { engine, s } = store();
+    s.toggleMute(2);
+    s.useMix('editor');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith(unity);
+  });
+
+  it('coming back to the recording page puts its mix back', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(0, 0.5);
+    s.toggleMute(2);
+    s.useMix('editor');
+    s.useMix('recording');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0.5, 1, 0, 1, 1, 1, 1, 1]);
+  });
+
+  it('the recording page’s mixer doesn’t reach the engine while the editor has it', () => {
+    const { engine, s } = store();
+    s.useMix('editor');
+    vi.mocked(engine.setSlotLevels).mockClear();
+    s.toggleMute(1);
+    expect(engine.setSlotLevels).not.toHaveBeenCalled();
+    expect(s.slotMuted[1]).toBe(true);
+  });
+});
+
+describe('definePerformanceStore — the recording page’s last rifff', () => {
+  it('remembers the last rifff played from the recording page, through stops and replays', async () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn(async () => []) })();
+    expect(s.lastPlayed).toBeNull();
+    await s.hopTo(JAM, riff('r1'));
+    s.stop();
+    // A replay moving the engine on isn't the recording page playing.
+    engine._emitRiff('elsewhere' as RiffCouchID);
+    expect(s.lastPlayed).toEqual({ jamId: JAM, riff: riff('r1') });
+  });
+});
+
+describe('definePerformanceStore — solo', () => {
+  const store = () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    return { engine, s };
+  };
+
+  it('starts with nothing soloed', () => {
+    expect(store().s.slotSoloed).toEqual([false, false, false, false, false, false, false, false]);
+  });
+
+  it('soloing a track plays only that track', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(2, 0.6);
+    s.toggleSolo(2);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0.6, 0, 0, 0, 0, 0]);
+  });
+
+  it('each further solo adds its track to what plays', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 1, 0, 0, 1, 0, 0]);
+  });
+
+  it('turning one solo off leaves the others soloed', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    s.toggleSolo(2);
+    expect(s.slotSoloed[5]).toBe(true);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0, 0, 0, 1, 0, 0]);
+  });
+
+  it('with the last solo off, every track plays again', () => {
+    const { engine, s } = store();
+    s.toggleSolo(2);
+    s.toggleSolo(2);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it('un-solo clears every solo at once, leaving mutes as they were', () => {
+    const { engine, s } = store();
+    s.toggleMute(1);
+    s.toggleSolo(2);
+    s.toggleSolo(5);
+    expect(s.anySoloed).toBe(true);
+    s.clearSolos();
+    expect(s.anySoloed).toBe(false);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 0, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it('a muted track stays silent even when soloed', () => {
+    const { engine, s } = store();
+    s.toggleMute(2);
+    s.toggleSolo(2);
+    s.toggleSolo(3);
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0, 0, 0, 1, 0, 0, 0, 0]);
+  });
+
+  it('says which tracks are being heard, for the mixer and waveform', () => {
+    const { s } = store();
+    s.toggleMute(0);
+    s.toggleSolo(3);
+    expect(s.slotAudible).toEqual([false, false, false, true, false, false, false, false]);
+  });
+
+  it('is the recording page’s: the editor still hears the rifffs’ own mix', () => {
+    const { engine, s } = store();
+    s.toggleSolo(3);
+    s.useMix('editor');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+});

@@ -6,7 +6,14 @@
         <div
           v-for="entry in day.entries"
           :key="entry.riff.riffId"
-          :class="['splat-cell', { current: entry.riff.riffId === currentRiffId, loading: loadingIds.has(entry.riff.riffId) }]"
+          :class="[
+            'splat-cell',
+            {
+              current: entry.riff.riffId === currentRiffId,
+              last: entry.riff.riffId === lastRiffId && entry.riff.riffId !== currentRiffId,
+              loading: loadingIds.has(entry.riff.riffId),
+            },
+          ]"
           data-test="riff-row"
         >
           <button
@@ -48,6 +55,8 @@ const props = defineProps<{
   /** Newest first, as the jam's pages arrive. */
   riffs: RiffDocument[];
   currentRiffId: RiffCouchID | null;
+  /** The last rifff played, ringed dashed while the transport is stopped. */
+  lastRiffId?: RiffCouchID | null;
   loadingIds: Set<RiffCouchID>;
   notReadyId: RiffCouchID | null;
 }>();
@@ -167,6 +176,11 @@ const days = computed(() => {
 }
 .current .splat {
   box-shadow: 0 0 0 2px var(--accent), 0 0 20px -2px var(--accent);
+}
+/* Stopped: where playback left off, dashed so it doesn't read as playing. */
+.last .splat {
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
 }
 .loading .splat {
   animation: splat-loading 0.7s ease-in-out infinite alternate;

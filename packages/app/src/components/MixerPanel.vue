@@ -1,29 +1,57 @@
 <template>
   <div class="mixer" role="group" aria-label="Track mixer">
+    <div class="mixer__head">
+      <span class="lwlkc-eyebrow">Tracks</span>
+      <button
+        type="button"
+        class="lw-btn lw-btn--ghost lw-btn--sm"
+        :disabled="!performance.anySoloed"
+        title="Turn every solo off"
+        data-test="unsolo"
+        @click="performance.clearSolos()"
+      >
+        Un-solo
+      </button>
+    </div>
+    <div class="mixer__channels">
     <div
       v-for="ch in channels"
       :key="ch.slot"
-      :class="['ch', { 'is-empty': !ch.stemId, 'is-muted': ch.muted }]"
+      :class="['ch', { 'is-empty': !ch.stemId, 'is-muted': ch.muted, 'is-soloed': ch.soloed, 'is-silenced': ch.silenced }]"
       data-test="channel"
     >
-      <button
-        type="button"
-        class="ch__mute"
-        :title="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
-        :aria-label="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
-        :aria-pressed="ch.muted"
-        :disabled="!ch.stemId"
-        data-test="mute"
-        @click="performance.toggleMute(ch.slot)"
-      >
-        <span
-          class="ch__lamp"
-          :style="{
-            background: ch.lit ? ch.colour : 'transparent',
-            borderColor: ch.lit ? ch.colour : 'var(--line-strong)',
-          }"
-        />
-      </button>
+      <div class="ch__buttons">
+        <button
+          type="button"
+          class="ch__mute"
+          :title="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
+          :aria-label="ch.muted ? `Unmute ${ch.name}` : `Mute ${ch.name}`"
+          :aria-pressed="ch.muted"
+          :disabled="!ch.stemId"
+          data-test="mute"
+          @click="performance.toggleMute(ch.slot)"
+        >
+          <span
+            class="ch__lamp"
+            :style="{
+              background: ch.lit ? ch.colour : 'transparent',
+              borderColor: ch.lit ? ch.colour : 'var(--line-strong)',
+            }"
+          />
+        </button>
+        <button
+          type="button"
+          class="ch__solo"
+          :title="ch.soloed ? `Un-solo ${ch.name}` : `Solo ${ch.name}`"
+          :aria-label="ch.soloed ? `Un-solo ${ch.name}` : `Solo ${ch.name}`"
+          :aria-pressed="ch.soloed"
+          :disabled="!ch.stemId"
+          data-test="solo"
+          @click="performance.toggleSolo(ch.slot)"
+        >
+          S
+        </button>
+      </div>
       <div
         class="fader"
         role="slider"
@@ -48,6 +76,7 @@
         <span class="ch__dot" :style="{ background: ch.user ? userColour(ch.user) : 'var(--surface-3)' }" />
         {{ ch.user ?? '—' }}
       </span>
+    </div>
     </div>
   </div>
 </template>
@@ -75,11 +104,15 @@ const channels = computed(() =>
     const stemId = riffSlot?.on && riffSlot.stemId ? (riffSlot.stemId as StemCouchID) : null;
     const doc = stemId ? stemDocs.get(stemId) : null;
     const muted = performance.slotMuted[slot] ?? false;
+    const audible = performance.slotAudible[slot] ?? true;
     return {
       slot,
       stemId,
       muted,
-      lit: !!stemId && !muted,
+      soloed: performance.slotSoloed[slot] ?? false,
+      // Quiet because another track is soloed, not because it's muted.
+      silenced: !!stemId && !muted && !audible,
+      lit: !!stemId && audible,
       name: stemId ? doc?.presetName || `Track ${slot + 1}` : 'Empty',
       user: stemId ? doc?.creatorUserName || null : null,
       colour: (doc && stemColour(doc.primaryColour)) || 'var(--accent)',
@@ -116,13 +149,61 @@ function onFaderDown(e: PointerEvent, slot: number): void {
 
 <style scoped>
 .mixer {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 16px 12px 14px;
+  padding: 10px 12px 14px;
   background: var(--surface-1);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
+}
+.mixer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 4px;
+}
+.mixer__channels {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+}
+.ch__buttons {
+  display: flex;
+  gap: 4px;
+}
+.ch__solo {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.ch__solo:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--text-1);
+}
+.ch__solo:disabled {
+  cursor: default;
+}
+.ch.is-soloed .ch__solo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.ch.is-silenced .fader__fill,
+.ch.is-silenced .ch__name {
+  opacity: 0.35;
 }
 .ch {
   display: flex;

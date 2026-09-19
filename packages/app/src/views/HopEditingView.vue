@@ -99,6 +99,13 @@
           data-test="block"
           @click.stop="onPickBlock(b)"
         >
+          <span
+            v-for="lx in b.loopLines"
+            :key="`loop-${lx}`"
+            class="blk__loop"
+            :style="{ left: `${lx}px` }"
+            data-test="loop-line"
+          />
           <svg
             v-for="row in b.rows"
             :key="row.slot"
@@ -141,6 +148,29 @@
           {{ p.num }}
         </button>
 
+        <template v-if="take && !expanded">
+          <button
+            type="button"
+            class="take-handle is-start"
+            :style="{ left: `${x(0)}px`, top: `${geometry.lane1Y}px`, height: `${linesBottom - geometry.lane1Y}px` }"
+            title="Drag left to start the first rifff earlier"
+            aria-label="Start of the take"
+            data-test="take-start"
+            @pointerdown.stop="(e) => onHandleDown(e, 'start')"
+            @click.stop
+          />
+          <button
+            type="button"
+            class="take-handle is-end"
+            :style="{ left: `${x(take.durationSec)}px`, top: `${geometry.lane1Y}px`, height: `${linesBottom - geometry.lane1Y}px` }"
+            title="Drag right to let the last rifff play on"
+            aria-label="End of the take"
+            data-test="take-end"
+            @pointerdown.stop="(e) => onHandleDown(e, 'end')"
+            @click.stop
+          />
+        </template>
+
         <span v-if="playheadSec !== null" class="take-playhead" :style="{ left: `${x(playheadSec)}px` }" data-test="take-playhead" />
       </div>
     </div>
@@ -160,7 +190,7 @@ import {
   useStemDocsStore,
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
-import { moveHop, segmentsOf, type Snap } from '../hop-editor/edits';
+import { moveHop, resizeEnd, resizeStart, segmentsOf, type Snap } from '../hop-editor/edits';
 import { laneGeometry, timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
 import { phaseRow, rowPath } from '../ui/peaks';
 import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
@@ -214,6 +244,9 @@ const take = computed(() => preview.value ?? editor.take);
 // ── Loading ───────────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  // The editor's own mix: the rifffs as committed, whatever the recording
+  // page has muted.
+  performance.useMix('editor');
   const last = editor.lastOpened;
   const sameTake = last && last.jamId === jamId.value && last.id === String(route.params.id) && editor.take;
   // Coming back to the take already open keeps its undo history.
@@ -234,15 +267,25 @@ async function loadAudio(riffs: RiffDocument[]): Promise<void> {
   }
 }
 
+// Load each of the take's rifffs as soon as its document is in. Opening a
+// take fetches the documents *after* the take appears, so they can arrive
+// later — waiting on the take alone left the lanes empty until something
+// else redrew them. Each rifff is loaded once.
+const requested = new Set<RiffCouchID>();
+const takeRiffs = computed(() => {
+  const seq = editor.take;
+  if (!seq) return [];
+  return [...new Set(seq.hops.map((h) => h.riffId))]
+    .map((id) => riffDocs.get(id))
+    .filter((r): r is RiffDocument => !!r);
+});
 watch(
-  () => editor.take?.id,
-  () => {
-    const seq = editor.take;
-    if (!seq) return;
-    const riffs = [...new Set(seq.hops.map((h) => h.riffId))]
-      .map((id) => riffDocs.get(id))
-      .filter((r): r is RiffDocument => !!r);
-    void loadAudio(riffs);
+  takeRiffs,
+  (riffs) => {
+    const fresh = riffs.filter((r) => !requested.has(r.riffId));
+    if (fresh.length === 0) return;
+    for (const r of fresh) requested.add(r.riffId);
+    void loadAudio(fresh);
   },
   { immediate: true },
 );
@@ -320,6 +363,21 @@ function rowsFor(b: TimelineBlock): { slot: number; d: string; bins: number; col
   return rows;
 }
 
+/**
+ * Where a new copy of the rifff's loop begins inside a block, in px from its
+ * left edge. Phase-true like the lanes: loops start at multiples of the loop
+ * on the take's grid, not at the block's edge.
+ */
+function loopLinesFor(b: TimelineBlock): number[] {
+  const loop = loopSec(b.riffId);
+  if (!(loop > 0)) return [];
+  const out: number[] = [];
+  for (let t = Math.ceil(b.startSec / loop + 1e-9) * loop; t < b.endSec - 1e-9; t += loop) {
+    out.push((t - b.startSec) * PX_PER_SEC);
+  }
+  return out;
+}
+
 const drawn = computed(() => {
   void performance.decodedTick;
   return layout.value.blocks.map((b) => {
@@ -330,6 +388,7 @@ const drawn = computed(() => {
       y: b.lane === 1 ? geometry.value.lane1Y : geometry.value.lane2Y,
       w: Math.max(2, (b.endSec - b.startSec) * PX_PER_SEC),
       rows: rowsFor(b),
+      loopLines: loopLinesFor(b),
       label: doc ? `${formatTime(doc.createdAt)} · ${doc.userName}` : b.riffId,
       picked:
         (b.kind === 'seg' && b.segIndex === pickedSeg.value) || (b.kind === 'skip' && b.skipIndex === pickedSkip.value),
@@ -470,6 +529,67 @@ function onPinDown(e: PointerEvent, p: TimelinePin): void {
   };
 }
 
+// Dragging the take's start or end handle: the same preview-then-edit. The
+// end handle scrolls the timeline along when held near its right edge, so
+// what's being extended stays in view; the scroll counts as drag.
+const EDGE_PX = 40;
+function onHandleDown(e: PointerEvent, which: 'start' | 'end'): void {
+  const base = editor.take;
+  const tl = timelineEl.value;
+  if (!base || !tl) return;
+  clearSelection();
+  const startX = e.clientX;
+  const startScroll = tl.scrollLeft;
+  let lastX = startX;
+  let edgeFrame = 0;
+  // How far the pointer has travelled over the take, scrolling included.
+  const travelled = () => (lastX - startX + (tl.scrollLeft - startScroll)) / PX_PER_SEC;
+  // Start: dragged left means more take at the front.
+  const amount = () => (which === 'start' ? -travelled() : base.durationSec + travelled());
+  const edit = () =>
+    which === 'start'
+      ? resizeStart(base, amount(), snap.value, editor.gridOf)
+      : resizeEnd(base, amount(), snap.value, editor.gridOf);
+  const moved = () => Math.abs(lastX - startX) >= 3 || tl.scrollLeft !== startScroll;
+  const refresh = () => {
+    if (moved()) preview.value = edit();
+  };
+  // Held near (or past) the right edge: scroll on, faster the further in.
+  const scrollAtEdge = () => {
+    const rect = tl.getBoundingClientRect();
+    const into = lastX - (rect.right - EDGE_PX);
+    // Nothing to scroll in a timeline that hasn't been laid out.
+    if (which !== 'end' || rect.width <= 0 || into <= 0) {
+      edgeFrame = 0;
+      return;
+    }
+    tl.scrollLeft += Math.min(30, 4 + into * 0.5);
+    refresh();
+    edgeFrame = requestAnimationFrame(scrollAtEdge);
+  };
+  const move = (ev: PointerEvent | MouseEvent) => {
+    lastX = ev.clientX;
+    refresh();
+    if (!edgeFrame) scrollAtEdge();
+  };
+  const up = (ev: PointerEvent | MouseEvent) => {
+    lastX = ev.clientX;
+    dragCleanup?.();
+    preview.value = null;
+    if (!moved()) return;
+    void (which === 'start' ? editor.resizeStart(amount(), snap.value) : editor.resizeEnd(amount(), snap.value));
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  dragCleanup = () => {
+    cancelAnimationFrame(edgeFrame);
+    edgeFrame = 0;
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragCleanup = null;
+  };
+}
+
 // ── Playback ──────────────────────────────────────────────────────────────
 
 async function onPlay(): Promise<void> {
@@ -523,6 +643,8 @@ onMounted(() => {
   }
 });
 onUnmounted(() => {
+  // The editor's playback belongs to the editor.
+  if (recorder.isPlaying) recorder.stopPlayback();
   resizeObserver?.disconnect();
   window.removeEventListener('keydown', onKey);
   cancelAnimationFrame(frame);
@@ -754,6 +876,40 @@ onUnmounted(() => {
 }
 .pin:disabled:not(.is-candidate) {
   cursor: default;
+}
+.blk__loop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--line-strong);
+  pointer-events: none;
+}
+/* The take's ends: a grip either side, dragged to grow or trim it. */
+.take-handle {
+  position: absolute;
+  width: 10px;
+  padding: 0;
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  cursor: ew-resize;
+  touch-action: none;
+  transition: var(--transition-control);
+}
+.take-handle.is-start {
+  margin-left: -12px;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+.take-handle.is-end {
+  margin-left: 2px;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+.take-handle:hover,
+.take-handle:focus-visible {
+  background: var(--accent);
+  box-shadow: var(--glow-accent);
 }
 .take-playhead {
   position: absolute;

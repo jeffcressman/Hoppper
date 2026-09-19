@@ -271,6 +271,10 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Lanes.** Each rifff shows its eight tracks, drawn where the audio
       is — a rifff that came in mid-loop starts mid-waveform. Rifffs load
       without a download if they were played before (log panel).
+- [ ] **Lanes appear on first open.** Restart the app, go straight to
+      Hops and Edit a take: the waveforms fill in by themselves, without
+      clicking anything. (Fixed 2026-09-18: they waited for a redraw when
+      the take's rifff documents arrived after it opened.)
 - [ ] **Select and drag.** Clicking a hop point splits the lanes, with
       each side running on dashed. Dragging it moves when the next rifff
       comes in, snapped to the beat; Bar and Off change the snap. Other hop
@@ -287,6 +291,52 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
       page shows the new length and hop count.
 - [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
       rifff-document requests the second time.
+
+### Solo
+
+- [ ] **Solo one, then more.** S on a track plays only that track; S on a
+      second adds it. The others dim in the mixer and the waveform.
+- [ ] **Each solo on its own.** Turning one S off leaves the other solos
+      playing; turning the last off brings every track back.
+- [ ] **Un-solo.** Clears every solo at once and leaves mutes as they
+      were. It's greyed out while nothing is soloed.
+- [ ] **Mute wins, and solo stays on this page.** A muted track stays
+      silent when soloed; a take played in the editor ignores solos.
+
+### Take start and end handles
+
+- [ ] **Grow the start.** Drag the start handle left: the first rifff
+      starts earlier (new dashed loop lines appear in it), the take gets
+      longer and the rest moves right. Play: the extra time is the first
+      rifff looping.
+- [ ] **Grow the end.** Drag the end handle right: the last rifff plays on
+      for longer, repeating. Drag either handle back in to trim; neither
+      goes past the nearest hop point.
+- [ ] **Snap and undo.** Both handles follow Beat/Bar/Off, and Ctrl/Cmd+Z
+      undoes a resize.
+- [ ] **Review: does growing the start feel right?** *(Open question,
+      2026-09-18.)* Growing the front moves every later rifff along the
+      beat grid, so unless the growth is a whole number of their loops,
+      each comes in at a different point in its loop — grow by one bar and
+      an 8-bar rifff that entered on its bar 1 now enters on bar 2. Play a
+      take after growing its start by a bar, then by a whole loop, and
+      decide: keep this, or have the start handle snap to whole loops of
+      the first rifff so everything after keeps its place.
+- [ ] **End handle scrolls.** Drag the end handle to the right edge of the
+      timeline and hold: it scrolls on, and the take keeps growing, faster
+      the further into the edge.
+- [ ] **Leaving stops playback.** Play a take in the editor, then go to any
+      other page: the take stops.
+
+### Independent pages (fixes 2026-09-18)
+
+- [ ] **Mutes stay on the recording page.** Mute a track on Hop Recording,
+      open a take in the editor and play it: every track plays. Back on
+      Hop Recording, the track is still muted.
+- [ ] **Where you left off.** Play a rifff on Hop Recording, go to the
+      editor and play a take, come back: the rifff you last played has a
+      dashed ring and is in the mixer and waveform. Playing it again turns
+      the ring solid amber.
 
 ---
 

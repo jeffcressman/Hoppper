@@ -61,7 +61,8 @@ const rows = computed(() =>
     return {
       slot,
       d: stem ? rowPath(loopRow(stemPeaks(stem.stemId, stem.buffer), stem.loopSec, loopSec.value, BINS)) : '',
-      muted: performance.slotMuted[slot] ?? false,
+      // Muted, or silenced by another track's solo.
+      muted: !(performance.slotAudible[slot] ?? true),
       colour: (doc && stemColour(doc.primaryColour)) || 'var(--accent)',
     };
   }),
