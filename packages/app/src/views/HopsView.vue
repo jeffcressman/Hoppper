@@ -10,6 +10,7 @@
     <div v-if="takes.length > 0" class="hops">
       <div class="hops__row hops__head">
         <span />
+        <span />
         <span class="lwlkc-eyebrow">Hop</span>
         <span class="lwlkc-eyebrow" title="When the take was made in Hoppper">Created</span>
         <span class="lwlkc-eyebrow">Hops</span>
@@ -22,6 +23,7 @@
         :class="['hops__row', { 'is-playing': take.playing }]"
         data-test="hop-row"
       >
+        <JamCover :jam-id="take.seq.jamId" class="hops__cover" data-test="jam-cover" />
         <button
           type="button"
           :class="['lw-iconbtn', 'lw-iconbtn--solid', 'lw-iconbtn--round', { 'lw-iconbtn--active': take.playing }]"
@@ -119,6 +121,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useExportStore, useJamsStore, useRecorderStore, useSessionStore } from '../stores';
 import type { HopSequence } from '../hop-recorder/types';
+import JamCover from '../components/JamCover.vue';
 import LwIcon from '../components/LwIcon.vue';
 import { formatDay, formatDuration } from '../ui/format';
 
@@ -194,7 +197,7 @@ async function onDelete(): Promise<void> {
 }
 .hops__row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 130px 70px 80px 240px;
+  grid-template-columns: var(--control-h-md) var(--control-h-md) minmax(0, 1fr) 130px 70px 80px 240px;
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
@@ -213,6 +216,12 @@ async function onDelete(): Promise<void> {
   padding-bottom: 10px;
   border-top: none;
   background: var(--bg-sunken);
+}
+/* The jam's image, the play button's size so it never sets the row's height. */
+.hops__cover {
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  border-radius: var(--r-sm);
 }
 .hops__name {
   min-width: 0;

@@ -23,6 +23,7 @@ export {
 } from './token-store.js';
 export * from './types/index.js';
 export { resolveStemUrl } from './parse.js';
+export { jamImageUrl } from './jam-image.js';
 export {
   ReadonlyCacheError,
   type StemBlob,

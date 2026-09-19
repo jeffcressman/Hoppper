@@ -1,6 +1,7 @@
 <template>
   <button type="button" class="tile" data-test="jam-tile" @click="emit('open')">
-    <span :class="['tile__media', { 'is-current': current }]" :style="{ background: cover }">
+    <span :class="['tile__media', { 'is-current': current }]">
+      <JamCover :jam-id="jamId" class="tile__cover" />
       <span class="tile__badges">
         <span v-if="personal" class="lw-badge tile__badge--dark">Personal</span>
         <span v-if="current" class="lw-badge lw-badge--solid">Current</span>
@@ -14,10 +15,12 @@
 </template>
 
 <script setup lang="ts">
+import JamCover from './JamCover.vue';
+
 defineProps<{
+  jamId: string;
   title: string;
   meta?: string;
-  cover: string;
   personal?: boolean;
   current?: boolean;
 }>();
@@ -50,6 +53,10 @@ const emit = defineEmits<{ open: [] }>();
   overflow: hidden;
   background: var(--surface-3);
   transition: var(--transition-control);
+}
+.tile__cover {
+  position: absolute;
+  inset: 0;
 }
 .tile:hover .tile__media {
   box-shadow: var(--shadow-lg);

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { jamImageUrl } from '@hoppper/sdk';
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils';
 
 enableAutoUnmount(afterEach);
@@ -106,6 +107,16 @@ describe('MyJamsView — logged in', () => {
     expect(jamsStub.loadProfile.mock.calls.map((c) => c[0]).sort()).toEqual(['me', 'newer', 'older']);
   });
 
+  it('shows each jam’s Endlesss image on its tile', async () => {
+    jamsStub.listing = listing();
+    const wrapper = mount(MyJamsView);
+    await flushPromises();
+    const tiles = wrapper.findAll('[data-test="jam-tile"]');
+    expect(tiles.length).toBeGreaterThan(0);
+    const ids = jamIdsOf(jamsStub.listing);
+    tiles.forEach((tile) => expect(ids.map(jamImageUrl)).toContain(tile.find('img').attributes('src')));
+  });
+
   it('opening a jam goes to Hop Recording for it', async () => {
     jamsStub.listing = listing();
     const wrapper = mount(MyJamsView);
@@ -121,3 +132,12 @@ describe('MyJamsView — logged in', () => {
     expect(jamsStub.refresh).not.toHaveBeenCalled();
   });
 });
+
+function jamIdsOf(listing: { personal?: { jamId: string } | null; subscribed?: { jamId: string }[]; joinable?: { jamId: string }[] } | null): string[] {
+  if (!listing) return [];
+  return [
+    ...(listing.personal ? [listing.personal.jamId] : []),
+    ...(listing.subscribed ?? []).map((j) => j.jamId),
+    ...(listing.joinable ?? []).map((j) => j.jamId),
+  ];
+}

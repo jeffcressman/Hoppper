@@ -219,6 +219,19 @@ Design: `docs/phases/phase-8-redesign-and-editor.md`; target look:
       Current Jam greys out, and logging in as someone else shows
       their jams, not the previous user's.
 
+### Jam images (2026-09-18)
+
+- [ ] **Tiles show jam images.** On Public Jams and My Jams, jams that
+      have an image in Endlesss (e.g. Hopper, lwlkc) show it filling
+      the tile; the gradient shows first and the image fades in over it.
+- [ ] **No image, no gap.** Jams without one keep their generated
+      gradient, with no broken-image icon.
+- [ ] **Hops rows.** Each take has its jam's image left of the play
+      button, the same size as the button. The rows stay the same height
+      as before.
+- [ ] **Scrolling a long grid.** Images load as tiles scroll into view
+      (lazy), not all at once when the page opens.
+
 ### Slice B — rifff splats
 
 - [x] **Splats in stem colours.** Opening a jam shows its rifffs as splats

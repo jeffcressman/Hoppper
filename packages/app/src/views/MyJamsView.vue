@@ -20,7 +20,7 @@
         :key="jam.jamId"
         :title="jam.title"
         :meta="jam.meta"
-        :cover="jamCover(jam.jamId)"
+        :jam-id="jam.jamId"
         :personal="jam.personal"
         :current="jam.jamId === currentJam.lastJamId"
         @open="open(jam.jamId)"
@@ -39,7 +39,6 @@ import { useCurrentJamStore, useJamsStore, useSessionStore } from '../stores';
 import JamTile from '../components/JamTile.vue';
 import LoginGate from '../components/LoginGate.vue';
 import LoginDialog from '../components/LoginDialog.vue';
-import { jamCover } from '../ui/jam-cover';
 import { formatDay } from '../ui/format';
 
 const session = useSessionStore();

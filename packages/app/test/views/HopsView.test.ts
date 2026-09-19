@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { jamImageUrl } from '@hoppper/sdk';
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils';
 import type { HopSequence } from '../../src/hop-recorder/types';
 
@@ -111,6 +112,17 @@ describe('HopsView', () => {
     expect(first).toContain('4:12');
     // No profile yet: the jam ID stands in for the name.
     expect(rows(wrapper)[1].text()).toContain('me');
+  });
+
+  it('shows each take’s jam image to the left of its play button', () => {
+    const rows = mount(HopsView).findAll('[data-test="hop-row"]');
+    expect(rows.map((r) => r.find('[data-test="jam-cover"] img').attributes('src'))).toEqual([
+      jamImageUrl('band1'),
+      jamImageUrl('me'),
+    ]);
+    const cells = rows[0].element.children;
+    expect(cells[0].getAttribute('data-test')).toBe('jam-cover');
+    expect(cells[1].getAttribute('data-test')).toBe('play');
   });
 
   it('looks up the name of each jam that has a take, once each', async () => {

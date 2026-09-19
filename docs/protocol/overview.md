@@ -105,6 +105,10 @@ GET /user_appdata${jamID}/Profile
 Returns: `{ displayName: string, app_version?: int, bio?: string }`  
 LORE source: `api.cpp::JamProfile::fetch`
 
+Observed 2026-09-18: live Profile docs also carry `_id`, `_rev`, `type: "Profile"`
+and `created` (unix ms), and **never an image**, not even for jams that have
+one in Endlesss (see "Jam Image" below).
+
 ---
 
 #### Subscribed Jams
@@ -232,6 +236,9 @@ No auth. Returns: `{ ok, data: { legacy_id, name }, message? }`
 `name` is the current jam name (may differ from `band_name` above if renamed).  
 LORE source: `api.cpp::BandNameFromExtendedID::fetch`
 
+Observed 2026-09-18: `data` also carries `id` (the long ID), `bio`, `owner`,
+`members`, `rifffs`, and `image`: the jam's cover image (see below).
+
 ---
 
 #### Rifff Structure Page (public jams)
@@ -259,6 +266,21 @@ GET /api/v3/feed/shared_rifff/{sharedRiffID}
 ```
 Auth optional.  
 LORE source: `api.cpp::SharedRiffsByUser::fetchSpecific`
+
+---
+
+#### Jam Image (cover art)
+```
+GET https://endlesss.ams3.cdn.digitaloceanspaces.com/attachments/avatars/{jamCouchID}
+```
+No auth, and not an API call: it's a file on the CDN (Cloudflare in front of
+DigitalOcean Spaces). The public rifffs API above reports this URL as `image`,
+and it's always this path keyed by the jam's couch ID, so we build it without a
+request (`jamImageUrl` in the SDK). A jam with an image answers `200 image/jpeg`
+(250–650 KB seen) with `cache-control: max-age=3600` and an ETag. A jam
+without one answers **403** `application/xml` (a Spaces "not found"), not 404.
+The owner can change it, so the URL isn't immutable like stems are.
+LORE doesn't use jam images. Found 2026-09-18 by probing the rifffs API.
 
 ---
 

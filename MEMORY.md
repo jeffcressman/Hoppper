@@ -319,8 +319,19 @@ Newest entries at the top of each section. Date entries absolutely
   system's Google Fonts import, because the app has to look the same offline.
   Component styles (`styles/components.css`) are the design system's JSX
   component CSS as plain `lw-*` classes.
-- **Jam tiles have generated covers** (`ui/jam-cover.ts`). Endlesss jam
-  profiles carry no image, and neither ours nor LORE's `JamProfile` has one.
+- **Jam images come from the CDN, not the Profile doc** (2026-09-18). The
+  Profile never carries one; the public rifffs API reports it as `image`,
+  and it's always `…/attachments/avatars/<jamCouchID>`, so the SDK's
+  `jamImageUrl` builds it with no request. A jam without one answers 403
+  (not 404). `JamCover.vue` draws the generated gradient (`ui/jam-cover.ts`)
+  under the image and drops the image on error. Refusals are remembered for
+  the session in `ui/jam-image.ts`, because the webview doesn't cache failed
+  images. Images rely on the webview's HTTP cache (`max-age=3600` + ETag);
+  there's no disk cache for them yet. Details: `docs/protocol/overview.md`,
+  "Jam Image".
+- **happy-dom drops a `background` style whose value contains `var()`**, so
+  a component test can't see it. Pass such a value as a custom property
+  (`--jam-cover`) and set `background: var(--jam-cover)` in CSS.
 - **The jam list is fetched once per session** (2026-09-18): Public Jams and
   My Jams only call `jams.refresh()` while `listing` is null, and Settings →
   Log out clears it. A jam joined elsewhere shows up after the next log-in or
