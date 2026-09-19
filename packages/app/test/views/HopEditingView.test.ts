@@ -45,6 +45,14 @@ const recorderStub = vi.hoisted(() => ({
   playPosition: () => recorderStub.position,
 }));
 
+const performanceStub = vi.hoisted(() => ({
+  bufferFor: () => undefined,
+  decodedTick: 0,
+  warm: vi.fn(async () => {}),
+  stop: vi.fn(),
+  useMix: vi.fn(),
+}));
+
 vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
   const editor = reactive(editorStub);
@@ -54,7 +62,7 @@ vi.mock('../../src/stores', async () => {
     useRecorderStore: () => recorder,
     useRiffDocsStore: () => ({ get: (id: string) => riff(id) }),
     useStemDocsStore: () => ({ get: () => undefined, ensure: async () => {} }),
-    usePerformanceStore: () => ({ bufferFor: () => undefined, decodedTick: 0, warm: vi.fn(async () => {}), stop: vi.fn() }),
+    usePerformanceStore: () => performanceStub,
     useJamsStore: () => ({ profilesById: new Map([['band1', { displayName: 'Hoppper' }]]), loadProfile: vi.fn(async () => {}) }),
     __editor: editor,
     __recorder: recorder,
@@ -242,5 +250,11 @@ describe('HopEditingView', () => {
     } finally {
       if (tall) Object.defineProperty(HTMLElement.prototype, 'clientHeight', tall);
     }
+  });
+
+  it('plays with its own mix: the rifffs as committed, not the recording page’s mutes', async () => {
+    performanceStub.useMix.mockClear();
+    await mounted();
+    expect(performanceStub.useMix).toHaveBeenCalledWith('editor');
   });
 });

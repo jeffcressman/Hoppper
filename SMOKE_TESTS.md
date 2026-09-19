@@ -288,6 +288,16 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Replay doesn't refetch rifffs.** Playing a take twice makes no
       rifff-document requests the second time.
 
+### Independent pages (fixes 2026-09-18)
+
+- [ ] **Mutes stay on the recording page.** Mute a track on Hop Recording,
+      open a take in the editor and play it: every track plays. Back on
+      Hop Recording, the track is still muted.
+- [ ] **Where you left off.** Play a rifff on Hop Recording, go to the
+      editor and play a take, come back: the rifff you last played has a
+      dashed ring and is in the mixer and waveform. Playing it again turns
+      the ring solid amber.
+
 ---
 
 ## Cross-tempo stems

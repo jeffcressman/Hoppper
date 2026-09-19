@@ -33,6 +33,9 @@ const performanceStub = vi.hoisted(() => ({
   prefetchWindow: vi.fn(async () => {}),
   decodedTick: 0,
   bufferFor: vi.fn(() => undefined),
+  // The last rifff the recording page itself played.
+  lastPlayed: null as null | { jamId: string; riff: ReturnType<typeof riffOf> },
+  useMix: vi.fn(),
 }));
 
 const recorderStub = vi.hoisted(() => ({
@@ -109,6 +112,8 @@ beforeEach(() => {
 
   performanceStub.state = 'idle';
   performanceStub.currentRiffId = null;
+  performanceStub.lastPlayed = null;
+  performanceStub.useMix.mockReset();
   performanceStub.quantiseEntry = false;
   performanceStub.missingStems = [];
   performanceStub.lastError = null;
@@ -233,6 +238,7 @@ describe('PerformView', () => {
   it('says in the header which rifff is playing: when, who, and its tempo', async () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r1';
+    performanceStub.lastPlayed = { jamId: 'band1', riff: riffOf('r1', 120) };
     currentJamStub.riffPage = [riffOf('r1', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
@@ -243,12 +249,54 @@ describe('PerformView', () => {
   });
 
   it('shows the playing rifff in the mixer and the waveform', async () => {
+    performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r2';
+    performanceStub.lastPlayed = { jamId: 'band1', riff: riffOf('r2', 120) };
     currentJamStub.riffPage = [riffOf('r1', 120), riffOf('r2', 120)];
     const wrapper = mount(PerformView);
     await flushPromises();
     expect(wrapper.findComponent({ name: 'MixerPanel' }).props('riff')).toMatchObject({ riffId: 'r2' });
     expect(wrapper.findComponent({ name: 'LoopWaveform' }).props('riff')).toMatchObject({ riffId: 'r2' });
+  });
+
+  it('when stopped, keeps the last rifff it played in the mixer and rings it dashed', async () => {
+    performanceStub.state = 'idle';
+    performanceStub.lastPlayed = { jamId: 'band1', riff: riffOf('r2', 120) };
+    currentJamStub.riffPage = [riffOf('r1', 120), riffOf('r2', 120)];
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'MixerPanel' }).props('riff')).toMatchObject({ riffId: 'r2' });
+    const rows = wrapper.findAll('[data-test="riff-row"]');
+    expect(rows[1]!.classes()).toContain('last');
+    expect(rows[1]!.classes()).not.toContain('current');
+  });
+
+  it('isn’t moved by a replay elsewhere: its own last rifff stays, dashed', async () => {
+    // The editor's replay has the engine playing some other rifff.
+    performanceStub.state = 'playing';
+    performanceStub.currentRiffId = 'r1';
+    performanceStub.lastPlayed = { jamId: 'band1', riff: riffOf('r2', 120) };
+    currentJamStub.riffPage = [riffOf('r1', 120), riffOf('r2', 120)];
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    const rows = wrapper.findAll('[data-test="riff-row"]');
+    expect(rows[0]!.classes()).not.toContain('current');
+    expect(rows[1]!.classes()).toContain('last');
+    expect(wrapper.findComponent({ name: 'MixerPanel' }).props('riff')).toMatchObject({ riffId: 'r2' });
+  });
+
+  it('shows nothing from another jam’s last rifff', async () => {
+    performanceStub.lastPlayed = { jamId: 'other-jam', riff: riffOf('r9', 120) };
+    currentJamStub.riffPage = [riffOf('r1', 120)];
+    const wrapper = mount(PerformView);
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'MixerPanel' }).props('riff')).toBeNull();
+  });
+
+  it('puts its own mix back on the engine when it opens', async () => {
+    mount(PerformView);
+    await flushPromises();
+    expect(performanceStub.useMix).toHaveBeenCalledWith('recording');
   });
 
   it('leaving the jam silences it', async () => {
@@ -263,6 +311,7 @@ describe('PerformView', () => {
   it('highlights the row of the rifff that is playing', async () => {
     performanceStub.state = 'playing';
     performanceStub.currentRiffId = 'r2';
+    performanceStub.lastPlayed = { jamId: 'band1', riff: riffOf('r2', 120) };
     currentJamStub.riffPage = [
       riffOf('r1', 120),
       riffOf('r2', 120),

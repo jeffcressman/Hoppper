@@ -653,3 +653,50 @@ describe('definePerformanceStore — loading without playing', () => {
     expect(s.decodedTick).toBe(before + 1);
   });
 });
+
+describe('definePerformanceStore — each page has its own mix', () => {
+  const unity = [1, 1, 1, 1, 1, 1, 1, 1];
+  const store = () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
+    return { engine, s };
+  };
+
+  it('the editor plays at the rifffs’ own mix, whatever the recording page muted', () => {
+    const { engine, s } = store();
+    s.toggleMute(2);
+    s.useMix('editor');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith(unity);
+  });
+
+  it('coming back to the recording page puts its mix back', () => {
+    const { engine, s } = store();
+    s.setSlotLevel(0, 0.5);
+    s.toggleMute(2);
+    s.useMix('editor');
+    s.useMix('recording');
+    expect(engine.setSlotLevels).toHaveBeenLastCalledWith([0.5, 1, 0, 1, 1, 1, 1, 1]);
+  });
+
+  it('the recording page’s mixer doesn’t reach the engine while the editor has it', () => {
+    const { engine, s } = store();
+    s.useMix('editor');
+    vi.mocked(engine.setSlotLevels).mockClear();
+    s.toggleMute(1);
+    expect(engine.setSlotLevels).not.toHaveBeenCalled();
+    expect(s.slotMuted[1]).toBe(true);
+  });
+});
+
+describe('definePerformanceStore — the recording page’s last rifff', () => {
+  it('remembers the last rifff played from the recording page, through stops and replays', async () => {
+    const engine = mockEngine();
+    const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn(async () => []) })();
+    expect(s.lastPlayed).toBeNull();
+    await s.hopTo(JAM, riff('r1'));
+    s.stop();
+    // A replay moving the engine on isn't the recording page playing.
+    engine._emitRiff('elsewhere' as RiffCouchID);
+    expect(s.lastPlayed).toEqual({ jamId: JAM, riff: riff('r1') });
+  });
+});

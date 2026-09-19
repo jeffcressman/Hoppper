@@ -317,6 +317,13 @@ Newest entries at the top of each section. Date entries absolutely
   `src/hop-editor/edits.ts`. Any new code that positions or moves hops
   must go through `arrivalSec`/`moveHop`, or quantised and crossfaded hops
   land in the wrong place.
+- **Hop Recording and the hop editor keep independent state** (user,
+  2026-09-18). One engine plays both, so each page sets its own mix on it
+  when it opens (`performance.useMix`): the editor always hears the rifffs'
+  own mix, never the recording page's mutes. Hop Recording shows the last
+  rifff *it* played (`performance.lastPlayed`, set only by `hopTo`), ringed
+  amber while that rifff plays and dashed once stopped — a replay moving the
+  engine elsewhere doesn't change it.
 - **A splat layer is the stem's waveform wrapped round a circle, never its
   loudness envelope** (user correction, 2026-09-18). An envelope (abs peaks)
   smooths pads into circles, which is wrong; the min/max per slice, peaks out
@@ -361,6 +368,13 @@ Newest entries at the top of each section. Date entries absolutely
   conclusion propagated into a whole recommendation. Verify with
   `ls /refs/OUROVEON/src`, and see the mount table in `/proc/self/mountinfo`
   if you doubt it (host `<parent>/OUROVEON` → `/refs/OUROVEON`, virtiofs, ro).
+- **Check `vue-tsc` by its own exit code, never through a pipe.**
+  `npx vue-tsc --noEmit | tail; echo $?` reports `tail`'s status, so it
+  says 0 over real errors (caught 2026-09-18). Write the output to a file
+  and `echo $?` straight after. Likewise run `pnpm --filter @hoppper/sdk
+  build` with its output visible: the app typechecks against the SDK's
+  `dist/index.d.ts`, and a stale one reads as "missing export" errors in
+  app files.
 - **`pnpm lint` cannot run here**: `typescript-eslint` isn't installed in the
   container, so ESLint fails to load its config in both packages. Pre-existing
   and unrelated to any change; verify with `vitest` + `vue-tsc` instead.

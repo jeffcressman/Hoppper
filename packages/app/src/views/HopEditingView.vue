@@ -214,6 +214,9 @@ const take = computed(() => preview.value ?? editor.take);
 // ── Loading ───────────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  // The editor's own mix: the rifffs as committed, whatever the recording
+  // page has muted.
+  performance.useMix('editor');
   const last = editor.lastOpened;
   const sameTake = last && last.jamId === jamId.value && last.id === String(route.params.id) && editor.take;
   // Coming back to the take already open keeps its undo history.
