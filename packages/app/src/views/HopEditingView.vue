@@ -267,15 +267,25 @@ async function loadAudio(riffs: RiffDocument[]): Promise<void> {
   }
 }
 
+// Load each of the take's rifffs as soon as its document is in. Opening a
+// take fetches the documents *after* the take appears, so they can arrive
+// later — waiting on the take alone left the lanes empty until something
+// else redrew them. Each rifff is loaded once.
+const requested = new Set<RiffCouchID>();
+const takeRiffs = computed(() => {
+  const seq = editor.take;
+  if (!seq) return [];
+  return [...new Set(seq.hops.map((h) => h.riffId))]
+    .map((id) => riffDocs.get(id))
+    .filter((r): r is RiffDocument => !!r);
+});
 watch(
-  () => editor.take?.id,
-  () => {
-    const seq = editor.take;
-    if (!seq) return;
-    const riffs = [...new Set(seq.hops.map((h) => h.riffId))]
-      .map((id) => riffDocs.get(id))
-      .filter((r): r is RiffDocument => !!r);
-    void loadAudio(riffs);
+  takeRiffs,
+  (riffs) => {
+    const fresh = riffs.filter((r) => !requested.has(r.riffId));
+    if (fresh.length === 0) return;
+    for (const r of fresh) requested.add(r.riffId);
+    void loadAudio(fresh);
   },
   { immediate: true },
 );

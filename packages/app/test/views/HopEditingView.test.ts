@@ -47,22 +47,26 @@ const recorderStub = vi.hoisted(() => ({
   playPosition: () => recorderStub.position,
 }));
 
+// Rifff documents not fetched yet. Reactive, so the page sees them arrive.
+const riffDocsState = vi.hoisted(() => ({ missing: new Set<string>() }));
+
 const performanceStub = vi.hoisted(() => ({
   bufferFor: () => undefined,
   decodedTick: 0,
-  warm: vi.fn(async () => {}),
+  warm: vi.fn(async (_jamId: string, _riff: { riffId: string }) => {}),
   stop: vi.fn(),
   useMix: vi.fn(),
 }));
 
 vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
+  riffDocsState.missing = reactive(new Set<string>()) as Set<string>;
   const editor = reactive(editorStub);
   const recorder = reactive(recorderStub);
   return {
     useHopEditorStore: () => editor,
     useRecorderStore: () => recorder,
-    useRiffDocsStore: () => ({ get: (id: string) => riff(id) }),
+    useRiffDocsStore: () => ({ get: (id: string) => (riffDocsState.missing.has(id) ? undefined : riff(id)) }),
     useStemDocsStore: () => ({ get: () => undefined, ensure: async () => {} }),
     usePerformanceStore: () => performanceStub,
     useJamsStore: () => ({ profilesById: new Map([['band1', { displayName: 'Hoppper' }]]), loadProfile: vi.fn(async () => {}) }),
@@ -84,6 +88,8 @@ const editor = (stores as unknown as { __editor: typeof editorStub }).__editor;
 const recorder = (stores as unknown as { __recorder: typeof recorderStub }).__recorder;
 
 beforeEach(() => {
+  riffDocsState.missing.clear();
+  performanceStub.warm.mockClear();
   editor.take = take();
   editor.canUndo = false;
   editor.canRedo = false;
@@ -355,5 +361,23 @@ describe('HopEditingView', () => {
       const px = Number(tl.dataset.pxPerSec);
       expect(editorStub.resizeEnd).toHaveBeenCalledWith(expect.closeTo(24 + (18 + scrolled) / px, 6), 'beat');
     });
+  });
+
+  it('loads each rifff’s audio for the lanes once its document arrives, even after the take opened', async () => {
+    // Opened from the Hops page before the take's rifff documents are in.
+    for (const id of ['A', 'B', 'C']) riffDocsState.missing.add(id);
+    await mounted();
+    expect(performanceStub.warm).not.toHaveBeenCalled();
+    riffDocsState.missing.clear();
+    await flushPromises();
+    expect(performanceStub.warm.mock.calls.map((c) => c[1].riffId).sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('loads each rifff once, however often the take changes', async () => {
+    await mounted();
+    const loads = performanceStub.warm.mock.calls.length;
+    editor.take = { ...take(), durationSec: 30 };
+    await flushPromises();
+    expect(performanceStub.warm.mock.calls.length).toBe(loads);
   });
 });
