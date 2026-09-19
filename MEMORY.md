@@ -65,6 +65,23 @@ Newest entries at the top of each section. Date entries absolutely
   feeds something. The meter was confirmed working on macOS in the
   2026-09-18 smoke tests; keep the silent path if you touch the bus.
 
+## Audio principle: click- and jitter-free, always
+
+- **No clicks and no jitter, in every circumstance** (set by the user
+  2026-09-18). Any level change that could be heard is a ramp, never a jump,
+  and anything new that changes gain, starts or stops sound, or cuts audio
+  must say how it avoids a click. Where it's done now:
+  - hops crossfade (250 ms default); a cold start fades in over 10 ms;
+  - Stop fades every sounding voice out over 30 ms, then stops it (a held
+    hop that hasn't begun is silent, so it stops at once);
+  - mixer moves glide over 20 ms (`RiffVoice.setSlotLevel`);
+  - automation mute/solo steps are 10 ms ramps, and automation applied to a
+    sounding voice glides onto its curve (`automateSlot`, `glide`);
+  - an exported WAV's last 10 ms fade out (`render.ts`).
+  Tests pin each of these. "Jitter-free" means timing stays on the one
+  continuous grid (see "Rifff and stem timing") — never a hop or event
+  placed by a timer's wall-clock guess.
+
 ## Recording principle
 
 - **A take is what the performer heard, not what they clicked** (set by

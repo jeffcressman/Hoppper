@@ -64,5 +64,18 @@ export async function renderTake(seq: HopSequence, deps: RenderDeps): Promise<Re
 
   const buffer = await context.startRendering();
   const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+  fadeOutEnd(channels, buffer.sampleRate);
   return { channels, sampleRate: buffer.sampleRate };
+}
+
+/** The take ends mid-waveform: fade its last 10 ms so the file doesn't end on a click. */
+const END_FADE_SEC = 0.01;
+function fadeOutEnd(channels: Float32Array[], sampleRate: number): void {
+  for (const data of channels) {
+    const n = Math.min(data.length, Math.max(1, Math.round(sampleRate * END_FADE_SEC)));
+    for (let i = 0; i < n; i++) {
+      const at = data.length - n + i;
+      data[at] = data[at]! * ((n - 1 - i) / n);
+    }
+  }
 }

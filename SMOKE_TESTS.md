@@ -303,6 +303,12 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Mute wins, and solo stays on this page.** A muted track stays
       silent when soloed; a take played in the editor ignores solos.
 
+### No clicks, anywhere
+
+- [ ] **Listen for clicks** with headphones, a sustained pad rifff playing:
+      Stop; start from silence; mute and solo tracks live; play a take whose
+      automation mutes and solos; end of an exported WAV. None clicks.
+
 ### Automation
 
 - [ ] **Recorded.** Record a take while moving a fader, muting one track
@@ -367,8 +373,8 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 ## Phase 10 — WAV export
 
 - [ ] **Save dialog.** Export on a take opens the system Save dialog,
-      offering the take's title as the file name, WAV only. Cancel does
-      nothing.
+      offering "<jam> hoppp <date recorded> - <hop>.wav", WAV only. Cancel
+      does nothing.
 - [ ] **The file.** The row says Exporting…, then Saved <name>.wav. The file
       opens in a DAW or player as stereo 24-bit at the app's sample rate,
       exactly as long as the take.

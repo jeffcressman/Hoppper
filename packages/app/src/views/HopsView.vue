@@ -61,7 +61,7 @@
             :aria-label="`Export ${take.seq.title} as a WAV file`"
             :disabled="exporter.exportingId !== null && !take.exporting"
             data-test="export"
-            @click="exporter.exportTake(take.seq)"
+            @click="exporter.exportTake(take.seq, take.jam)"
           >
             <LwIcon name="download" />
             {{ take.exporting ? 'Exporting…' : 'Export' }}

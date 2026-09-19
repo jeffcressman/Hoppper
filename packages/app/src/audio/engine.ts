@@ -133,6 +133,11 @@ interface OutgoingVoice {
   stopAt: number;
 }
 
+/** Stop fades everything out over this, rather than cutting it dead. */
+const STOP_FADE_SEC = 0.03;
+/** A cold start fades in over this, so the first sample isn't a click. */
+const COLD_START_FADE_SEC = 0.01;
+
 export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   const { context, loader } = opts;
   const defaultCrossfadeMs = opts.defaultCrossfadeMs ?? 250;
@@ -154,8 +159,9 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   let automation: AutomationStretch[][] | null = null;
   const unity: number[] = Array(SLOT_COUNT).fill(1);
 
-  function automate(voice: RiffVoice, fromSec: number): void {
-    automation?.forEach((curve, slot) => voice.automateSlot(slot, curve, fromSec));
+  /** `sounding`: the voice is already playing, so it glides onto the curve. */
+  function automate(voice: RiffVoice, fromSec: number, sounding = false): void {
+    automation?.forEach((curve, slot) => voice.automateSlot(slot, curve, fromSec, { glide: sounding }));
   }
 
   // Every voice plays into one master bus, which the level meter taps.
@@ -392,6 +398,8 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         automate(voice, now);
         gridOrigin = now;
         voice.start(now, 0);
+        // Even from silence, never a hard onset: a click at the first sample.
+        voice.fadeIn(now, COLD_START_FADE_SEC);
         warnOnDeclaredLengthMismatch(riff.riffId, stems, buffers);
         warnOnRaggedStems(riff.riffId, stems, buffers, voice.effectiveLoopSec);
         log(
@@ -503,17 +511,26 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
     },
 
     stop() {
-      // Outgoing voices already have a stop scheduled; disconnecting silences
-      // them now, which is what Stop means.
-      for (const o of outgoing) o.voice.dispose();
+      // Stop silences everything within STOP_FADE_SEC: every voice still
+      // sounding fades out and then stops — a cut dead would click — and
+      // tears itself down when its stop lands.
+      const now = context.currentTime;
+      for (const o of outgoing) {
+        o.voice.fadeOut(now, STOP_FADE_SEC);
+        o.voice.stop(now + STOP_FADE_SEC);
+      }
       outgoing = [];
       if (current === null) {
         setState('idle');
         return;
       }
-      const stopAt = context.currentTime;
-      current.voice.stop(stopAt);
-      current.voice.dispose();
+      if (current.startsAt > now) {
+        // A held hop that hasn't begun is silent: stop it before it starts.
+        current.voice.stop(now);
+      } else {
+        current.voice.fadeOut(now, STOP_FADE_SEC);
+        current.voice.stop(now + STOP_FADE_SEC);
+      }
       current = null;
       gridOrigin = null;
       emitRiffChange();
@@ -561,7 +578,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         applyMixerLevels(now);
         return;
       }
-      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) if (v) automate(v, now);
+      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) if (v) automate(v, now, true);
     },
 
     onStateChange(fn) {

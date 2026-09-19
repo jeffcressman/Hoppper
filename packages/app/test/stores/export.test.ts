@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import type { HopSequence } from '../../src/hop-recorder/types';
 import { defineExportStore } from '../../src/stores/export';
 
-const take = (id: string) => ({ id, title: `Take ${id}`, durationSec: 1 }) as HopSequence;
+const take = (id: string) => ({ id, title: `Take ${id}`, durationSec: 1, recordedAt: '2026-09-14T12:00:00.000Z' }) as HopSequence;
 
 function deps() {
   let finishRender: () => void = () => {};
@@ -26,22 +26,22 @@ describe('export store', () => {
   it('says which take is exporting until the file is written', async () => {
     const d = deps();
     const store = defineExportStore(d)();
-    const done = store.exportTake(take('a'));
+    const done = store.exportTake(take('a'), 'Jam');
     await Promise.resolve();
     await Promise.resolve();
     expect(store.exportingId).toBe('a');
     d.finishRender();
     await done;
     expect(store.exportingId).toBeNull();
-    expect(store.lastSaved).toEqual({ id: 'a', path: '/out/Take a.wav' });
+    expect(store.lastSaved).toEqual({ id: 'a', path: '/out/Jam hoppp 2026-09-14 - Take a.wav' });
   });
 
   it('runs one export at a time', async () => {
     const d = deps();
     const store = defineExportStore(d)();
-    const first = store.exportTake(take('a'));
+    const first = store.exportTake(take('a'), 'Jam');
     // A second click straight away, while the first dialog is still up.
-    await store.exportTake(take('b'));
+    await store.exportTake(take('b'), 'Jam');
     expect(d.chooseFile).toHaveBeenCalledTimes(1);
     d.finishRender();
     await first;
@@ -51,7 +51,7 @@ describe('export store', () => {
     const d = deps();
     d.render.mockRejectedValueOnce(new Error('Couldn’t load rifff B'));
     const store = defineExportStore(d)();
-    await store.exportTake(take('a'));
+    await store.exportTake(take('a'), 'Jam');
     expect(store.lastError).toEqual({ id: 'a', message: 'Couldn’t load rifff B' });
     expect(store.exportingId).toBeNull();
   });
@@ -60,7 +60,7 @@ describe('export store', () => {
     const d = deps();
     d.chooseFile.mockResolvedValueOnce(null as never);
     const store = defineExportStore(d)();
-    await store.exportTake(take('a'));
+    await store.exportTake(take('a'), 'Jam');
     expect(store.lastSaved).toBeNull();
     expect(store.lastError).toBeNull();
   });

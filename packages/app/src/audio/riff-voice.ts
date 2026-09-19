@@ -78,6 +78,11 @@ export interface AutomationStretch {
 
 /** Glide time for a mixer move: long enough not to click, short enough to feel instant. */
 const LEVEL_GLIDE_SEC = 0.02;
+/**
+ * How long an automation step — a mute or solo switching — takes. Never an
+ * instant jump: a jump in level is a click (docs: click-free audio, MEMORY).
+ */
+const STEP_SEC = 0.01;
 
 export interface RiffVoiceOptions {
   context: AudioContextLike;
@@ -122,7 +127,12 @@ export interface RiffVoice {
    * stretches in context time — each ramps `from` → `to` until the next,
    * the last holds — times the rifff's own gain for the slot.
    */
-  automateSlot(slot: number, curve: ReadonlyArray<AutomationStretch>, fromSec: number): void;
+  automateSlot(
+    slot: number,
+    curve: ReadonlyArray<AutomationStretch>,
+    fromSec: number,
+    opts?: { glide?: boolean },
+  ): void;
   dispose(): void;
 }
 
@@ -279,37 +289,47 @@ export function createRiffVoice(opts: RiffVoiceOptions): RiffVoice {
       param.setValueAtTime(param.value, when);
       param.linearRampToValueAtTime(source.riffGain * Math.max(0, level), when + LEVEL_GLIDE_SEC);
     },
-    automateSlot(slot, curve, fromSec) {
+    automateSlot(slot, curve, fromSec, stepOpts) {
       const source = bySlot.get(slot);
       if (!source || curve.length === 0 || !Number.isFinite(fromSec)) return;
       const g = source.riffGain;
       const param = source.level.gain;
-      param.cancelScheduledValues(fromSec);
+      // A step from `from` to `to` at `at`, over at most STEP_SEC and never
+      // past `until` (the next change).
+      const step = (from: number, to: number, at: number, until: number) => {
+        param.setValueAtTime(from * g, at);
+        param.linearRampToValueAtTime(to * g, at + Math.min(STEP_SEC, Math.max(0, (until - at) / 2)));
+      };
       // The stretch playing at fromSec, if the curve has begun by then.
       let i = -1;
       while (i + 1 < curve.length && curve[i + 1]!.atSec <= fromSec) i++;
-      let current: number;
-      if (i === -1) {
-        current = curve[0]!.from;
-        param.setValueAtTime(current * g, fromSec);
-      } else {
-        const seg = curve[i]!;
-        const next = curve[i + 1];
-        current = next ? seg.from + ((seg.to - seg.from) * (fromSec - seg.atSec)) / (next.atSec - seg.atSec) : seg.from;
-        param.setValueAtTime(current * g, fromSec);
-        if (next) {
-          param.linearRampToValueAtTime(seg.to * g, next.atSec);
-          current = seg.to;
-        }
+      const first = curve[Math.max(0, i)]!;
+      const next = curve[i + 1];
+      const startValue =
+        i === -1
+          ? curve[0]!.from
+          : next
+            ? first.from + ((first.to - first.from) * (fromSec - first.atSec)) / (next.atSec - first.atSec)
+            : first.from;
+      const anchor = param.value;
+      param.cancelScheduledValues(fromSec);
+      // A voice already sounding glides from where it is; one about to start
+      // (silent until then) can simply begin at the curve's value.
+      if (stepOpts?.glide) step(anchor / (g || 1), startValue, fromSec, next?.atSec ?? Infinity);
+      else param.setValueAtTime(startValue * g, fromSec);
+      let current = startValue;
+      if (i !== -1 && next) {
+        param.linearRampToValueAtTime(first.to * g, next.atSec);
+        current = first.to;
       }
       for (let k = i + 1; k < curve.length; k++) {
         const seg = curve[k]!;
-        const next = curve[k + 1];
-        // A step where the curve jumps; nothing where it carries straight on.
-        if (seg.from !== current) param.setValueAtTime(seg.from * g, seg.atSec);
+        const after = curve[k + 1];
+        // A short ramp where the curve jumps; nothing where it carries on.
+        if (seg.from !== current) step(current, seg.from, seg.atSec, after?.atSec ?? Infinity);
         current = seg.from;
-        if (next) {
-          param.linearRampToValueAtTime(seg.to * g, next.atSec);
+        if (after) {
+          param.linearRampToValueAtTime(seg.to * g, after.atSec);
           current = seg.to;
         }
       }

@@ -180,7 +180,7 @@ describe('HopsView', () => {
     it('each take has an Export button that exports it as a WAV', async () => {
       const wrapper = mount(HopsView);
       await rows(wrapper)[1]!.find('[data-test="export"]').trigger('click');
-      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1]);
+      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1], 'me');
     });
 
     it('shows the take being exported, and holds the other buttons off meanwhile', async () => {

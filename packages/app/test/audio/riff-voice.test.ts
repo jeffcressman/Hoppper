@@ -204,7 +204,7 @@ describe('createRiffVoice', () => {
     expect(stemGainOf(ctx.sources[1]!).param.events).toEqual([]);
   });
 
-  it('automateSlot schedules a slot’s level curve from a moment on: ramps and steps, times the rifff’s gain', () => {
+  it('automateSlot schedules a slot’s level curve from a moment on: ramps, and steps as 10 ms ramps, times the rifff’s gain', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
       context: ctx,
@@ -216,13 +216,33 @@ describe('createRiffVoice', () => {
       { atSec: 10, from: 1, to: 0.5 },
       { atSec: 14, from: 0, to: 0 },
     ], 12);
-    expect(stemGainOf(ctx.sources[0]!).param.events).toEqual([
+    const events = stemGainOf(ctx.sources[0]!).param.events;
+    expect(events.slice(0, 3)).toEqual([
       { kind: 'cancel', time: 12 },
       // Mid-ramp at 12 s: 0.75 × the rifff's 0.5.
       { kind: 'set', value: 0.375, time: 12 },
       { kind: 'ramp', value: 0.25, time: 14 },
-      { kind: 'set', value: 0, time: 14 },
     ]);
+    // The drop to silence at 14 s is a short ramp, never a jump: no click.
+    expect(events[3]).toEqual({ kind: 'set', value: 0.25, time: 14 });
+    expect(events[4]!.kind).toBe('ramp');
+    expect(events[4]!.value).toBe(0);
+    expect(events[4]!.time).toBeCloseTo(14.01, 9);
+  });
+
+  it('automateSlot glides from where a sounding voice is, rather than jumping', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.automateSlot(0, [{ atSec: 0, from: 0.2, to: 0.2 }], 5, { glide: true });
+    const events = stemGainOf(ctx.sources[0]!).param.events;
+    expect(events[1]).toEqual({ kind: 'set', value: 1, time: 5 });
+    expect(events[2]!.kind).toBe('ramp');
+    expect(events[2]!.value).toBeCloseTo(0.2, 9);
+    expect(events[2]!.time).toBeCloseTo(5.01, 9);
   });
 
   it('automateSlot starts on the right stretch when the moment is before the curve', () => {

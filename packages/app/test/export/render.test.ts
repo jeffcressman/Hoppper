@@ -84,4 +84,14 @@ describe('renderTake', () => {
     expect(calls.indexOf('automation')).toBeLessThan(calls.indexOf('hop A@0'));
     expect(engine.setAutomation.mock.calls[0]![1]).toBe(0);
   });
+
+  it('fades the file’s last 10 ms out, so it doesn’t end on a click', async () => {
+    const { deps } = setup();
+    const out = await renderTake(take, deps as never);
+    // 100 Hz in these tests: the last sample is silent, the one a frame in
+    // from the fade's start still near full.
+    expect(out.channels[0]!.at(-1)).toBeCloseTo(0, 6);
+    expect(Math.abs(out.channels[0]![out.channels[0]!.length - 3]!)).toBeGreaterThan(0.1);
+    expect(out.channels[0]![0]).toBe(0.5);
+  });
 });

@@ -15,7 +15,8 @@ export function defineExportStore(deps: ExportDeps) {
     // is open mustn't open another.
     let busy = false;
 
-    async function exportTake(seq: HopSequence): Promise<void> {
+    /** `jamName` goes into the file name offered. */
+    async function exportTake(seq: HopSequence, jamName: string): Promise<void> {
       if (busy) return;
       busy = true;
       lastError.value = null;
@@ -33,7 +34,7 @@ export function defineExportStore(deps: ExportDeps) {
             await deps.write(path, bytes);
             savedTo = path;
           },
-        });
+        }, jamName);
         if (result === 'saved' && savedTo) lastSaved.value = { id: seq.id, path: savedTo };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
