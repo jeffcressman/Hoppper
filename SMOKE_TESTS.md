@@ -303,6 +303,50 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
 - [ ] **Mute wins, and solo stays on this page.** A muted track stays
       silent when soloed; a take played in the editor ignores solos.
 
+### Zoom and scrolling (editor)
+
+- [ ] **Time zoom.** The zoom buttons, and Ctrl/Cmd + scroll, zoom time;
+      with the wheel, the moment under the pointer stays put. Fit shows the
+      whole take. Dragging hop points, handles and automation points still
+      lands where you let go at any zoom.
+- [ ] **Track height.** Taller/Shorter, and Alt/Option + scroll, change the
+      tracks' height; taller than the window scrolls vertically, with the
+      ruler and hop points staying at the top.
+- [ ] **Automation up close.** Zoom in on a track's automation and add and
+      drag points precisely.
+
+### No clicks, anywhere
+
+- [ ] **Listen for clicks** with headphones, a sustained pad rifff playing:
+      Stop; start from silence; mute and solo tracks live; play a take whose
+      automation mutes and solos; end of an exported WAV. None clicks.
+
+### Automation
+
+- [ ] **Recorded.** Record a take while moving a fader, muting one track
+      and soloing another. Open it in the editor, press Automation: Volume
+      shows the fader move on that track, Mute and Solo show the switches,
+      at the times you made them.
+- [ ] **Played back.** Play the take in the editor and from Hops: the
+      fader moves, mutes and solos happen as recorded, smoothly (no clicks).
+      Export it: the WAV has them too.
+- [ ] **Editing.** Click a line to add a point, drag it, double-click to
+      remove it; Mute/Solo points snap on or off by the half of the row you
+      click. Undo works. Play to hear the change.
+- [ ] **Moves with hop edits.** Delete a rifff whose stretch had a fade:
+      the fade goes with it and the rest carries on unchanged.
+- [ ] **The recording page is its own.** A take's automation doesn't move
+      the recording page's mixer, and replaying a take then going back to
+      recording leaves your mixer as you had it.
+
+### Track meters
+
+- [ ] **A meter beside each fader.** Each moves with its own track while a
+      rifff plays; a muted, faded-down or solo-silenced track's meter stays
+      dark. One line per track (stereo read as one).
+- [ ] **On macOS too.** The meters use the same silent-path trick as the
+      master meter (`MEMORY.md`); check they move there.
+
 ### Take start and end handles
 
 - [ ] **Grow the start.** Drag the start handle left: the first rifff
@@ -337,6 +381,28 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
       editor and play a take, come back: the rifff you last played has a
       dashed ring and is in the mixer and waveform. Playing it again turns
       the ring solid amber.
+
+## Phase 10 — WAV export
+
+- [ ] **Save dialog.** Export on a take opens the system Save dialog,
+      offering the hop's name as the file, e.g. "20260919 Sunday drift
+      hoppp.wav", WAV only. Cancel does nothing.
+- [ ] **New takes are named for where they came from.** Record a take:
+      it's named "<YYYYMMDD> <jam> hoppp", the date being the day its first
+      rifff was committed (check it against that rifff in Endlesss or LORE),
+      not today. The Hops list's Created column shows today.
+- [ ] **Older takes get renamed.** Takes recorded before the new names
+      (titled with a timestamp) take the "<YYYYMMDD> <jam> hoppp" form the
+      first time Hops opens while logged in — one request per jam in the
+      log. Logged out, they keep their old names until you log in.
+- [ ] **The file.** The row says Exporting…, then Saved <name>.wav. The file
+      opens in a DAW or player as stereo 24-bit at the app's sample rate,
+      exactly as long as the take.
+- [ ] **Sounds like replay.** It matches playing the take in the app: the
+      same hops at the same moments, crossfaded, on the beat — at each
+      rifff's own mix (the recording page's mutes and solos don't apply).
+- [ ] **Anywhere you can save.** Export to the Desktop, to a folder with a
+      non-English name, and over an existing file.
 
 ---
 

@@ -401,7 +401,41 @@ describe('createAudioEngine', () => {
     await engine.hopTo(JAM, riff('r2'), [stem('b')], { quantise: 'bar' });
     engine.stop();
 
-    for (const src of ctx.sources) expect(src.disconnected).toBe(true);
+    // Both fade out and stop within 30 ms — no click — and tear down once
+    // their stops land.
+    for (const src of ctx.sources) {
+      expect(src.stoppedAt).toBeLessThanOrEqual(4.1 + 0.031);
+      src.onended?.({});
+      expect(src.disconnected).toBe(true);
+    }
+  });
+
+  it('stop() fades the playing rifff out over 30 ms rather than cutting it dead', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([['s1' as StemCouchID, fakeBuffer()]]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    ctx.currentTime = 5;
+    await engine.hopTo(JAM, riff('r1'), [stem('s1')]);
+    ctx.currentTime = 7;
+    engine.stop();
+    const fade = voiceGains(ctx)[0]!.events.filter((e) => e.kind === 'ramp').at(-1)!;
+    expect(fade.value).toBe(0);
+    expect(fade.time).toBeCloseTo(7.03, 9);
+    expect(ctx.sources[0]!.stoppedAt).toBeCloseTo(7.03, 9);
+    expect(engine.state).toBe('idle');
+  });
+
+  it('a cold start fades in over 10 ms, so a rifff never starts with a click', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([['s1' as StemCouchID, fakeBuffer()]]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    ctx.currentTime = 5;
+    await engine.hopTo(JAM, riff('r1'), [stem('s1')]);
+    const events = voiceGains(ctx)[0]!.events.filter((e) => e.kind !== 'cancel');
+    expect(events[0]).toEqual({ kind: 'set', value: 0, time: 5 });
+    expect(events[1]!.kind).toBe('ramp');
+    expect(events[1]!.value).toBe(1);
+    expect(events[1]!.time).toBeCloseTo(5.01, 9);
   });
 
   it('a hop clicked during a hold replaces the held rifff before it sounds', async () => {
@@ -441,10 +475,14 @@ describe('createAudioEngine', () => {
     expect(second!.startedAt?.when).toBeCloseTo(4.25, 6);
     expect(engine.currentRiffId).toBe('r3');
 
-    // And Stop still reaches everything that could sound.
+    // And Stop still reaches everything that could sound: stopped within
+    // its 30 ms fade, and torn down once those stops land.
     engine.stop();
-    expect(first!.disconnected).toBe(true);
-    expect(second!.disconnected).toBe(true);
+    for (const src of [first!, second!]) {
+      expect(src.stoppedAt!).toBeLessThanOrEqual(4.15 + 0.031);
+      src.onended?.({});
+      expect(src.disconnected).toBe(true);
+    }
   });
 
   it('reports when it acted on each hop, before any crossfade or hold', async () => {
@@ -505,7 +543,8 @@ describe('createAudioEngine', () => {
       { kind: 'set', value: 0, time: 4.25 },
       { kind: 'ramp', value: 1, time: 4.5 },
     ]);
-    expect(ramps(outGain!)).toEqual([
+    // After the first rifff's 10 ms cold-start fade-in, its fade to the beat.
+    expect(ramps(outGain!).filter((e) => e.time > 0.01)).toEqual([
       { kind: 'set', value: 1, time: 4.25 },
       { kind: 'ramp', value: 0, time: 4.5 },
     ]);
@@ -1002,6 +1041,20 @@ describe('createAudioEngine — output level', () => {
     expect(sink!.gain.value).toBe(0);
   });
 
+  it('reads each track’s level on its own, for the mixer’s meters', async () => {
+    const ctx = analyserContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([['a' as StemCouchID, fakeBuffer()]]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers) });
+    // Analysers 0 and 1 are the master meter's; 2..9 are the tracks'.
+    ctx.analysers[2 + 3]!.data = [0.2, -0.7];
+    expect(engine.trackMeters()).toEqual([0, 0, 0, expect.closeTo(0.7, 6), 0, 0, 0, 0]);
+  });
+
+  it('has quiet track meters when the context can’t analyse', () => {
+    const engine = createAudioEngine({ context: createMockContext(), loader: mockLoader(new Map()) });
+    expect(engine.trackMeters()).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
   it('is silent when the context can’t analyse', () => {
     const engine = createAudioEngine({ context: createMockContext(), loader: mockLoader(new Map()) });
     expect(engine.levels()).toEqual([0, 0]);
@@ -1014,5 +1067,94 @@ describe('createAudioEngine — output level', () => {
     await engine.hopTo(JAM, riff('r1'), [stem('a')]);
     const master = ctx.gains.find((g) => g.target === ctx.destination)!;
     expect(voiceGains(ctx)[0]!.target).toBe(master);
+  });
+});
+
+describe('createAudioEngine — scheduling ahead (offline render)', () => {
+  it('atSec plays a hop as if it were made then, not now', async () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>([
+      ['a' as StemCouchID, fakeBuffer()],
+      ['b' as StemCouchID, fakeBuffer()],
+    ]);
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers), defaultCrossfadeMs: 250 });
+    // The clock never moves: everything is laid out before rendering.
+    await engine.hopTo(JAM, riff('r1'), [stem('a')], { atSec: 0 });
+    const result = await engine.hopTo(JAM, riff('r2'), [stem('b')], { atSec: 8 });
+    const [first, second] = ctx.sources;
+    expect(first!.startedAt?.when).toBe(0);
+    // Crossfade 8 → 8.25, the new rifff at its grid position 8.25 then.
+    expect(second!.startedAt?.when).toBeCloseTo(8, 6);
+    expect(second!.startedAt?.offset).toBeCloseTo(8, 6);
+    expect(first!.stoppedAt).toBeCloseTo(8.26, 6);
+    expect(result).toMatchObject({ kind: 'phase-locked', atSec: 8 });
+  });
+});
+
+describe('createAudioEngine — playing automation', () => {
+  const setup = () => {
+    const ctx = createMockContext();
+    const buffers = new Map<StemCouchID, AudioBufferLike>(
+      ['a', 'b'].map((id) => [id as StemCouchID, fakeBuffer()]),
+    );
+    const engine = createAudioEngine({ context: ctx, loader: mockLoader(buffers), defaultCrossfadeMs: 250 });
+    return { ctx, engine };
+  };
+  const stemEvents = (src: MockSource) => (src.target as MockGain).events;
+  // Slot 0 fades 1 → 0 over the take's first 8 s; the rest stay at full level.
+  const curves = [
+    [{ tSec: 0, from: 1, to: 0 }, { tSec: 8, from: 0, to: 0 }],
+    ...Array.from({ length: 7 }, () => [{ tSec: 0, from: 1, to: 1 }]),
+  ];
+
+  it('plays each voice’s slots along the take’s automation, from when the voice starts', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 100;
+    engine.setAutomation(curves, 100);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    expect(stemEvents(ctx.sources[0]!)).toEqual([
+      { kind: 'cancel', time: 100 },
+      { kind: 'set', value: 1, time: 100 },
+      { kind: 'ramp', value: 0, time: 108 },
+    ]);
+  });
+
+  it('a voice hopped to mid-take picks the curve up where it is', async () => {
+    const { ctx, engine } = setup();
+    ctx.currentTime = 100;
+    engine.setAutomation(curves, 100);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 104;
+    await engine.hopTo(JAM, riff('r2'), [stem('b')]);
+    // Fading in from 104 (the crossfade's start), half way down the fade.
+    const events = stemEvents(ctx.sources[1]!);
+    expect(events[1]).toEqual({ kind: 'set', value: 0.5, time: 104 });
+    expect(events[2]).toEqual({ kind: 'ramp', value: 0, time: 108 });
+  });
+
+  it('the mixer stands aside while automation plays, and comes back after', async () => {
+    const { ctx, engine } = setup();
+    engine.setAutomation(curves, 0);
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    const before = stemEvents(ctx.sources[0]!).length;
+    engine.setSlotLevels([0.3, 1, 1, 1, 1, 1, 1, 1]);
+    expect(stemEvents(ctx.sources[0]!).length).toBe(before);
+    ctx.currentTime = 2;
+    engine.setAutomation(null, 0);
+    expect(stemEvents(ctx.sources[0]!).at(-1)).toEqual({ kind: 'ramp', value: 0.3, time: 2.02 });
+  });
+
+  it('automation set while a rifff plays reaches it straight away', async () => {
+    const { ctx, engine } = setup();
+    await engine.hopTo(JAM, riff('r1'), [stem('a')]);
+    ctx.currentTime = 3;
+    engine.setAutomation(curves, 0);
+    // Glides from where it is to the curve (no jump), then follows it.
+    const events = stemEvents(ctx.sources[0]!).slice(-4);
+    expect(events[0]).toEqual({ kind: 'cancel', time: 3 });
+    expect(events[2]!.kind).toBe('ramp');
+    expect(events[2]!.value).toBeCloseTo(0.625, 9);
+    expect(events[2]!.time).toBeCloseTo(3.01, 9);
+    expect(events[3]).toEqual({ kind: 'ramp', value: 0, time: 8 });
   });
 });

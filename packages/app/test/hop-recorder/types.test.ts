@@ -101,3 +101,40 @@ describe('parseSequence', () => {
     expect(() => parseSequence(bad)).toThrow(/id/i);
   });
 });
+
+describe('HopSequence automation', () => {
+  const track = (volume: [number, number][] = [], mute: [number, number][] = [], solo: [number, number][] = []) => ({
+    volume: volume.map(([tSec, value]) => ({ tSec, value })),
+    mute: mute.map(([tSec, value]) => ({ tSec, value })),
+    solo: solo.map(([tSec, value]) => ({ tSec, value })),
+  });
+  const withAutomation = (): HopSequence => ({
+    ...fixture(),
+    automation: [
+      track([[0, 1], [4.5, 0.25]], [[0, 0], [8, 1]], [[0, 0]]),
+      ...Array.from({ length: 7 }, () => track()),
+    ],
+  });
+
+  it('round-trips a take’s automation: eight tracks of volume, mute and solo points', () => {
+    const seq = withAutomation();
+    expect(parseSequence(serializeSequence(seq))).toEqual(seq);
+  });
+
+  it('reads a take recorded before automation as having none', () => {
+    const parsed = parseSequence(serializeSequence(fixture()));
+    expect(parsed.automation).toBeUndefined();
+    expect(serializeSequence(fixture())).not.toContain('automation');
+  });
+
+  it('rejects automation that isn’t eight tracks', () => {
+    const json = JSON.stringify({ ...withAutomation(), automation: [track()] });
+    expect(() => parseSequence(json)).toThrow(/automation/);
+  });
+
+  it('rejects a malformed point', () => {
+    const bad = withAutomation();
+    (bad.automation![0]!.volume[0] as unknown as { value: string }).value = 'loud';
+    expect(() => parseSequence(JSON.stringify(bad))).toThrow(/automation/);
+  });
+});

@@ -65,6 +65,23 @@ Newest entries at the top of each section. Date entries absolutely
   feeds something. The meter was confirmed working on macOS in the
   2026-09-18 smoke tests; keep the silent path if you touch the bus.
 
+## Audio principle: click- and jitter-free, always
+
+- **No clicks and no jitter, in every circumstance** (set by the user
+  2026-09-18). Any level change that could be heard is a ramp, never a jump,
+  and anything new that changes gain, starts or stops sound, or cuts audio
+  must say how it avoids a click. Where it's done now:
+  - hops crossfade (250 ms default); a cold start fades in over 10 ms;
+  - Stop fades every sounding voice out over 30 ms, then stops it (a held
+    hop that hasn't begun is silent, so it stops at once);
+  - mixer moves glide over 20 ms (`RiffVoice.setSlotLevel`);
+  - automation mute/solo steps are 10 ms ramps, and automation applied to a
+    sounding voice glides onto its curve (`automateSlot`, `glide`);
+  - an exported WAV's last 10 ms fade out (`render.ts`).
+  Tests pin each of these. "Jitter-free" means timing stays on the one
+  continuous grid (see "Rifff and stem timing") — never a hop or event
+  placed by a timer's wall-clock guess.
+
 ## Recording principle
 
 - **A take is what the performer heard, not what they clicked** (set by
@@ -313,6 +330,30 @@ Newest entries at the top of each section. Date entries absolutely
   never ranges that view, so as of 2026-09-18 it's unit-tested only; the
   Slice C smoke test checks it live. If Expand finds nothing where it
   should, suspect the key's units first (ns keys, ms `createdAt`).
+- **A take is named "YYYYMMDD <jam> hoppp" from its *first rifff's* commit
+  day, not the recording day** (user's format, 2026-09-18), so a hop — and
+  its exported WAV, which takes the same name — can be traced back to its
+  place in Endlesss or LORE. The Hops list's "Created" column is when it was
+  made in Hoppper. `hop-recorder/naming.ts`; applied when a recording is
+  saved (`recorder.nameTake`). Takes still carrying the old default name —
+  a title equal to their `recordedAt` — are renamed when Hops opens while
+  logged in (`recorder.renameOldTakes`, batched per jam); naming needs each
+  first rifff's document, so offline they wait.
+- **Automation lives on the take and overrides the mixer while it plays**
+  (2026-09-18): `engine.setAutomation(curves, origin)` makes every voice
+  follow each track's level curve and makes `setSlotLevels` wait;
+  `setAutomation(null)` hands the slots back. Anything that plays a take must
+  set it (replay and the render do) and clear it after, or the recording
+  page's mixer is left sidelined. Curves are *heard* levels — mute and every
+  track's solo folded in by `levelCurve` — so a solo on one track is a step in
+  every other track's curve.
+- **Export writes through its own Rust command, `write_export`**
+  (2026-09-18), not the fs plugin: the WAV goes as the raw invoke body (tens
+  of MB — JSON would multiply it) and the path, percent-encoded, in the
+  `x-export-path` header, since headers can't carry every character a path
+  can. It only writes `.wav` paths. The render reuses the live engine with an
+  `OfflineAudioContext` and `HopOptions.atSec`, so an export is what replay
+  plays.
 - **Hop points are placed at *arrival*, not `tSec`** — see
   `src/hop-editor/edits.ts`. Any new code that positions or moves hops
   must go through `arrivalSec`/`moveHop`, or quantised and crossfaded hops

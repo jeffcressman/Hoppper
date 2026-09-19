@@ -7,6 +7,8 @@ import { defineRecorderStore, type RecorderDeps } from './recorder';
 import { defineStemDocsStore } from './stem-docs';
 import { defineRiffDocsStore } from './riff-docs';
 import { defineHopEditorStore, type HopEditorDeps } from './hop-editor';
+import { defineExportStore } from './export';
+import type { ExportDeps } from '../export/export-take';
 
 // Bind each store factory to the production client lazily, so that store
 // definitions stay tree-shakeable in tests (which never call these) and so
@@ -22,6 +24,7 @@ let _recorderDeps: RecorderDeps | undefined;
 let _useStemDocsStore: ReturnType<typeof defineStemDocsStore> | undefined;
 let _useRiffDocsStore: ReturnType<typeof defineRiffDocsStore> | undefined;
 let _useHopEditorStore: ReturnType<typeof defineHopEditorStore> | undefined;
+let _useExportStore: ReturnType<typeof defineExportStore> | undefined;
 
 export function useSessionStore() {
   _useSessionStore ??= defineSessionStore(getClient());
@@ -53,6 +56,18 @@ export function useHopEditorStore() {
     throw new Error('Hop editor store not initialized — call initHopEditorStore() during bootstrap');
   }
   return _useHopEditorStore();
+}
+
+// Export renders through the app's decoded stems and writes through Tauri.
+export function initExportStore(deps: ExportDeps): void {
+  _useExportStore = defineExportStore(deps);
+}
+
+export function useExportStore() {
+  if (!_useExportStore) {
+    throw new Error('Export store not initialized — call initExportStore() during bootstrap');
+  }
+  return _useExportStore();
 }
 
 export function useCurrentJamStore() {

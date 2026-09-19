@@ -147,11 +147,14 @@ export interface LaneGeometry {
 
 /**
  * Lanes fill the timeline's height: two share it around a selected hop
- * point, one takes it all. `availablePx` is the timeline's inner height.
+ * point, one takes it all. `availablePx` is the timeline's inner height;
+ * `trackZoom` (≥ 1) makes them taller than that, to scroll.
  */
-export function laneGeometry(availablePx: number, split: boolean): LaneGeometry {
+export function laneGeometry(availablePx: number, split: boolean, trackZoom = 1): LaneGeometry {
   const room = availablePx - LANE_TOP - FOOT - (split ? LANE_GAP + LABEL_H : 0);
-  const laneH = Math.max(MIN_LANE_H, Math.floor(split ? room / 2 : room));
+  // Zoomed taller than the view, the timeline scrolls; never shorter than it fits.
+  const fitted = Math.max(MIN_LANE_H, Math.floor(split ? room / 2 : room));
+  const laneH = Math.round(fitted * Math.max(1, trackZoom));
   const lane1Y = LANE_TOP;
   const lane2Y = lane1Y + laneH + LANE_GAP;
   const label2Y = lane2Y + laneH + 6;

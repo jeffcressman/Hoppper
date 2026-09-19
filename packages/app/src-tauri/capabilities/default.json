@@ -19,6 +19,7 @@
     "fs:allow-applocaldata-meta-recursive",
     "stronghold:default",
     "stronghold:allow-remove-store-record",
-    "stronghold:allow-save"
+    "stronghold:allow-save",
+    "dialog:allow-save"
   ]
 }

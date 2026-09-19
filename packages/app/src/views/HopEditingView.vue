@@ -52,6 +52,30 @@
         </button>
 
         <span class="bar__divider" />
+        <button
+          type="button"
+          :class="['lw-btn', 'lw-btn--outline', 'lw-btn--sm', { 'is-on': automating }]"
+          :aria-pressed="automating"
+          data-test="automation-toggle"
+          @click="toggleAutomation"
+        >
+          <LwIcon name="automation" />
+          Automation
+        </button>
+        <div v-if="automating" class="snap" role="group" aria-label="Automation to edit">
+          <button
+            v-for="p in AUTO_PARAMS"
+            :key="p.value"
+            type="button"
+            :class="['snap__opt', { 'is-on': autoParam === p.value }]"
+            :aria-pressed="autoParam === p.value"
+            :data-test="`auto-param-${p.value}`"
+            @click="autoParam = p.value"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+        <span class="bar__divider" />
         <div class="snap" role="group" aria-label="Snap hop points to">
           <button
             v-for="s in SNAPS"
@@ -63,6 +87,21 @@
             @click="snap = s.value"
           >
             {{ s.label }}
+          </button>
+        </div>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button type="button" class="lw-iconbtn lw-iconbtn--sm" title="Zoom out (Ctrl/Cmd + scroll)" aria-label="Zoom out" :disabled="pxPerSec <= MIN_PX_PER_SEC" data-test="zoom-out" @click="zoomTime(1 / ZOOM_STEP)">
+            <LwIcon name="zoomOut" />
+          </button>
+          <button type="button" class="lw-iconbtn lw-iconbtn--sm" title="Zoom in (Ctrl/Cmd + scroll)" aria-label="Zoom in" :disabled="pxPerSec >= MAX_PX_PER_SEC" data-test="zoom-in" @click="zoomTime(ZOOM_STEP)">
+            <LwIcon name="zoomIn" />
+          </button>
+          <button type="button" class="lw-btn lw-btn--ghost lw-btn--sm" title="Fit the whole take" data-test="zoom-fit" @click="fitTime">Fit</button>
+          <button type="button" class="lw-iconbtn lw-iconbtn--sm" title="Shorter tracks (Alt + scroll)" aria-label="Shorter tracks" :disabled="trackZoom <= 1" data-test="shorter" @click="zoomTracks(1 / ZOOM_STEP)">
+            <LwIcon name="shorter" />
+          </button>
+          <button type="button" class="lw-iconbtn lw-iconbtn--sm" title="Taller tracks (Alt + scroll)" aria-label="Taller tracks" :disabled="trackZoom >= MAX_TRACK_ZOOM" data-test="taller" @click="zoomTracks(ZOOM_STEP)">
+            <LwIcon name="taller" />
           </button>
         </div>
         <button type="button" class="lw-iconbtn lw-iconbtn--sm" title="Undo" aria-label="Undo" :disabled="!editor.canUndo" data-test="undo" @click="editor.undo()">
@@ -85,11 +124,29 @@
     </div>
     <p v-if="editor.lastError" class="error" role="alert">{{ editor.lastError }}</p>
 
-    <div ref="timelineEl" class="tl" data-test="timeline" :data-px-per-sec="PX_PER_SEC" @click="clearSelection">
+    <div ref="timelineEl" class="tl" data-test="timeline" :data-px-per-sec="pxPerSec" @click="clearSelection" @wheel="onWheel">
       <div class="tl__inner" :style="{ width: `${width}px`, height: `${height}px` }">
-        <span v-for="tick in ticks" :key="tick.label" class="tl__tick lwlkc-readout" :style="{ left: `${tick.x}px` }">
-          {{ tick.label }}
-        </span>
+        <!-- The ruler and hop points stay in view while the tracks scroll. -->
+        <div class="tl__head" data-test="timeline-head">
+          <span v-for="tick in ticks" :key="tick.label" class="tl__tick lwlkc-readout" :style="{ left: `${tick.x}px` }">
+            {{ tick.label }}
+          </span>
+          <button
+            v-for="p in layout.pins"
+            :key="p.key"
+            type="button"
+            :class="['pin', `is-${p.kind}`]"
+            :style="{ left: `${x(p.atSec)}px` }"
+            :title="p.kind === 'candidate' ? 'Where a hop could go' : `Hop point ${p.num}`"
+            :disabled="p.hopIndex === undefined || automating"
+            data-test="hop-point"
+            @pointerdown.stop="(e) => onPinDown(e, p)"
+            @click.stop="onPinClick(p)"
+          >
+            {{ p.num }}
+          </button>
+        </div>
+
 
         <div
           v-for="b in drawn"
@@ -133,22 +190,43 @@
           :class="['hopline', `is-${p.kind}`]"
           :style="{ left: `${x(p.atSec)}px`, top: '54px', height: `${linesBottom - 54}px` }"
         />
-        <button
-          v-for="p in layout.pins"
-          :key="p.key"
-          type="button"
-          :class="['pin', `is-${p.kind}`]"
-          :style="{ left: `${x(p.atSec)}px` }"
-          :title="p.kind === 'candidate' ? 'Where a hop could go' : `Hop point ${p.num}`"
-          :disabled="p.hopIndex === undefined"
-          data-test="hop-point"
-          @pointerdown.stop="(e) => onPinDown(e, p)"
-          @click.stop="onPinClick(p)"
-        >
-          {{ p.num }}
-        </button>
 
-        <template v-if="take && !expanded">
+        <!-- Automation: each track's line for the chosen parameter, over its row. -->
+        <svg
+          v-if="automating && take"
+          class="auto"
+          :style="{ left: `${x(0)}px`, top: `${geometry.lane1Y}px` }"
+          :width="take.durationSec * pxPerSec"
+          :height="geometry.laneH"
+          data-test="automation"
+        >
+          <g v-for="row in autoRows" :key="row.slot">
+            <rect
+              class="auto__row"
+              x="0"
+              :y="row.top"
+              :width="take.durationSec * pxPerSec"
+              :height="row.height"
+              data-test="auto-row"
+              @click.stop="(e) => onAutoRowClick(e, row.slot)"
+            />
+            <path class="auto__line" :d="row.path" data-test="auto-line" />
+            <circle
+              v-for="pt in row.points"
+              :key="pt.index"
+              class="auto__point"
+              :cx="pt.cx"
+              :cy="pt.cy"
+              r="4.5"
+              data-test="auto-point"
+              @click.stop
+              @pointerdown.stop="(e) => onAutoPointDown(e, row.slot, pt.index)"
+              @dblclick.stop="editor.removeAutomationPoint(row.slot, autoParam, pt.index)"
+            />
+          </g>
+        </svg>
+
+        <template v-if="take && !expanded && !automating">
           <button
             type="button"
             class="take-handle is-start"
@@ -178,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { JamCouchID, RiffCouchID, RiffDocument, StemCouchID } from '@hoppper/sdk';
 import {
@@ -191,6 +269,9 @@ import {
 } from '../stores';
 import LwIcon from '../components/LwIcon.vue';
 import { moveHop, resizeEnd, resizeStart, segmentsOf, type Snap } from '../hop-editor/edits';
+import { automationLine } from '../hop-editor/automation-line';
+import { blankAutomation, movePoint } from '../automation/automation';
+import type { AutomationParam } from '../hop-recorder/types';
 import { laneGeometry, timelineLayout, type TimelineBlock, type TimelinePin } from '../hop-editor/layout';
 import { phaseRow, rowPath } from '../ui/peaks';
 import { riffStemAudio, stemPeaks } from '../ui/riff-audio';
@@ -209,10 +290,15 @@ const jamsStore = useJamsStore();
 
 // Timeline geometry, in px. Across: a fixed scale. Down: the lanes fill the
 // timeline's height (laneGeometry), measured as the window changes.
-const PX_PER_SEC = 16;
+const pxPerSec = ref(16);
+const MIN_PX_PER_SEC = 2;
+const MAX_PX_PER_SEC = 160;
+const ZOOM_STEP = 1.5;
+const MAX_TRACK_ZOOM = 8;
+const trackZoom = ref(1);
 const PAD = 20;
 const LABEL1_Y = 60;
-const x = (sec: number) => PAD + sec * PX_PER_SEC;
+const x = (sec: number) => PAD + sec * pxPerSec.value;
 
 const timelineEl = ref<HTMLElement | null>(null);
 const timelineHeight = ref(0);
@@ -227,7 +313,17 @@ const SNAPS: { value: Snap; label: string }[] = [
   { value: 'off', label: 'Off' },
 ];
 
+const AUTO_PARAMS: { value: AutomationParam; label: string }[] = [
+  { value: 'volume', label: 'Volume' },
+  { value: 'mute', label: 'Mute' },
+  { value: 'solo', label: 'Solo' },
+];
+// Space left above and below a line inside its track row.
+const AUTO_PAD = 3;
+
 const jamId = computed(() => String(route.params.jamId) as JamCouchID);
+const automating = ref(false);
+const autoParam = ref<AutomationParam>('volume');
 const snap = ref<Snap>('beat');
 const point = ref<number | null>(null);
 const expanded = ref(false);
@@ -322,7 +418,7 @@ const layout = computed(() =>
   ),
 );
 
-const geometry = computed(() => laneGeometry(timelineHeight.value, layout.value.split));
+const geometry = computed(() => laneGeometry(timelineHeight.value, layout.value.split, trackZoom.value));
 const width = computed(() => x(layout.value.endSec) + PAD + 60);
 const height = computed(() => geometry.value.height);
 const linesBottom = computed(() =>
@@ -343,11 +439,11 @@ const rowMemo = new Map<string, { slot: number; d: string; bins: number; colour:
 function rowsFor(b: TimelineBlock): { slot: number; d: string; bins: number; colour: string }[] {
   const doc = riffDocs.get(b.riffId);
   if (!doc) return [];
-  const key = `${b.riffId}|${b.startSec}|${b.endSec}|${performance.decodedTick}`;
+  const key = `${b.riffId}|${b.startSec}|${b.endSec}|${performance.decodedTick}|${pxPerSec.value}`;
   const memo = rowMemo.get(key);
   if (memo) return memo;
   const audio = riffStemAudio(doc, stemDocs.get, performance.bufferFor);
-  const bins = Math.max(8, Math.round(((b.endSec - b.startSec) * PX_PER_SEC) / 2));
+  const bins = Math.max(8, Math.round(((b.endSec - b.startSec) * pxPerSec.value) / 2));
   const rows = Array.from({ length: 8 }, (_, slot) => {
     const stem = audio.stems[slot];
     const s = doc.slots[slot];
@@ -373,7 +469,7 @@ function loopLinesFor(b: TimelineBlock): number[] {
   if (!(loop > 0)) return [];
   const out: number[] = [];
   for (let t = Math.ceil(b.startSec / loop + 1e-9) * loop; t < b.endSec - 1e-9; t += loop) {
-    out.push((t - b.startSec) * PX_PER_SEC);
+    out.push((t - b.startSec) * pxPerSec.value);
   }
   return out;
 }
@@ -386,7 +482,7 @@ const drawn = computed(() => {
       ...b,
       x: x(b.startSec),
       y: b.lane === 1 ? geometry.value.lane1Y : geometry.value.lane2Y,
-      w: Math.max(2, (b.endSec - b.startSec) * PX_PER_SEC),
+      w: Math.max(2, (b.endSec - b.startSec) * pxPerSec.value),
       rows: rowsFor(b),
       loopLines: loopLinesFor(b),
       label: doc ? `${formatTime(doc.createdAt)} · ${doc.userName}` : b.riffId,
@@ -406,7 +502,95 @@ const meta = computed(() => {
   return `${jam} · ${n} ${n === 1 ? 'hop' : 'hops'} · ${formatDuration(seq.durationSec)}`;
 });
 
+// ── Automation overlay ───────────────────────────────────────────────────
+
+function toggleAutomation(): void {
+  clearSelection();
+  automating.value = !automating.value;
+}
+
+const rowHeight = computed(() => geometry.value.laneH / 8);
+const yFor = (slot: number, value: number) =>
+  slot * rowHeight.value + AUTO_PAD + (1 - value) * (rowHeight.value - 2 * AUTO_PAD);
+function valueForY(slot: number, y: number): number {
+  const v = 1 - (y - slot * rowHeight.value - AUTO_PAD) / (rowHeight.value - 2 * AUTO_PAD);
+  const clamped = Math.min(1, Math.max(0, v));
+  // Mute and solo are on or off: the upper half of the row is on.
+  return autoParam.value === 'volume' ? clamped : clamped >= 0.5 ? 1 : 0;
+}
+
+const autoRows = computed(() => {
+  const seq = take.value;
+  if (!seq) return [];
+  const tracks = seq.automation ?? blankAutomation();
+  return tracks.map((track, slot) => {
+    const points = track[autoParam.value];
+    const line = automationLine(points, autoParam.value, seq.durationSec);
+    return {
+      slot,
+      top: slot * rowHeight.value,
+      height: rowHeight.value,
+      path: line.map((p, i) => `${i ? 'L' : 'M'}${(p.tSec * pxPerSec.value).toFixed(1)} ${yFor(slot, p.value).toFixed(1)}`).join(''),
+      points: points
+        .map((p, index) => ({ index, cx: p.tSec * pxPerSec.value, cy: yFor(slot, p.value), tSec: p.tSec }))
+        .filter((p) => p.tSec <= seq.durationSec),
+    };
+  });
+});
+
+/** Where a pointer is on the overlay, in its own px. */
+function overlayPoint(e: MouseEvent, el: Element | null): { x: number; y: number } {
+  const svg = el?.closest('svg');
+  const rect = svg?.getBoundingClientRect();
+  return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
+}
+
+function onAutoRowClick(e: MouseEvent, slot: number): void {
+  const { x: px, y } = overlayPoint(e, e.currentTarget as Element);
+  void editor.addAutomationPoint(slot, autoParam.value, Math.max(0, px / pxPerSec.value), valueForY(slot, y));
+}
+
+// Dragging a point: a preview while it moves, one edit when it's let go.
+function onAutoPointDown(e: PointerEvent, slot: number, index: number): void {
+  const base = editor.take;
+  if (!base) return;
+  const param = autoParam.value;
+  const target = e.currentTarget as Element;
+  const start = { x: e.clientX, y: e.clientY };
+  const at = (ev: MouseEvent) => {
+    const { x: px, y } = overlayPoint(ev, target);
+    return { tSec: Math.max(0, px / pxPerSec.value), value: valueForY(slot, y) };
+  };
+  const moved = (ev: MouseEvent) => Math.hypot(ev.clientX - start.x, ev.clientY - start.y) >= 3;
+  const move = (ev: PointerEvent | MouseEvent) => {
+    if (!moved(ev)) return;
+    const { tSec, value } = at(ev);
+    const tracks = base.automation ?? blankAutomation();
+    preview.value = {
+      ...base,
+      automation: tracks.map((t, i) => (i === slot ? { ...t, [param]: movePoint(t[param], index, tSec, value) } : t)),
+    };
+  };
+  const up = (ev: PointerEvent | MouseEvent) => {
+    dragCleanup?.();
+    preview.value = null;
+    if (!moved(ev)) return;
+    const { tSec, value } = at(ev);
+    void editor.moveAutomationPoint(slot, param, index, tSec, value);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  dragCleanup = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragCleanup = null;
+  };
+}
+
 const hint = computed(() => {
+  if (automating.value) {
+    return `${AUTO_PARAMS.find((p) => p.value === autoParam.value)!.label}: click a track’s line to add a point, drag to move it, double-click to remove it.`;
+  }
   if (skippedNothing.value) return 'This hop skipped nothing: its two rifffs were committed one after the other.';
   if (expanded.value) return 'Skipped rifffs are dashed. Pick one, then Add it to the hop.';
   if (point.value !== null) return `Drag hop point ${point.value} to change when the next rifff comes in. Expand shows what it skipped.`;
@@ -432,10 +616,11 @@ function selectPoint(index: number): void {
 }
 
 function onPinClick(p: TimelinePin): void {
-  if (p.hopIndex !== undefined) selectPoint(p.hopIndex);
+  if (p.hopIndex !== undefined && !automating.value) selectPoint(p.hopIndex);
 }
 
 function onPickBlock(b: TimelineBlock): void {
+  if (automating.value) return;
   if (b.kind === 'skip' && b.skipIndex !== undefined) {
     pickedSkip.value = b.skipIndex;
   } else if (b.kind === 'seg' && b.segIndex !== undefined) {
@@ -510,7 +695,7 @@ function onPinDown(e: PointerEvent, p: TimelinePin): void {
   const base = editor.take;
   if (!(expanded.value && point.value === index)) selectPoint(index);
   if (expanded.value) return;
-  const secAt = (clientX: number) => startSec + (clientX - startX) / PX_PER_SEC;
+  const secAt = (clientX: number) => startSec + (clientX - startX) / pxPerSec.value;
   const move = (ev: PointerEvent | MouseEvent) => {
     if (Math.abs(ev.clientX - startX) < 3) return;
     preview.value = moveHop(base, index, secAt(ev.clientX), snap.value, editor.gridOf);
@@ -543,7 +728,7 @@ function onHandleDown(e: PointerEvent, which: 'start' | 'end'): void {
   let lastX = startX;
   let edgeFrame = 0;
   // How far the pointer has travelled over the take, scrolling included.
-  const travelled = () => (lastX - startX + (tl.scrollLeft - startScroll)) / PX_PER_SEC;
+  const travelled = () => (lastX - startX + (tl.scrollLeft - startScroll)) / pxPerSec.value;
   // Start: dragged left means more take at the front.
   const amount = () => (which === 'start' ? -travelled() : base.durationSec + travelled());
   const edit = () =>
@@ -588,6 +773,54 @@ function onHandleDown(e: PointerEvent, which: 'start' | 'end'): void {
     window.removeEventListener('pointerup', up);
     dragCleanup = null;
   };
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────
+
+/**
+ * Zoom time by `factor`, keeping the moment at `anchorX` (a client x; the
+ * view's middle if not given) where it is on screen.
+ */
+function zoomTime(factor: number, anchorX?: number): void {
+  const tl = timelineEl.value;
+  const before = pxPerSec.value;
+  const next = Math.min(MAX_PX_PER_SEC, Math.max(MIN_PX_PER_SEC, before * factor));
+  if (next === before) return;
+  const viewX = tl ? (anchorX !== undefined ? anchorX - tl.getBoundingClientRect().left : tl.clientWidth / 2) : 0;
+  const t = tl ? (tl.scrollLeft + viewX - PAD) / before : 0;
+  pxPerSec.value = next;
+  if (tl) void nextTick(() => (tl.scrollLeft = Math.max(0, t * next + PAD - viewX)));
+}
+
+/** The whole take across the view. */
+function fitTime(): void {
+  const tl = timelineEl.value;
+  const seq = editor.take;
+  if (!tl || !seq || !(seq.durationSec > 0)) return;
+  const room = tl.clientWidth - PAD * 2 - 60;
+  pxPerSec.value = Math.min(MAX_PX_PER_SEC, Math.max(MIN_PX_PER_SEC, room / seq.durationSec));
+  tl.scrollLeft = 0;
+}
+
+/** Track height, keeping the row at `anchorY` (a client y) where it is. */
+function zoomTracks(factor: number, anchorY?: number): void {
+  const tl = timelineEl.value;
+  const before = trackZoom.value;
+  const next = Math.min(MAX_TRACK_ZOOM, Math.max(1, before * factor));
+  if (next === before) return;
+  const viewY = tl && anchorY !== undefined ? anchorY - tl.getBoundingClientRect().top : 0;
+  const y = tl ? tl.scrollTop + viewY : 0;
+  trackZoom.value = next;
+  if (tl) void nextTick(() => (tl.scrollTop = Math.max(0, (y * next) / before - viewY)));
+}
+
+// Ctrl/Cmd + wheel zooms time, Alt + wheel track height; a plain wheel scrolls.
+function onWheel(e: WheelEvent): void {
+  if (!(e.ctrlKey || e.metaKey || e.altKey)) return;
+  e.preventDefault();
+  const factor = Math.exp(-e.deltaY * 0.004);
+  if (e.altKey) zoomTracks(factor, e.clientY);
+  else zoomTime(factor, e.clientX);
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────
@@ -756,6 +989,22 @@ onUnmounted(() => {
 .tl__inner {
   position: relative;
 }
+.tl__head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 56px;
+  background: linear-gradient(var(--surface-inset) 80%, transparent);
+  pointer-events: none;
+}
+.tl__head .pin {
+  pointer-events: auto;
+}
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .tl__tick {
   position: absolute;
   top: 6px;
@@ -876,6 +1125,32 @@ onUnmounted(() => {
 }
 .pin:disabled:not(.is-candidate) {
   cursor: default;
+}
+.auto {
+  position: absolute;
+  overflow: visible;
+}
+.auto__row {
+  fill: transparent;
+  cursor: crosshair;
+}
+.auto__row:hover {
+  fill: oklch(1 0 0 / 0.04);
+}
+.auto__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.auto__point {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: grab;
+}
+.auto__point:hover {
+  fill: var(--accent);
 }
 .blk__loop {
   position: absolute;

@@ -35,6 +35,9 @@ const editorStub = vi.hoisted(() => ({
   duplicate: vi.fn(async () => {}),
   resizeStart: vi.fn(async () => {}),
   resizeEnd: vi.fn(async () => {}),
+  addAutomationPoint: vi.fn(async () => {}),
+  moveAutomationPoint: vi.fn(async () => {}),
+  removeAutomationPoint: vi.fn(async () => {}),
   undo: vi.fn(async () => {}),
   redo: vi.fn(async () => {}),
 }));
@@ -94,7 +97,7 @@ beforeEach(() => {
   editor.canUndo = false;
   editor.canRedo = false;
   editor.lastError = null;
-  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.resizeStart, editorStub.resizeEnd, editorStub.undo, editorStub.redo]) {
+  for (const fn of [editorStub.moveHop, editorStub.deleteHop, editorStub.addRiff, editorStub.duplicate, editorStub.resizeStart, editorStub.resizeEnd, editorStub.addAutomationPoint, editorStub.moveAutomationPoint, editorStub.removeAutomationPoint, editorStub.undo, editorStub.redo]) {
     fn.mockReset().mockResolvedValue(undefined);
   }
   editorStub.open.mockReset().mockResolvedValue(undefined);
@@ -379,5 +382,163 @@ describe('HopEditingView', () => {
     editor.take = { ...take(), durationSec: 30 };
     await flushPromises();
     expect(performanceStub.warm.mock.calls.length).toBe(loads);
+  });
+
+  describe('automation', () => {
+    // Unmeasured, the lane is its minimum 128 px: eight 16 px track rows,
+    // each drawn 3 px in from its edges.
+    const ROW_H = 16;
+    const PAD = 3;
+    const yFor = (slot: number, value: number) => slot * ROW_H + PAD + (1 - value) * (ROW_H - 2 * PAD);
+    const pxPerSecOf = (w: ReturnType<typeof mount>) => Number(w.find('[data-test="timeline"]').attributes('data-px-per-sec'));
+
+    async function automating(param?: 'mute' | 'solo') {
+      const wrapper = await mounted();
+      await find(wrapper, 'automation-toggle').trigger('click');
+      if (param) await find(wrapper, `auto-param-${param}`).trigger('click');
+      return wrapper;
+    }
+
+    it('Automation shows a line for each of the eight tracks, volume first', async () => {
+      const wrapper = await automating();
+      expect(find(wrapper, 'automation-toggle').attributes('aria-pressed')).toBe('true');
+      expect(all(wrapper, 'auto-row')).toHaveLength(8);
+      expect(all(wrapper, 'auto-line')).toHaveLength(8);
+      expect(find(wrapper, 'auto-param-volume').attributes('aria-pressed')).toBe('true');
+    });
+
+    it('sets hop editing aside while it’s on', async () => {
+      const wrapper = await automating();
+      expect(pin(wrapper, 1).attributes('disabled')).toBeDefined();
+      expect(find(wrapper, 'take-start').exists()).toBe(false);
+      expect(find(wrapper, 'take-end').exists()).toBe(false);
+    });
+
+    it('a click on a track’s line adds a point there, at that time and height', async () => {
+      const wrapper = await automating();
+      const px = pxPerSecOf(wrapper);
+      await all(wrapper, 'auto-row')[2]!.trigger('click', { clientX: 5 * px, clientY: yFor(2, 0.5) });
+      expect(editorStub.addAutomationPoint).toHaveBeenCalledWith(2, 'volume', expect.closeTo(5, 6), expect.closeTo(0.5, 6));
+    });
+
+    it('for mute and solo, a click in a track’s upper half is on, lower half off', async () => {
+      const wrapper = await automating('mute');
+      await all(wrapper, 'auto-row')[0]!.trigger('click', { clientX: 32, clientY: yFor(0, 0.9) });
+      expect(editorStub.addAutomationPoint).toHaveBeenLastCalledWith(0, 'mute', 2, 1);
+      await all(wrapper, 'auto-row')[0]!.trigger('click', { clientX: 32, clientY: yFor(0, 0.1) });
+      expect(editorStub.addAutomationPoint).toHaveBeenLastCalledWith(0, 'mute', 2, 0);
+    });
+
+    it('shows the points recorded on the take, and double-click removes one', async () => {
+      editor.take = {
+        ...take(),
+        automation: Array.from({ length: 8 }, (_, i) => ({
+          volume: i === 1 ? [{ tSec: 2, value: 1 }, { tSec: 10, value: 0.2 }] : [],
+          mute: [],
+          solo: [],
+        })),
+      };
+      const wrapper = await automating();
+      const points = all(wrapper, 'auto-point');
+      expect(points).toHaveLength(2);
+      await points[1]!.trigger('dblclick');
+      expect(editorStub.removeAutomationPoint).toHaveBeenCalledWith(1, 'volume', 1);
+    });
+
+    it('dragging a point moves it, in time and value', async () => {
+      editor.take = {
+        ...take(),
+        automation: Array.from({ length: 8 }, (_, i) => ({
+          volume: i === 1 ? [{ tSec: 2, value: 1 }] : [],
+          mute: [],
+          solo: [],
+        })),
+      };
+      const wrapper = await automating();
+      const px = pxPerSecOf(wrapper);
+      await find(wrapper, 'auto-point').trigger('pointerdown', { clientX: 2 * px, clientY: yFor(1, 1) });
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 4 * px, clientY: yFor(1, 0.5) }));
+      window.dispatchEvent(new MouseEvent('pointerup', { clientX: 4 * px, clientY: yFor(1, 0.5) }));
+      await flushPromises();
+      expect(editorStub.moveAutomationPoint).toHaveBeenCalledWith(1, 'volume', 0, expect.closeTo(4, 6), expect.closeTo(0.5, 6));
+    });
+  });
+
+  describe('zoom and scrolling', () => {
+    const pxOf = (w: ReturnType<typeof mount>) => Number(w.find('[data-test="timeline"]').attributes('data-px-per-sec'));
+    const blockHeight = (w: ReturnType<typeof mount>) => parseFloat((all(w, 'block')[0]!.element as HTMLElement).style.height);
+    function sizeTimeline(el: HTMLElement, width: number) {
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: width });
+      el.getBoundingClientRect = () => ({ left: 0, right: width, top: 0, bottom: 400, width, height: 400 }) as DOMRect;
+    }
+
+    it('zooms time in and out', async () => {
+      const wrapper = await mounted();
+      const start = pxOf(wrapper);
+      await find(wrapper, 'zoom-in').trigger('click');
+      expect(pxOf(wrapper)).toBeCloseTo(start * 1.5, 6);
+      await find(wrapper, 'zoom-out').trigger('click');
+      await find(wrapper, 'zoom-out').trigger('click');
+      expect(pxOf(wrapper)).toBeCloseTo(start / 1.5, 6);
+    });
+
+    it('stops at sensible limits', async () => {
+      const wrapper = await mounted();
+      for (let i = 0; i < 30; i++) await find(wrapper, 'zoom-in').trigger('click');
+      const most = pxOf(wrapper);
+      await find(wrapper, 'zoom-in').trigger('click');
+      expect(pxOf(wrapper)).toBe(most);
+      expect(find(wrapper, 'zoom-in').attributes('disabled')).toBeDefined();
+    });
+
+    it('Fit shows the whole take across the view', async () => {
+      const wrapper = await mounted();
+      sizeTimeline(find(wrapper, 'timeline').element as HTMLElement, 600);
+      await find(wrapper, 'zoom-fit').trigger('click');
+      // 24 s across what's left of 600 px after the margins.
+      const px = pxOf(wrapper);
+      expect(24 * px).toBeLessThanOrEqual(600);
+      expect(24 * px).toBeGreaterThan(450);
+    });
+
+    it('Ctrl/Cmd + wheel zooms time around the pointer, keeping that moment under it', async () => {
+      const wrapper = await mounted();
+      const tl = find(wrapper, 'timeline').element as HTMLElement;
+      sizeTimeline(tl, 600);
+      tl.scrollLeft = 100;
+      const px = pxOf(wrapper);
+      const pointerX = 300;
+      const before = (tl.scrollLeft + pointerX) / px;
+      await find(wrapper, 'timeline').trigger('wheel', { deltaY: -100, ctrlKey: true, clientX: pointerX });
+      await flushPromises();
+      const after = pxOf(wrapper);
+      expect(after).toBeGreaterThan(px);
+      // Allow for the timeline's 20 px left margin.
+      expect((tl.scrollLeft + pointerX - 20) / after).toBeCloseTo((before * px - 20) / px, 1);
+    });
+
+    it('makes tracks taller and shorter — taller than the view scrolls', async () => {
+      const wrapper = await mounted();
+      const start = blockHeight(wrapper);
+      await find(wrapper, 'taller').trigger('click');
+      expect(blockHeight(wrapper)).toBeGreaterThan(start);
+      await find(wrapper, 'shorter').trigger('click');
+      expect(blockHeight(wrapper)).toBe(start);
+      expect(find(wrapper, 'shorter').attributes('disabled')).toBeDefined();
+    });
+
+    it('Alt + wheel makes tracks taller', async () => {
+      const wrapper = await mounted();
+      const start = blockHeight(wrapper);
+      await find(wrapper, 'timeline').trigger('wheel', { deltaY: -100, altKey: true });
+      await flushPromises();
+      expect(blockHeight(wrapper)).toBeGreaterThan(start);
+    });
+
+    it('keeps the ruler and hop points in view while scrolling down', async () => {
+      const wrapper = await mounted();
+      expect(find(wrapper, 'timeline-head').exists()).toBe(true);
+      expect(find(wrapper, 'timeline-head').findAll('[data-test="hop-point"]')).toHaveLength(2);
+    });
   });
 });

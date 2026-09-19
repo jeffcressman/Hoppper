@@ -27,4 +27,15 @@ describe('laneGeometry — lanes fill the timeline’s height', () => {
   it('copes with not being measured yet', () => {
     expect(laneGeometry(0, true).laneH).toBe(MIN_LANE_H);
   });
+
+  it('zooms tracks taller than the view, which then scrolls', () => {
+    const fitted = laneGeometry(700, true);
+    const tall = laneGeometry(700, true, 2);
+    expect(tall.laneH).toBe(fitted.laneH * 2);
+    expect(tall.height).toBeGreaterThan(700);
+  });
+
+  it('never zooms below the fitted size', () => {
+    expect(laneGeometry(700, false, 0.5).laneH).toBe(laneGeometry(700, false).laneH);
+  });
 });

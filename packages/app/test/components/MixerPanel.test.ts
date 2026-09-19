@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mount, enableAutoUnmount } from '@vue/test-utils';
+import { mount, enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import type { RiffDocument, StemDocument } from '@hoppper/sdk';
 
 enableAutoUnmount(afterEach);
@@ -14,6 +14,8 @@ const performanceStub = vi.hoisted(() => ({
   toggleMute: vi.fn(),
   toggleSolo: vi.fn(),
   clearSolos: vi.fn(),
+  meters: [0, 0, 0, 0, 0, 0, 0, 0],
+  trackMeters: () => performanceStub.meters,
 }));
 const docs = vi.hoisted(() => new Map<string, Partial<StemDocument>>());
 
@@ -38,6 +40,7 @@ beforeEach(() => {
   performanceStub.slotSoloed = [false, false, false, false, false, false, false, false];
   performanceStub.slotAudible = [true, true, true, true, true, true, true, true];
   performanceStub.anySoloed = false;
+  performanceStub.meters = [0, 0, 0, 0, 0, 0, 0, 0];
   performanceStub.toggleSolo.mockReset();
   performanceStub.clearSolos.mockReset();
   performanceStub.setSlotLevel.mockReset();
@@ -135,6 +138,23 @@ describe('MixerPanel', () => {
     it('an empty channel has nothing to solo', () => {
       const wrapper = mount(MixerPanel, { props: { riff: riff(['d', null]) } });
       expect(channels(wrapper)[1]!.find('[data-test="solo"]').attributes('disabled')).toBeDefined();
+    });
+  });
+
+  describe('level meters', () => {
+    const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    it('puts a meter beside each fader, lit to that track’s level', async () => {
+      performanceStub.meters = [1, 0.5, 0, 0, 0, 0, 0, 0];
+      const wrapper = mount(MixerPanel, { props: { riff: riff(['d', 'b']) } });
+      await nextFrame();
+      await flushPromises();
+      const lit = (i: number) => channels(wrapper)[i]!.findAll('[data-test="track-meter"] .is-lit').length;
+      const segments = channels(wrapper)[0]!.findAll('[data-test="track-meter"] span').length;
+      expect(segments).toBeGreaterThan(8);
+      expect(lit(0)).toBe(segments);
+      expect(lit(1)).toBe(Math.round(segments / 2));
+      expect(lit(2)).toBe(0);
     });
   });
 });

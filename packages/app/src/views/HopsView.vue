@@ -11,7 +11,7 @@
       <div class="hops__row hops__head">
         <span />
         <span class="lwlkc-eyebrow">Hop</span>
-        <span class="lwlkc-eyebrow">Recorded</span>
+        <span class="lwlkc-eyebrow" title="When the take was made in Hoppper">Created</span>
         <span class="lwlkc-eyebrow">Hops</span>
         <span class="lwlkc-eyebrow">Length</span>
         <span />
@@ -36,8 +36,12 @@
         <div class="hops__name">
           <div class="hops__title">{{ take.seq.title }}</div>
           <div class="hops__jam">{{ take.jam }}</div>
+          <div v-if="take.savedTo" class="hops__note" data-test="export-saved">Saved {{ take.savedTo }}</div>
+          <div v-if="take.exportError" class="hops__note hops__note--error" role="alert">
+            {{ take.exportError }}
+          </div>
         </div>
-        <span class="hops__num">{{ take.day }}</span>
+        <span class="hops__num" data-test="created">{{ take.day }}</span>
         <span class="hops__num lwlkc-readout">{{ take.seq.hops.length }}</span>
         <span class="hops__num lwlkc-readout">{{ take.length }}</span>
         <div class="hops__actions">
@@ -50,6 +54,17 @@
           >
             <LwIcon name="edit" />
             Edit
+          </button>
+          <button
+            type="button"
+            class="lw-btn lw-btn--secondary lw-btn--sm"
+            :aria-label="`Export ${take.seq.title} as a WAV file`"
+            :disabled="exporter.exportingId !== null && !take.exporting"
+            data-test="export"
+            @click="exporter.exportTake(take.seq)"
+          >
+            <LwIcon name="download" />
+            {{ take.exporting ? 'Exporting…' : 'Export' }}
           </button>
           <button
             type="button"
@@ -102,7 +117,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useJamsStore, useRecorderStore, useSessionStore } from '../stores';
+import { useExportStore, useJamsStore, useRecorderStore, useSessionStore } from '../stores';
 import type { HopSequence } from '../hop-recorder/types';
 import LwIcon from '../components/LwIcon.vue';
 import { formatDay, formatDuration } from '../ui/format';
@@ -111,6 +126,7 @@ const recorder = useRecorderStore();
 const session = useSessionStore();
 const jamsStore = useJamsStore();
 const router = useRouter();
+const exporter = useExportStore();
 const confirming = ref<HopSequence | null>(null);
 
 const takes = computed(() =>
@@ -120,6 +136,10 @@ const takes = computed(() =>
     day: formatDay(seq.recordedAt),
     length: formatDuration(seq.durationSec),
     playing: recorder.isPlaying && recorder.playingId === seq.id,
+    exporting: exporter.exportingId === seq.id,
+    // The file's name, not the whole path: enough to find it.
+    savedTo: exporter.lastSaved?.id === seq.id ? exporter.lastSaved.path.split(/[\\/]/).pop() : null,
+    exportError: exporter.lastError?.id === seq.id ? exporter.lastError.message : null,
   })),
 );
 
@@ -128,9 +148,19 @@ const subtitle = computed(() => {
   return `${n} recorded ${n === 1 ? 'hop' : 'hops'}`;
 });
 
-onMounted(() => {
-  void recorder.loadAll();
+onMounted(async () => {
+  await recorder.loadAll();
+  // Takes made before the "YYYYMMDD <jam> hoppp" names get theirs — which
+  // needs each first rifff's date, so only when logged in.
+  if (session.isAuthenticated) await recorder.renameOldTakes();
 });
+
+watch(
+  () => session.isAuthenticated,
+  (authed) => {
+    if (authed) void recorder.renameOldTakes();
+  },
+);
 
 // Takes are on disk and play offline; only their jams' names need Endlesss.
 watch(
@@ -164,7 +194,7 @@ async function onDelete(): Promise<void> {
 }
 .hops__row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 150px 90px 90px 150px;
+  grid-template-columns: 38px minmax(0, 1fr) 130px 70px 80px 240px;
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
@@ -195,6 +225,14 @@ async function onDelete(): Promise<void> {
 .hops__jam {
   font-size: var(--text-sm);
   color: var(--text-3);
+}
+.hops__note {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+.hops__note--error {
+  color: var(--danger);
 }
 .hops__num {
   font-size: var(--text-sm);

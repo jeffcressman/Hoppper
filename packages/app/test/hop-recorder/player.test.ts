@@ -60,6 +60,7 @@ function sequence(): HopSequence {
 }
 
 interface MockEngine extends AudioEngine {
+  setAutomation: ReturnType<typeof vi.fn>;
   hopTo: ReturnType<typeof vi.fn>;
   warmRiff: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -80,6 +81,7 @@ function mockEngine(): MockEngine {
       }),
     ),
     stop: vi.fn(),
+    setAutomation: vi.fn(),
     onStateChange: () => () => {},
   };
   return eng as unknown as MockEngine;
@@ -391,5 +393,24 @@ describe('createHopPlayer', () => {
     expect(player.positionSec()).toBeCloseTo(7.5, 9);
     player.stop();
     expect(player.positionSec()).toBeNull();
+  });
+
+  it('plays a take’s automation from the moment it starts, and hands the mixer back when it stops', async () => {
+    const clock = { t: 50 };
+    const player = createHopPlayer({ engine, resolveRiff, clock: () => clock.t, scheduler: fakeScheduler(clock) });
+    const blank = { volume: [], mute: [], solo: [] };
+    const seq = { ...sequence(), automation: Array.from({ length: 8 }, () => blank) };
+    await player.play(seq);
+    expect(engine.setAutomation).toHaveBeenCalledWith(expect.any(Array), 50);
+    expect(engine.setAutomation.mock.calls[0]![0]).toHaveLength(8);
+    player.stop();
+    expect(engine.setAutomation).toHaveBeenLastCalledWith(null, 0);
+  });
+
+  it('a take without automation plays at the rifffs’ own mix', async () => {
+    const clock = { t: 50 };
+    const player = createHopPlayer({ engine, resolveRiff, clock: () => clock.t, scheduler: fakeScheduler(clock) });
+    await player.play(sequence());
+    expect(engine.setAutomation).toHaveBeenCalledWith(null, 0);
   });
 });

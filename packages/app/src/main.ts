@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import {
   EndlesssClient,
@@ -21,9 +22,11 @@ import './styles/components.css';
 import { initClient } from './client';
 import { createAppRouter } from './router';
 import {
+  initExportStore,
   initHopEditorStore,
   initPerformanceStore,
   initRecorderStore,
+  useJamsStore,
   useRiffDocsStore,
   useSessionStore,
   useStemDocsStore,
@@ -48,6 +51,9 @@ import {
   createSequenceStorage,
 } from './hop-recorder';
 import { installGlobalErrorCapture, log } from './logging/log-store';
+import { renderTake, type OfflineContextLike } from './export/render';
+import { hopName } from './hop-recorder/naming';
+import type { HopSequence } from './hop-recorder/types';
 import type {
   JamCouchID,
   ResolvedStem,
@@ -195,12 +201,53 @@ async function bootstrap() {
       },
     },
   });
+  // "20260919 <jam> hoppp": the first rifff's day, so a hop can be found
+  // again in Endlesss or LORE. Batched per jam — one request for the jam's
+  // first rifffs (held already if just played), and its name.
+  const nameTakes = async (seqs: HopSequence[]): Promise<Map<string, string>> => {
+    const jams = useJamsStore();
+    const byJam = new Map<JamCouchID, HopSequence[]>();
+    for (const seq of seqs) byJam.set(seq.jamId, [...(byJam.get(seq.jamId) ?? []), seq]);
+    const names = new Map<string, string>();
+    for (const [jamId, takes] of byJam) {
+      await Promise.all([
+        riffDocs.ensure(jamId, takes.map((t) => t.hops[0]!.riffId)),
+        jams.loadProfile(jamId),
+      ]);
+      const jam = jams.profilesById.get(jamId)?.displayName ?? jamId;
+      for (const take of takes) {
+        const first = riffDocs.get(take.hops[0]!.riffId);
+        names.set(take.id, hopName(first?.createdAt ?? Date.parse(take.recordedAt), jam));
+      }
+    }
+    return names;
+  };
   initRecorderStore({
     recorder: hopRecorder,
     storage: sequenceStorage,
     player: hopPlayer,
+    nameTake: async (seq) => (await nameTakes([seq])).get(seq.id)!,
+    nameTakes,
   });
   log('info', 'boot', 'recorder store initialized');
+
+  // Export: the take rendered offline through its own engine — sharing the
+  // app's decoded stems — and written where the Save dialog says.
+  initExportStore({
+    chooseFile: async (defaultName) =>
+      saveDialog({ defaultPath: defaultName, filters: [{ name: 'WAV audio', extensions: ['wav'] }] }),
+    render: (seq) =>
+      renderTake(seq, {
+        sampleRate: audioContext.sampleRate,
+        createContext: (frames, sampleRate) =>
+          new OfflineAudioContext(2, frames, sampleRate) as unknown as OfflineContextLike,
+        createEngine: (context) => createAudioEngine({ context, loader }),
+        resolveRiff,
+      }),
+    // Raw bytes, not JSON: a take's WAV runs to tens of megabytes.
+    write: (path, bytes) =>
+      invoke('write_export', bytes, { headers: { 'x-export-path': encodeURIComponent(path) } }),
+  });
 
   initHopEditorStore({
     storage: sequenceStorage,

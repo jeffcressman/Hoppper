@@ -160,6 +160,8 @@ Ships inside a whole-app redesign on the LwlkcIng design system, in three slices
 - [x] Edit operations: drag a hop point (beat snap), delete a hop point, expand/add skipped rifffs, duplicate a rifff. *(2026-09-18. Changing transition duration: deferred by the user.)*
 - [x] Live preview: edits play back instantly using the AudioBuffer cache. *(Play in the editor replays the edited take.)*
 - [x] Undo/redo. *(Buttons and Ctrl/Cmd+Z, per editing session.)*
+- [x] Automation: mixer fader, mute and solo recorded into takes, played back in replay, the editor and exports, and edited as lines in the editor. *(2026-09-18; design in the Phase 8 doc → "Automation".)*
+- [x] A level meter beside each mixer fader. *(2026-09-18)*
 
 **Checkpoint**: a recorded session can be tightened, looped sections shortened, transitions tuned.
 
@@ -185,8 +187,8 @@ Moved out of Phases 6–8 on 2026-09-17 so the timeline editor and UI overhaul c
 
 **Goal**: render a sequence to disk.
 
-- [ ] `OfflineAudioContext` render path matching the live engine exactly.
-- [ ] Stereo WAV export (16/24-bit).
+- [x] `OfflineAudioContext` render path matching the live engine exactly. *(2026-09-18: `src/export/render.ts` renders through `createAudioEngine` itself, each hop scheduled at its time via `HopOptions.atSec`.)*
+- [x] Stereo WAV export (16/24-bit). *(2026-09-18: 24-bit, from an Export button per take on the Hops page, via the system Save dialog.)*
 - [ ] Multitrack export: 8 stems × N rifffs collapsed onto 8 output tracks at hop boundaries (FLAC, individual files).
 - [ ] Project export: `.zip` with sequence JSON + referenced stems for portability.
 

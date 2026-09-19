@@ -13,6 +13,7 @@ import {
   skippedBetween,
   type GridOf,
 } from '../../src/hop-editor/edits';
+import { valueAt } from '../../src/automation/automation';
 
 const JAM = 'band1' as JamCouchID;
 const hop = (tSec: number, riffId: string, extra: Partial<HopEvent> = {}): HopEvent => ({
@@ -237,5 +238,51 @@ describe('resizeEnd — the handle at the take’s end', () => {
 
   it('goes exactly where it is put with snapping off', () => {
     expect(resizeEnd(take(), 25.37, 'off', grid).durationSec).toBeCloseTo(25.37, 9);
+  });
+});
+
+describe('hop edits carry automation with the music', () => {
+  // Track 1's volume falls from 1 at 0 s to 0 at 24 s, across the whole take.
+  const withFade = (): HopSequence => ({
+    ...take(),
+    automation: Array.from({ length: 8 }, (_, i) => ({
+      volume: i === 0 ? [{ tSec: 0, value: 1 }, { tSec: 24, value: 0 }] : [],
+      mute: [],
+      solo: [],
+    })),
+  });
+  const vol = (seq: HopSequence, t: number) => valueAt(seq.automation![0]!.volume, t, 'volume');
+
+  it('delete cuts out the automation over the rifff it removes', () => {
+    const cut = deleteHop(withFade(), 1, grid);
+    // C, which came in at 16 s at level 1/3, now comes in at 8 s — at 1/3.
+    expect(vol(cut, 8)).toBeCloseTo(vol(withFade(), 16), 9);
+    expect(vol(cut, 4)).toBeCloseTo(vol(withFade(), 4), 9);
+  });
+
+  it('adding a rifff holds the level across it and moves the rest along', () => {
+    const added = insertRiff(withFade(), 1, 'X' as RiffCouchID, 4, grid);
+    expect(vol(added, 10)).toBeCloseTo(vol(withFade(), 8), 9);
+    expect(vol(added, 16)).toBeCloseTo(vol(withFade(), 12), 9);
+  });
+
+  it('growing the start holds the first level across the new time', () => {
+    const grown = resizeStart(withFade(), 4, 'beat', grid);
+    expect(vol(grown, 2)).toBe(1);
+    expect(vol(grown, 16)).toBeCloseTo(vol(withFade(), 12), 9);
+  });
+
+  it('trimming the start cuts its automation too', () => {
+    const trimmed = resizeStart(withFade(), -2, 'beat', grid);
+    expect(vol(trimmed, 0)).toBeCloseTo(vol(withFade(), 2), 9);
+  });
+
+  it('trimming the end drops what came after it', () => {
+    const trimmed = resizeEnd(withFade(), 20, 'beat', grid);
+    expect(trimmed.automation![0]!.volume.every((p) => p.tSec <= 20)).toBe(true);
+  });
+
+  it('moving a hop point leaves the automation where it is', () => {
+    expect(moveHop(withFade(), 1, 6.9, 'beat', grid).automation).toEqual(withFade().automation);
   });
 });

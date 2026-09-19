@@ -293,7 +293,8 @@ describe('hop audibility', () => {
 
     ctx.currentTime = 1;
     await engine.hopTo(JAM, riff('r1'), stemsFor('r1'));
-    expect(ctx.audibleVoicesAt(1).length).toBe(1);
+    // Once its 10 ms fade-in from silence is under way.
+    expect(ctx.audibleVoicesAt(1.02).length).toBe(1);
 
     ctx.currentTime = 3;
     await engine.hopTo(JAM, riff('r2'), stemsFor('r2'));

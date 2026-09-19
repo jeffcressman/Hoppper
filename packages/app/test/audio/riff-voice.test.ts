@@ -173,6 +173,19 @@ describe('createRiffVoice', () => {
     expect(ctx.sources.map((s) => stemGainOf(s).gain.value)).toEqual([0.25, 0]);
   });
 
+  it('feeds each stem, after its level, to its slot’s meter tap', () => {
+    const ctx = createMockContext();
+    const taps = Array.from({ length: 8 }, (_, i) => ({ tap: i }));
+    createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, { buffer: buf() }, null, null, null, null, null],
+      loopDurationSec: 4,
+      slotTaps: taps,
+    });
+    expect(stemGainOf(ctx.sources[0]!).connections).toContain(taps[0]);
+    expect(stemGainOf(ctx.sources[1]!).connections).toContain(taps[2]);
+  });
+
   it('setSlotLevel glides one slot to its new level, leaving the others alone', () => {
     const ctx = createMockContext();
     const voice = createRiffVoice({
@@ -189,6 +202,61 @@ describe('createRiffVoice', () => {
       { kind: 'ramp', value: 0.2, time: 10.02 },
     ]);
     expect(stemGainOf(ctx.sources[1]!).param.events).toEqual([]);
+  });
+
+  it('automateSlot schedules a slot’s level curve from a moment on: ramps, and steps as 10 ms ramps, times the rifff’s gain', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf(), gain: 0.5 }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    // Level 1 → 0.5 from 10 s to 14 s, silent from 14 s.
+    voice.automateSlot(0, [
+      { atSec: 10, from: 1, to: 0.5 },
+      { atSec: 14, from: 0, to: 0 },
+    ], 12);
+    const events = stemGainOf(ctx.sources[0]!).param.events;
+    expect(events.slice(0, 3)).toEqual([
+      { kind: 'cancel', time: 12 },
+      // Mid-ramp at 12 s: 0.75 × the rifff's 0.5.
+      { kind: 'set', value: 0.375, time: 12 },
+      { kind: 'ramp', value: 0.25, time: 14 },
+    ]);
+    // The drop to silence at 14 s is a short ramp, never a jump: no click.
+    expect(events[3]).toEqual({ kind: 'set', value: 0.25, time: 14 });
+    expect(events[4]!.kind).toBe('ramp');
+    expect(events[4]!.value).toBe(0);
+    expect(events[4]!.time).toBeCloseTo(14.01, 9);
+  });
+
+  it('automateSlot glides from where a sounding voice is, rather than jumping', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.automateSlot(0, [{ atSec: 0, from: 0.2, to: 0.2 }], 5, { glide: true });
+    const events = stemGainOf(ctx.sources[0]!).param.events;
+    expect(events[1]).toEqual({ kind: 'set', value: 1, time: 5 });
+    expect(events[2]!.kind).toBe('ramp');
+    expect(events[2]!.value).toBeCloseTo(0.2, 9);
+    expect(events[2]!.time).toBeCloseTo(5.01, 9);
+  });
+
+  it('automateSlot starts on the right stretch when the moment is before the curve', () => {
+    const ctx = createMockContext();
+    const voice = createRiffVoice({
+      context: ctx,
+      stems: [{ buffer: buf() }, null, null, null, null, null, null, null],
+      loopDurationSec: 4,
+    });
+    voice.automateSlot(0, [{ atSec: 10, from: 0.8, to: 0.8 }], 5);
+    expect(stemGainOf(ctx.sources[0]!).param.events).toEqual([
+      { kind: 'cancel', time: 5 },
+      { kind: 'set', value: 0.8, time: 5 },
+    ]);
   });
 
   it('setSlotLevel on an empty slot does nothing', () => {

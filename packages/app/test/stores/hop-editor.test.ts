@@ -145,4 +145,28 @@ describe('hop editor store', () => {
     await store.undo();
     expect(store.take!.durationSec).toBe(24);
   });
+
+  describe('automation points', () => {
+    it('adds a point to a track’s line, saved and undoable — starting from flat lines on an older take', async () => {
+      const { store, saved } = setup();
+      await store.open(JAM, 't1');
+      await store.addAutomationPoint(2, 'volume', 4, 0.5);
+      expect(store.take!.automation).toHaveLength(8);
+      expect(store.take!.automation![2]!.volume).toEqual([{ tSec: 4, value: 0.5 }]);
+      expect(saved.at(-1)?.automation?.[2]?.volume).toEqual([{ tSec: 4, value: 0.5 }]);
+      await store.undo();
+      expect(store.take!.automation).toBeUndefined();
+    });
+
+    it('moves and removes points', async () => {
+      const { store } = setup();
+      await store.open(JAM, 't1');
+      await store.addAutomationPoint(0, 'mute', 2, 1);
+      await store.addAutomationPoint(0, 'mute', 6, 0);
+      await store.moveAutomationPoint(0, 'mute', 0, 3, 1);
+      expect(store.take!.automation![0]!.mute).toEqual([{ tSec: 3, value: 1 }, { tSec: 6, value: 0 }]);
+      await store.removeAutomationPoint(0, 'mute', 1);
+      expect(store.take!.automation![0]!.mute).toEqual([{ tSec: 3, value: 1 }]);
+    });
+  });
 });

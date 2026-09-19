@@ -52,6 +52,7 @@
           S
         </button>
       </div>
+      <div class="ch__strip">
       <div
         class="fader"
         role="slider"
@@ -69,6 +70,16 @@
           <div class="fader__thumb" :style="{ bottom: `${ch.pct}%` }" />
         </div>
       </div>
+      <!-- LevelMeter, vertical (audio/LevelMeter): what the track is sounding. -->
+      <div class="meter" aria-hidden="true" data-test="track-meter">
+        <span
+          v-for="seg in meterSegments(ch.slot)"
+          :key="seg.i"
+          :class="['meter__seg', { 'is-lit': seg.lit }]"
+          :style="seg.lit ? { background: seg.colour } : undefined"
+        />
+      </div>
+      </div>
       <span class="ch__name" :style="{ color: ch.stemId ? ch.colour : 'var(--text-4)' }" data-test="channel-name">
         {{ ch.name }}
       </span>
@@ -82,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { RiffDocument, StemCouchID } from '@hoppper/sdk';
 import { usePerformanceStore, useStemDocsStore } from '../stores';
 import { stemColour } from '../ui/stem-colour';
@@ -120,6 +131,30 @@ const channels = computed(() =>
     };
   }),
 );
+
+// Each track's level, read every frame.
+const SEGMENTS = 14;
+const meterLevels = ref<number[]>(Array(8).fill(0));
+function segColour(frac: number): string {
+  if (frac > 0.9) return 'var(--spectrum-red)';
+  if (frac > 0.72) return 'var(--spectrum-amber)';
+  return 'var(--spectrum-green)';
+}
+function meterSegments(slot: number): { i: number; lit: boolean; colour: string }[] {
+  const lit = Math.round(Math.min(1, meterLevels.value[slot] ?? 0) * SEGMENTS);
+  // Bottom segment first, drawn upwards by the column's reverse order.
+  return Array.from({ length: SEGMENTS }, (_, i) => ({ i, lit: i < lit, colour: segColour((i + 1) / SEGMENTS) }));
+}
+let frame = 0;
+function readMeters(): void {
+  const next = performance.trackMeters();
+  if (next.some((v, i) => v !== meterLevels.value[i])) meterLevels.value = next;
+  frame = requestAnimationFrame(readMeters);
+}
+onMounted(() => {
+  frame = requestAnimationFrame(readMeters);
+});
+onUnmounted(() => cancelAnimationFrame(frame));
 
 function onFaderKey(e: KeyboardEvent, slot: number): void {
   const level = performance.slotLevels[slot] ?? 1;
@@ -171,6 +206,28 @@ function onFaderDown(e: PointerEvent, slot: number): void {
 .ch__buttons {
   display: flex;
   gap: 4px;
+}
+.ch__strip {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.meter {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: 6px;
+  height: 150px;
+}
+.meter__seg {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--surface-3);
+  opacity: 0.5;
+  transition: background 60ms linear, opacity 60ms linear;
+}
+.meter__seg.is-lit {
+  opacity: 1;
 }
 .ch__solo {
   display: grid;

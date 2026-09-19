@@ -17,6 +17,22 @@ export interface HopEvent {
   quantise?: HopQuantise;
 }
 
+/** The mixer moves a take can carry: a track's fader, mute and solo. */
+export type AutomationParam = 'volume' | 'mute' | 'solo';
+export const AUTOMATION_PARAMS: readonly AutomationParam[] = ['volume', 'mute', 'solo'];
+
+/**
+ * A point on an automation line, at `tSec` on the take's timeline (its first
+ * rifff arrives at 0). `value` is 0..1 for volume, 0 or 1 for mute and solo.
+ */
+export interface AutomationPoint {
+  tSec: number;
+  value: number;
+}
+
+/** One track's automation, points in time order. */
+export type TrackAutomation = Record<AutomationParam, AutomationPoint[]>;
+
 export interface HopSequence {
   schemaVersion: typeof HOP_SEQUENCE_SCHEMA_VERSION;
   id: string;
@@ -25,6 +41,12 @@ export interface HopSequence {
   recordedAt: string;
   durationSec: number;
   hops: HopEvent[];
+  /**
+   * The mixer moves recorded with the take, one entry per track slot (eight).
+   * Absent on takes recorded before automation, which play at each rifff's
+   * own mix.
+   */
+  automation?: TrackAutomation[];
 }
 
 export class SequenceParseError extends Error {
@@ -49,6 +71,15 @@ export function serializeSequence(seq: HopSequence): string {
       transitionMs: h.transitionMs,
       ...(h.quantise === undefined ? {} : { quantise: h.quantise }),
     })),
+    ...(seq.automation === undefined
+      ? {}
+      : {
+          automation: seq.automation.map((track) => ({
+            volume: track.volume.map(({ tSec, value }) => ({ tSec, value })),
+            mute: track.mute.map(({ tSec, value }) => ({ tSec, value })),
+            solo: track.solo.map(({ tSec, value }) => ({ tSec, value })),
+          })),
+        }),
   };
   return JSON.stringify(canonical, null, 2);
 }
@@ -106,6 +137,7 @@ export function parseSequence(json: string): HopSequence {
   }
 
   const hops: HopEvent[] = obj.hops.map((h, i) => parseHop(h, i));
+  const automation = obj.automation === undefined ? undefined : parseAutomation(obj.automation);
 
   return {
     schemaVersion: HOP_SEQUENCE_SCHEMA_VERSION,
@@ -115,7 +147,34 @@ export function parseSequence(json: string): HopSequence {
     recordedAt,
     durationSec,
     hops,
+    ...(automation === undefined ? {} : { automation }),
   };
+}
+
+const TRACK_COUNT = 8;
+
+function parseAutomation(raw: unknown): TrackAutomation[] {
+  if (!Array.isArray(raw) || raw.length !== TRACK_COUNT) {
+    throw new SequenceParseError(`Field "automation" must be an array of ${TRACK_COUNT} tracks`);
+  }
+  return raw.map((track, i) => {
+    if (track === null || typeof track !== 'object') {
+      throw new SequenceParseError(`automation[${i}] must be an object`);
+    }
+    const t = track as Record<string, unknown>;
+    const points = (param: AutomationParam): AutomationPoint[] => {
+      const list = t[param] ?? [];
+      if (!Array.isArray(list)) throw new SequenceParseError(`automation[${i}].${param} must be an array`);
+      return list.map((p, j) => {
+        const pt = p as Record<string, unknown> | null;
+        if (!pt || typeof pt.tSec !== 'number' || !Number.isFinite(pt.tSec) || typeof pt.value !== 'number' || !Number.isFinite(pt.value)) {
+          throw new SequenceParseError(`automation[${i}].${param}[${j}] must have a finite tSec and value`);
+        }
+        return { tSec: pt.tSec, value: pt.value };
+      });
+    };
+    return { volume: points('volume'), mute: points('mute'), solo: points('solo') };
+  });
 }
 
 function parseHop(raw: unknown, index: number): HopEvent {

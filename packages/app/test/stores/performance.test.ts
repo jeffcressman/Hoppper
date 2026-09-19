@@ -72,6 +72,8 @@ function mockEngine(): MockEngine {
     setSlotLevels: vi.fn(),
     playhead: vi.fn(() => null),
     levels: vi.fn((): [number, number] => [0, 0]),
+    trackMeters: vi.fn(() => [0, 0, 0, 0, 0, 0, 0, 0]),
+    setAutomation: vi.fn(),
     onStateChange(fn: (s: AudioEngineState) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -422,6 +424,8 @@ describe('definePerformanceStore', () => {
           recording = true;
         }),
         recordHop: vi.fn(),
+        startMix: vi.fn(),
+        recordMix: vi.fn(),
         stop: vi.fn(() => {
           recording = false;
           return {
@@ -611,9 +615,11 @@ describe('definePerformanceStore — what the page draws from', () => {
     const head = { riffId: 'r1' as RiffCouchID, positionSec: 3, loopSec: 16 };
     vi.mocked(engine.playhead).mockReturnValue(head);
     vi.mocked(engine.levels).mockReturnValue([0.5, 0.4]);
+    vi.mocked(engine.trackMeters).mockReturnValue([0, 0.3, 0, 0, 0, 0, 0, 0]);
     const s = definePerformanceStore({ engine, prefetcher: mockPrefetcher(), resolveStems: vi.fn() })();
     expect(s.playhead()).toEqual(head);
     expect(s.levels()).toEqual([0.5, 0.4]);
+    expect(s.trackMeters()).toEqual([0, 0.3, 0, 0, 0, 0, 0, 0]);
   });
 
   it('hands out a stem’s decoded audio when it has been loaded, for the waveform', () => {
@@ -773,5 +779,78 @@ describe('definePerformanceStore — solo', () => {
     s.toggleSolo(3);
     s.useMix('editor');
     expect(engine.setSlotLevels).toHaveBeenLastCalledWith([1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+});
+
+describe('definePerformanceStore — recording the mixer', () => {
+  function armedRecorder() {
+    let state: 'idle' | 'armed' | 'recording' = 'armed';
+    return {
+      get state() {
+        return state;
+      },
+      get isRecording() {
+        return state !== 'idle';
+      },
+      onStateChange: () => () => {},
+      start: vi.fn(),
+      stop: vi.fn(),
+      recordHop: vi.fn(() => {
+        state = 'recording';
+      }),
+      startMix: vi.fn(),
+      recordMix: vi.fn(),
+    };
+  }
+  const setup = () => {
+    const engine = mockEngine();
+    const recorder = armedRecorder();
+    const s = definePerformanceStore({
+      engine,
+      prefetcher: mockPrefetcher(),
+      resolveStems: vi.fn(async () => [fakeStem('s')]),
+      recorder: recorder as unknown as HopRecorder,
+    })();
+    return { engine, recorder, s };
+  };
+
+  it('gives the take the mixer as it stands at its first rifff', async () => {
+    const { recorder, s } = setup();
+    s.setSlotLevel(0, 0.5);
+    s.toggleMute(1);
+    await s.hopTo(JAM, riff('r1'));
+    expect(recorder.startMix).toHaveBeenCalledWith({
+      volume: [0.5, 1, 1, 1, 1, 1, 1, 1],
+      mute: [false, true, false, false, false, false, false, false],
+      solo: [false, false, false, false, false, false, false, false],
+    });
+    // Moves while armed only set that starting mix.
+    expect(recorder.recordMix).not.toHaveBeenCalled();
+  });
+
+  it('records each fader, mute and solo move once the take is running', async () => {
+    const { recorder, s } = setup();
+    await s.hopTo(JAM, riff('r1'));
+    s.setSlotLevel(2, 0.4);
+    s.toggleMute(2);
+    s.toggleSolo(5);
+    expect(recorder.recordMix.mock.calls.map((c) => c[0])).toEqual([
+      { slot: 2, param: 'volume', value: 0.4 },
+      { slot: 2, param: 'mute', value: 1 },
+      { slot: 5, param: 'solo', value: 1 },
+    ]);
+  });
+
+  it('records Un-solo as each soloed track going off', async () => {
+    const { recorder, s } = setup();
+    await s.hopTo(JAM, riff('r1'));
+    s.toggleSolo(1);
+    s.toggleSolo(4);
+    recorder.recordMix.mockClear();
+    s.clearSolos();
+    expect(recorder.recordMix.mock.calls.map((c) => c[0])).toEqual([
+      { slot: 1, param: 'solo', value: 0 },
+      { slot: 4, param: 'solo', value: 0 },
+    ]);
   });
 });

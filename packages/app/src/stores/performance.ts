@@ -85,24 +85,34 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       activeMix.value = page;
       applyMix();
     }
+    // While a take is running, every mixer move is recorded into it.
+    function recordMix(slot: number, param: 'volume' | 'mute' | 'solo', value: number): void {
+      if (deps.recorder?.state === 'recording') deps.recorder.recordMix({ slot, param, value });
+    }
     function setSlotLevel(slot: number, level: number): void {
       if (!(slot in slotLevels.value) || !Number.isFinite(level)) return;
       slotLevels.value[slot] = Math.min(1, Math.max(0, level));
+      recordMix(slot, 'volume', slotLevels.value[slot]!);
       if (activeMix.value === 'recording') applyMix();
     }
     function toggleSolo(slot: number): void {
       if (!(slot in slotSoloed.value)) return;
       slotSoloed.value[slot] = !slotSoloed.value[slot];
+      recordMix(slot, 'solo', slotSoloed.value[slot] ? 1 : 0);
       if (activeMix.value === 'recording') applyMix();
     }
     function clearSolos(): void {
       if (!anySoloed.value) return;
+      slotSoloed.value.forEach((on, slot) => {
+        if (on) recordMix(slot, 'solo', 0);
+      });
       slotSoloed.value = slotSoloed.value.map(() => false);
       if (activeMix.value === 'recording') applyMix();
     }
     function toggleMute(slot: number): void {
       if (!(slot in slotMuted.value)) return;
       slotMuted.value[slot] = !slotMuted.value[slot];
+      recordMix(slot, 'mute', slotMuted.value[slot] ? 1 : 0);
       if (activeMix.value === 'recording') applyMix();
     }
 
@@ -165,6 +175,7 @@ export function definePerformanceStore(deps: PerformanceDeps) {
       // never played isn't part of it. Replay re-applies `quantise`, so the
       // hop is held to the same beat it was held to live.
       if (deps.recorder?.isRecording) {
+        const firstHop = deps.recorder.state === 'armed';
         deps.recorder.recordHop(
           {
             riffId: riff.riffId,
@@ -174,6 +185,14 @@ export function definePerformanceStore(deps: PerformanceDeps) {
           },
           result.atSec,
         );
+        // The take's automation starts from the mixer as it stands now.
+        if (firstHop) {
+          deps.recorder.startMix({
+            volume: [...slotLevels.value],
+            mute: [...slotMuted.value],
+            solo: [...slotSoloed.value],
+          });
+        }
       }
       return result;
     }
@@ -217,12 +236,14 @@ export function definePerformanceStore(deps: PerformanceDeps) {
     // reactive state.
     const playhead = () => deps.engine.playhead();
     const levels = () => deps.engine.levels();
+    const trackMeters = () => deps.engine.trackMeters();
     const bufferFor = (stemId: StemCouchID) => deps.peekBuffer?.(stemId);
 
     return {
       state,
       playhead,
       levels,
+      trackMeters,
       bufferFor,
       decodedTick,
       currentRiffId,

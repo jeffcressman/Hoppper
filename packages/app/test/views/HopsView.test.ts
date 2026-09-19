@@ -10,11 +10,18 @@ const recorderStub = vi.hoisted(() => ({
   isRecording: false,
   playingId: null as string | null,
   loadAll: vi.fn(async () => {}),
+  renameOldTakes: vi.fn(async () => {}),
   play: vi.fn(async () => {}),
   stopPlayback: vi.fn(),
   delete: vi.fn(async () => {}),
 }));
 const sessionStub = vi.hoisted(() => ({ isAuthenticated: true }));
+const exportStub = vi.hoisted(() => ({
+  exportingId: null as string | null,
+  lastSaved: null as null | { id: string; path: string },
+  lastError: null as null | { id: string; message: string },
+  exportTake: vi.fn(async () => {}),
+}));
 const jamsStub = vi.hoisted(() => ({
   profilesById: new Map<string, { displayName: string }>(),
   loadProfile: vi.fn(async (_jamId: string) => {}),
@@ -23,11 +30,15 @@ const jamsStub = vi.hoisted(() => ({
 vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
   const recorder = reactive(recorderStub);
+  const exportState = reactive(exportStub);
+  const session = reactive(sessionStub);
   return {
     useRecorderStore: () => recorder,
-    useSessionStore: () => sessionStub,
+    useSessionStore: () => session,
     useJamsStore: () => jamsStub,
+    useExportStore: () => exportState,
     __recorder: recorder,
+    __session: session,
   };
 });
 
@@ -41,6 +52,7 @@ import * as stores from '../../src/stores';
 import HopsView from '../../src/views/HopsView.vue';
 
 const recorder = (stores as unknown as { __recorder: typeof recorderStub }).__recorder;
+const session = (stores as unknown as { __session: typeof sessionStub }).__session;
 
 function take(overrides: Partial<HopSequence> = {}): HopSequence {
   return {
@@ -65,13 +77,18 @@ beforeEach(() => {
   recorder.isRecording = false;
   recorder.playingId = null;
   recorderStub.loadAll.mockReset().mockResolvedValue(undefined);
+  recorderStub.renameOldTakes.mockReset().mockResolvedValue(undefined);
   recorderStub.play.mockReset().mockResolvedValue(undefined);
   recorderStub.stopPlayback.mockReset();
   recorderStub.delete.mockReset().mockResolvedValue(undefined);
-  sessionStub.isAuthenticated = true;
+  session.isAuthenticated = true;
   jamsStub.profilesById = new Map([['band1', { displayName: 'Hoppper' }]]);
   jamsStub.loadProfile.mockReset().mockResolvedValue(undefined);
   routerPush.mockReset();
+  exportStub.exportingId = null;
+  exportStub.lastSaved = null;
+  exportStub.lastError = null;
+  exportStub.exportTake.mockReset().mockResolvedValue(undefined);
 });
 
 const rows = (w: ReturnType<typeof mount>) => w.findAll('[data-test="hop-row"]');
@@ -104,7 +121,7 @@ describe('HopsView', () => {
   });
 
   it('asks Endlesss for no names when logged out', async () => {
-    sessionStub.isAuthenticated = false;
+    session.isAuthenticated = false;
     mount(HopsView);
     await flushPromises();
     expect(jamsStub.loadProfile).not.toHaveBeenCalled();
@@ -162,5 +179,57 @@ describe('HopsView', () => {
     const wrapper = mount(HopsView);
     await rows(wrapper)[0]!.find('[data-test="edit"]').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({ name: 'hop-editing', params: { jamId: 'band1', id: 'take-1' } });
+  });
+
+  describe('export', () => {
+    it('each take has an Export button that exports it as a WAV', async () => {
+      const wrapper = mount(HopsView);
+      await rows(wrapper)[1]!.find('[data-test="export"]').trigger('click');
+      expect(exportStub.exportTake).toHaveBeenCalledWith(recorder.allSaved[1]);
+    });
+
+    it('shows the take being exported, and holds the other buttons off meanwhile', async () => {
+      exportStub.exportingId = 'take-1';
+      const wrapper = mount(HopsView);
+      expect(rows(wrapper)[0]!.find('[data-test="export"]').text()).toContain('Exporting');
+      expect(rows(wrapper)[1]!.find('[data-test="export"]').attributes('disabled')).toBeDefined();
+    });
+
+    it('says where it saved, and why it didn’t', () => {
+      exportStub.lastSaved = { id: 'take-1', path: '/Users/me/Sunday drift.wav' };
+      exportStub.lastError = { id: 'take-2', message: 'Couldn’t load rifff B for the export' };
+      const wrapper = mount(HopsView);
+      expect(wrapper.text()).toContain('Saved Sunday drift.wav');
+      expect(wrapper.find('[role="alert"]').text()).toContain('Couldn’t load rifff B');
+    });
+  });
+
+  it('shows when each take was created in Hoppper, apart from the jam date in its name', () => {
+    const wrapper = mount(HopsView);
+    expect(wrapper.find('.hops__head').text()).toContain('Created');
+    expect(rows(wrapper)[0]!.find('[data-test="created"]').text()).toBe('14 Sep 2026');
+  });
+
+  it('renames takes made before the naming format, once the list is in, when logged in', async () => {
+    mount(HopsView);
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).toHaveBeenCalledTimes(1);
+    expect(recorderStub.loadAll.mock.invocationCallOrder[0]).toBeLessThan(recorderStub.renameOldTakes.mock.invocationCallOrder[0]!);
+  });
+
+  it('leaves old names for later when logged out — naming needs Endlesss', async () => {
+    session.isAuthenticated = false;
+    mount(HopsView);
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).not.toHaveBeenCalled();
+  });
+
+  it('renames them as soon as you log in', async () => {
+    session.isAuthenticated = false;
+    mount(HopsView);
+    await flushPromises();
+    session.isAuthenticated = true;
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).toHaveBeenCalledTimes(1);
   });
 });

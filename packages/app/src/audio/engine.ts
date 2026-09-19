@@ -12,6 +12,7 @@ import {
   createRiffVoice,
   type AnalyserNodeLike,
   type AudioContextLike,
+  type AutomationStretch,
   type RiffVoice,
   type VoiceStem,
 } from './riff-voice.js';
@@ -58,6 +59,11 @@ export interface HopOptions {
    * enter immediately, which is the default everywhere.
    */
   quantise?: HopQuantise;
+  /**
+   * Act as if the hop were made at this context time rather than now — for
+   * an offline render, which lays the whole take out before any time passes.
+   */
+  atSec?: number;
 }
 
 export interface AudioEngine {
@@ -84,6 +90,13 @@ export interface AudioEngine {
   readonly slotLevels: ReadonlyArray<number>;
   setSlotLevels(levels: ReadonlyArray<number>): void;
   /**
+   * Play a take's automation: per slot, its heard-level curve on the take's
+   * timeline, which starts at context time `originSec`. Every voice follows
+   * it from when it starts, and the mixer's levels stand aside until
+   * `setAutomation(null)` hands the slots back to them.
+   */
+  setAutomation(curves: ReadonlyArray<ReadonlyArray<{ tSec: number; from: number; to: number }>> | null, originSec: number): void;
+  /**
    * Where playback is in the playing rifff's loop, on the same continuous
    * grid hops are measured against — so it is where the audio is. Null while
    * nothing plays.
@@ -91,6 +104,11 @@ export interface AudioEngine {
   playhead(): { riffId: RiffCouchID; positionSec: number; loopSec: number } | null;
   /** Peak output level of the left and right channels just now, 0..1. */
   levels(): [number, number];
+  /**
+   * Each track's peak level just now, 0..1, after its fader, mute and solo —
+   * stereo read as one (an analyser mixes down to mono).
+   */
+  trackMeters(): number[];
   onStateChange(fn: (s: AudioEngineState) => void): () => void;
   /**
    * Fires whenever `currentRiffId` changes: a cold start, every hop, and
@@ -115,6 +133,11 @@ interface OutgoingVoice {
   stopAt: number;
 }
 
+/** Stop fades everything out over this, rather than cutting it dead. */
+const STOP_FADE_SEC = 0.03;
+/** A cold start fades in over this, so the first sample isn't a click. */
+const COLD_START_FADE_SEC = 0.01;
+
 export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   const { context, loader } = opts;
   const defaultCrossfadeMs = opts.defaultCrossfadeMs ?? 250;
@@ -132,11 +155,20 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
   // these as well as `current`.
   let outgoing: OutgoingVoice[] = [];
   let slotLevels: number[] = Array(SLOT_COUNT).fill(1);
+  // A take's automation, in context time, while one is playing.
+  let automation: AutomationStretch[][] | null = null;
+  const unity: number[] = Array(SLOT_COUNT).fill(1);
+
+  /** `sounding`: the voice is already playing, so it glides onto the curve. */
+  function automate(voice: RiffVoice, fromSec: number, sounding = false): void {
+    automation?.forEach((curve, slot) => voice.automateSlot(slot, curve, fromSec, { glide: sounding }));
+  }
 
   // Every voice plays into one master bus, which the level meter taps.
   const master = context.createGain();
   master.connect(context.destination);
   const meters: { node: AnalyserNodeLike; frame: Float32Array }[] = [];
+  const slotMeters: { node: AnalyserNodeLike; frame: Float32Array }[] = [];
   if (context.createAnalyser && context.createChannelSplitter) {
     const splitter = context.createChannelSplitter(2);
     master.connect(splitter);
@@ -153,6 +185,20 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       node.connect(sink);
       meters.push({ node, frame: new Float32Array(1024) });
     }
+    for (let slot = 0; slot < SLOT_COUNT; slot++) {
+      const node = context.createAnalyser();
+      node.fftSize = 1024;
+      node.connect(sink);
+      slotMeters.push({ node, frame: new Float32Array(1024) });
+    }
+  }
+  const slotTaps = slotMeters.map((m) => m.node);
+
+  function peakOf({ node, frame }: { node: AnalyserNodeLike; frame: Float32Array }): number {
+    node.getFloatTimeDomainData(frame);
+    let max = 0;
+    for (const v of frame) max = Math.max(max, Math.abs(v));
+    return Math.min(1, max);
   }
   const listeners = new Set<(s: AudioEngineState) => void>();
   const riffListeners = new Set<(riffId: RiffCouchID | null) => void>();
@@ -192,6 +238,14 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       `rifff ${riffId} has stems that don't fit its ${sec(loopSec)} loop a whole ` +
         `number of times: ${ragged.join(', ')}`,
     );
+  }
+
+  /** The rifff playing, and any still fading out, follow the mixer at once. */
+  function applyMixerLevels(now: number): void {
+    for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) {
+      if (!v) continue;
+      slotLevels.forEach((level, slot) => v.setSlotLevel(slot, level, now));
+    }
   }
 
   function emitRiffChange(): void {
@@ -328,7 +382,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       const timing = computeRiffTiming(riff);
       const crossfadeMs = hopOpts?.crossfadeMs ?? defaultCrossfadeMs;
       const crossfadeSec = crossfadeMs / 1000;
-      const now = context.currentTime;
+      const now = hopOpts?.atSec ?? context.currentTime;
 
       // Cold start — no crossfade needed.
       if (current === null) {
@@ -337,11 +391,15 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
           context,
           stems: voiceStems,
           loopDurationSec: timing.loopDurationSec,
-          levels: slotLevels,
+          levels: automation ? unity : slotLevels,
           destination: master,
+          slotTaps,
         });
+        automate(voice, now);
         gridOrigin = now;
         voice.start(now, 0);
+        // Even from silence, never a hard onset: a click at the first sample.
+        voice.fadeIn(now, COLD_START_FADE_SEC);
         warnOnDeclaredLengthMismatch(riff.riffId, stems, buffers);
         warnOnRaggedStems(riff.riffId, stems, buffers, voice.effectiveLoopSec);
         log(
@@ -368,8 +426,9 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         context,
         stems: voiceStems,
         loopDurationSec: timing.loopDurationSec,
-        levels: slotLevels,
+        levels: automation ? unity : slotLevels,
         destination: master,
+        slotTaps,
       });
 
       // A beat is a quarter note — the unit `bps` counts.
@@ -398,6 +457,7 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
       const callOffset = hop.offsetInNew - crossfadeSec;
       newVoice.start(fadeStart, callOffset);
       newVoice.fadeIn(fadeStart, crossfadeSec);
+      automate(newVoice, fadeStart);
 
       // Fade the old voice out over the same window and stop it once the fade
       // has landed. The voice disposes itself when the stop takes effect —
@@ -451,17 +511,26 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
     },
 
     stop() {
-      // Outgoing voices already have a stop scheduled; disconnecting silences
-      // them now, which is what Stop means.
-      for (const o of outgoing) o.voice.dispose();
+      // Stop silences everything within STOP_FADE_SEC: every voice still
+      // sounding fades out and then stops — a cut dead would click — and
+      // tears itself down when its stop lands.
+      const now = context.currentTime;
+      for (const o of outgoing) {
+        o.voice.fadeOut(now, STOP_FADE_SEC);
+        o.voice.stop(now + STOP_FADE_SEC);
+      }
       outgoing = [];
       if (current === null) {
         setState('idle');
         return;
       }
-      const stopAt = context.currentTime;
-      current.voice.stop(stopAt);
-      current.voice.dispose();
+      if (current.startsAt > now) {
+        // A held hop that hasn't begun is silent: stop it before it starts.
+        current.voice.stop(now);
+      } else {
+        current.voice.fadeOut(now, STOP_FADE_SEC);
+        current.voice.stop(now + STOP_FADE_SEC);
+      }
       current = null;
       gridOrigin = null;
       emitRiffChange();
@@ -482,13 +551,12 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
 
     levels() {
       if (meters.length < 2) return [0, 0];
-      const peak = ({ node, frame }: (typeof meters)[number]) => {
-        node.getFloatTimeDomainData(frame);
-        let max = 0;
-        for (const v of frame) max = Math.max(max, Math.abs(v));
-        return Math.min(1, max);
-      };
-      return [peak(meters[0]!), peak(meters[1]!)];
+      return [peakOf(meters[0]!), peakOf(meters[1]!)];
+    },
+
+    trackMeters() {
+      if (slotMeters.length === 0) return Array(SLOT_COUNT).fill(0);
+      return slotMeters.map(peakOf);
     },
 
     setSlotLevels(levels) {
@@ -496,12 +564,21 @@ export function createAudioEngine(opts: AudioEngineOptions): AudioEngine {
         const l = levels[i];
         return l !== undefined && Number.isFinite(l) ? Math.max(0, l) : 1;
       });
-      // The rifff playing and any still fading out follow the fader at once.
+      // While automation plays, it has the slots; the levels wait for it.
+      if (automation) return;
+      applyMixerLevels(context.currentTime);
+    },
+
+    setAutomation(curves, originSec) {
       const now = context.currentTime;
-      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) {
-        if (!v) continue;
-        slotLevels.forEach((level, slot) => v.setSlotLevel(slot, level, now));
+      automation = curves
+        ? curves.map((curve) => curve.map((s) => ({ atSec: originSec + s.tSec, from: s.from, to: s.to })))
+        : null;
+      if (!automation) {
+        applyMixerLevels(now);
+        return;
       }
+      for (const v of [current?.voice, ...outgoing.map((o) => o.voice)]) if (v) automate(v, now, true);
     },
 
     onStateChange(fn) {
