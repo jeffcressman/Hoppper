@@ -391,4 +391,61 @@ describe('defineRecorderStore', () => {
     expect(storage.saveSequence).toHaveBeenCalled();
     expect(seq?.title).toBe('Untitled');
   });
+
+  describe('renaming takes made before the naming format', () => {
+    // An old take's default title is its own recordedAt.
+    const old = (id: string, jamId = JAM) =>
+      fixtureSeq({ id, jamId: jamId as JamCouchID, recordedAt: `2026-05-1${id.length}T00:00:00.000Z`, title: `2026-05-1${id.length}T00:00:00.000Z` });
+
+    it('renames each old take in one go, saves it, and lists it by its new name', async () => {
+      const storage = mockStorage();
+      storage._saved.set(`${JAM}/a`, old('a'));
+      storage._saved.set('band-B/bb', old('bb', 'band-B'));
+      storage._saved.set(`${JAM}/named`, fixtureSeq({ id: 'named', title: '20260101 Hoppper hoppp' }));
+      const nameTakes = vi.fn(async (seqs: HopSequence[]) => new Map(seqs.map((s) => [s.id, `20260919 ${s.jamId} hoppp`])));
+      const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer(), nameTakes })();
+      await store.loadAll();
+      await store.renameOldTakes();
+      // Asked once, for the old takes only.
+      expect(nameTakes).toHaveBeenCalledTimes(1);
+      expect(nameTakes.mock.calls[0]![0].map((s) => s.id).sort()).toEqual(['a', 'bb']);
+      expect(storage._saved.get(`${JAM}/a`)!.title).toBe(`20260919 ${JAM} hoppp`);
+      expect(storage._saved.get('band-B/bb')!.title).toBe('20260919 band-B hoppp');
+      expect(storage._saved.get(`${JAM}/named`)!.title).toBe('20260101 Hoppper hoppp');
+      expect(store.allSaved.map((s) => s.title)).toContain(`20260919 ${JAM} hoppp`);
+    });
+
+    it('does nothing, and asks nothing, once every take has a name', async () => {
+      const storage = mockStorage();
+      storage._saved.set(`${JAM}/named`, fixtureSeq({ id: 'named', title: '20260101 Hoppper hoppp' }));
+      const nameTakes = vi.fn(async () => new Map<string, string>());
+      const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer(), nameTakes })();
+      await store.loadAll();
+      await store.renameOldTakes();
+      expect(nameTakes).not.toHaveBeenCalled();
+      expect(storage.saveSequence).not.toHaveBeenCalled();
+    });
+
+    it('leaves the old names be if naming fails — offline, say — to try again later', async () => {
+      const storage = mockStorage();
+      storage._saved.set(`${JAM}/a`, old('a'));
+      const nameTakes = vi.fn(async () => {
+        throw new Error('offline');
+      });
+      const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer(), nameTakes })();
+      await store.loadAll();
+      await expect(store.renameOldTakes()).resolves.toBeUndefined();
+      expect(storage.saveSequence).not.toHaveBeenCalled();
+    });
+
+    it('keeps a take’s old name when no new one came back for it', async () => {
+      const storage = mockStorage();
+      storage._saved.set(`${JAM}/a`, old('a'));
+      const nameTakes = vi.fn(async () => new Map<string, string>());
+      const store = defineRecorderStore({ recorder: mockRecorder(), storage, player: mockPlayer(), nameTakes })();
+      await store.loadAll();
+      await store.renameOldTakes();
+      expect(storage.saveSequence).not.toHaveBeenCalled();
+    });
+  });
 });

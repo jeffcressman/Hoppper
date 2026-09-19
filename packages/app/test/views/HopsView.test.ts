@@ -10,6 +10,7 @@ const recorderStub = vi.hoisted(() => ({
   isRecording: false,
   playingId: null as string | null,
   loadAll: vi.fn(async () => {}),
+  renameOldTakes: vi.fn(async () => {}),
   play: vi.fn(async () => {}),
   stopPlayback: vi.fn(),
   delete: vi.fn(async () => {}),
@@ -30,12 +31,14 @@ vi.mock('../../src/stores', async () => {
   const { reactive } = await import('vue');
   const recorder = reactive(recorderStub);
   const exportState = reactive(exportStub);
+  const session = reactive(sessionStub);
   return {
     useRecorderStore: () => recorder,
-    useSessionStore: () => sessionStub,
+    useSessionStore: () => session,
     useJamsStore: () => jamsStub,
     useExportStore: () => exportState,
     __recorder: recorder,
+    __session: session,
   };
 });
 
@@ -49,6 +52,7 @@ import * as stores from '../../src/stores';
 import HopsView from '../../src/views/HopsView.vue';
 
 const recorder = (stores as unknown as { __recorder: typeof recorderStub }).__recorder;
+const session = (stores as unknown as { __session: typeof sessionStub }).__session;
 
 function take(overrides: Partial<HopSequence> = {}): HopSequence {
   return {
@@ -73,10 +77,11 @@ beforeEach(() => {
   recorder.isRecording = false;
   recorder.playingId = null;
   recorderStub.loadAll.mockReset().mockResolvedValue(undefined);
+  recorderStub.renameOldTakes.mockReset().mockResolvedValue(undefined);
   recorderStub.play.mockReset().mockResolvedValue(undefined);
   recorderStub.stopPlayback.mockReset();
   recorderStub.delete.mockReset().mockResolvedValue(undefined);
-  sessionStub.isAuthenticated = true;
+  session.isAuthenticated = true;
   jamsStub.profilesById = new Map([['band1', { displayName: 'Hoppper' }]]);
   jamsStub.loadProfile.mockReset().mockResolvedValue(undefined);
   routerPush.mockReset();
@@ -116,7 +121,7 @@ describe('HopsView', () => {
   });
 
   it('asks Endlesss for no names when logged out', async () => {
-    sessionStub.isAuthenticated = false;
+    session.isAuthenticated = false;
     mount(HopsView);
     await flushPromises();
     expect(jamsStub.loadProfile).not.toHaveBeenCalled();
@@ -203,5 +208,28 @@ describe('HopsView', () => {
     const wrapper = mount(HopsView);
     expect(wrapper.find('.hops__head').text()).toContain('Created');
     expect(rows(wrapper)[0]!.find('[data-test="created"]').text()).toBe('14 Sep 2026');
+  });
+
+  it('renames takes made before the naming format, once the list is in, when logged in', async () => {
+    mount(HopsView);
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).toHaveBeenCalledTimes(1);
+    expect(recorderStub.loadAll.mock.invocationCallOrder[0]).toBeLessThan(recorderStub.renameOldTakes.mock.invocationCallOrder[0]!);
+  });
+
+  it('leaves old names for later when logged out — naming needs Endlesss', async () => {
+    session.isAuthenticated = false;
+    mount(HopsView);
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).not.toHaveBeenCalled();
+  });
+
+  it('renames them as soon as you log in', async () => {
+    session.isAuthenticated = false;
+    mount(HopsView);
+    await flushPromises();
+    session.isAuthenticated = true;
+    await flushPromises();
+    expect(recorderStub.renameOldTakes).toHaveBeenCalledTimes(1);
   });
 });

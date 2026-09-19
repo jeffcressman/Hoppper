@@ -335,8 +335,10 @@ Newest entries at the top of each section. Date entries absolutely
   its exported WAV, which takes the same name — can be traced back to its
   place in Endlesss or LORE. The Hops list's "Created" column is when it was
   made in Hoppper. `hop-recorder/naming.ts`; applied when a recording is
-  saved (`recorder.nameTake`). Takes recorded before this keep their old
-  ISO-timestamp names.
+  saved (`recorder.nameTake`). Takes still carrying the old default name —
+  a title equal to their `recordedAt` — are renamed when Hops opens while
+  logged in (`recorder.renameOldTakes`, batched per jam); naming needs each
+  first rifff's document, so offline they wait.
 - **Automation lives on the take and overrides the mixer while it plays**
   (2026-09-18): `engine.setAutomation(curves, origin)` makes every voice
   follow each track's level curve and makes `setSlotLevels` wait;

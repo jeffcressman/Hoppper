@@ -53,6 +53,7 @@ import {
 import { installGlobalErrorCapture, log } from './logging/log-store';
 import { renderTake, type OfflineContextLike } from './export/render';
 import { hopName } from './hop-recorder/naming';
+import type { HopSequence } from './hop-recorder/types';
 import type {
   JamCouchID,
   ResolvedStem,
@@ -200,17 +201,33 @@ async function bootstrap() {
       },
     },
   });
+  // "20260919 <jam> hoppp": the first rifff's day, so a hop can be found
+  // again in Endlesss or LORE. Batched per jam — one request for the jam's
+  // first rifffs (held already if just played), and its name.
+  const nameTakes = async (seqs: HopSequence[]): Promise<Map<string, string>> => {
+    const jams = useJamsStore();
+    const byJam = new Map<JamCouchID, HopSequence[]>();
+    for (const seq of seqs) byJam.set(seq.jamId, [...(byJam.get(seq.jamId) ?? []), seq]);
+    const names = new Map<string, string>();
+    for (const [jamId, takes] of byJam) {
+      await Promise.all([
+        riffDocs.ensure(jamId, takes.map((t) => t.hops[0]!.riffId)),
+        jams.loadProfile(jamId),
+      ]);
+      const jam = jams.profilesById.get(jamId)?.displayName ?? jamId;
+      for (const take of takes) {
+        const first = riffDocs.get(take.hops[0]!.riffId);
+        names.set(take.id, hopName(first?.createdAt ?? Date.parse(take.recordedAt), jam));
+      }
+    }
+    return names;
+  };
   initRecorderStore({
     recorder: hopRecorder,
     storage: sequenceStorage,
     player: hopPlayer,
-    // "20260919 <jam> hoppp": the first rifff's day, so the hop can be found
-    // again in Endlesss or LORE. The rifff was just played, so it's held.
-    nameTake: async (seq) => {
-      const first = await riffDocs.fetch(seq.jamId, seq.hops[0]!.riffId);
-      const jam = useJamsStore().profilesById.get(seq.jamId)?.displayName ?? seq.jamId;
-      return hopName(first?.createdAt ?? Date.parse(seq.recordedAt), jam);
-    },
+    nameTake: async (seq) => (await nameTakes([seq])).get(seq.id)!,
+    nameTakes,
   });
   log('info', 'boot', 'recorder store initialized');
 

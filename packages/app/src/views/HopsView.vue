@@ -148,9 +148,19 @@ const subtitle = computed(() => {
   return `${n} recorded ${n === 1 ? 'hop' : 'hops'}`;
 });
 
-onMounted(() => {
-  void recorder.loadAll();
+onMounted(async () => {
+  await recorder.loadAll();
+  // Takes made before the "YYYYMMDD <jam> hoppp" names get theirs — which
+  // needs each first rifff's date, so only when logged in.
+  if (session.isAuthenticated) await recorder.renameOldTakes();
 });
+
+watch(
+  () => session.isAuthenticated,
+  (authed) => {
+    if (authed) void recorder.renameOldTakes();
+  },
+);
 
 // Takes are on disk and play offline; only their jams' names need Endlesss.
 watch(

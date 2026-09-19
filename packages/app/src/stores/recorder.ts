@@ -17,7 +17,16 @@ export interface RecorderDeps {
    * the recorder's default.
    */
   nameTake?: (seq: HopSequence) => Promise<string>;
+  /**
+   * Names for many takes at once, by take id — batched per jam, for renaming
+   * takes made before the naming format. A take missing from the result keeps
+   * its name.
+   */
+  nameTakes?: (seqs: HopSequence[]) => Promise<Map<string, string>>;
 }
+
+/** A take still wearing the recorder's old default name: its own timestamp. */
+const hasDefaultName = (seq: HopSequence) => seq.title === seq.recordedAt;
 
 export function defineRecorderStore(deps: RecorderDeps) {
   return defineStore('recorder', () => {
@@ -104,6 +113,35 @@ export function defineRecorderStore(deps: RecorderDeps) {
     /** Seconds into the take being replayed, or null — read every frame by the editor. */
     const playPosition = () => deps.player.positionSec();
 
+    /**
+     * Give takes made before the naming format their "YYYYMMDD <jam> hoppp"
+     * name. Only takes still on the old default; failing (offline, say)
+     * leaves them to try again next time.
+     */
+    async function renameOldTakes(): Promise<void> {
+      const old = allSaved.value.filter(hasDefaultName);
+      if (old.length === 0 || !deps.nameTakes) return;
+      let names: Map<string, string>;
+      try {
+        names = await deps.nameTakes(old);
+      } catch (err) {
+        log('warn', 'recorder', `renaming old takes: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+      let renamed = 0;
+      for (const seq of old) {
+        const title = names.get(seq.id);
+        if (!title) continue;
+        try {
+          await deps.storage.saveSequence({ ...seq, title });
+          renamed += 1;
+        } catch (err) {
+          log('warn', 'recorder', `renaming ${seq.id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (renamed > 0) await loadAll();
+    }
+
     function stopPlayback(): void {
       deps.player.stop();
       isPlaying.value = false;
@@ -127,6 +165,7 @@ export function defineRecorderStore(deps: RecorderDeps) {
       stop,
       loadSaved,
       loadAll,
+      renameOldTakes,
       play,
       playPosition,
       stopPlayback,

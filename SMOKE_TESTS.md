@@ -391,6 +391,10 @@ Rules: `docs/phases/phase-8-redesign-and-editor.md` → "Slice C".
       it's named "<YYYYMMDD> <jam> hoppp", the date being the day its first
       rifff was committed (check it against that rifff in Endlesss or LORE),
       not today. The Hops list's Created column shows today.
+- [ ] **Older takes get renamed.** Takes recorded before the new names
+      (titled with a timestamp) take the "<YYYYMMDD> <jam> hoppp" form the
+      first time Hops opens while logged in — one request per jam in the
+      log. Logged out, they keep their old names until you log in.
 - [ ] **The file.** The row says Exporting…, then Saved <name>.wav. The file
       opens in a DAW or player as stereo 24-bit at the app's sample rate,
       exactly as long as the take.
